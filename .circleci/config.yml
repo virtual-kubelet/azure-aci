@@ -22,12 +22,13 @@ jobs:
     steps:
       - checkout
       - run:
-        command: sh hack/ci/create_credentials.sh
+          name: Create the credentials file
+          command: sh hack/ci/create_credentials.sh
       - run: |
           echo 'export AZURE_AUTH_LOCATION=${outputPathCredsfile}' >> $BASH_ENV
       - run:
-        name: Tests
-        command: go test -v $(go list ./...)
+          name: Tests
+          command: go test -v $(go list ./...)
 
 workflows:
   version: 2
