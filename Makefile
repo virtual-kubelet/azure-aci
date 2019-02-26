@@ -23,6 +23,10 @@ vet:
 lint:
 	@$(LINTER_BIN) run --new-from-rev "HEAD~$(git rev-list master.. --count)" ./...
 
+.PHONY: check-mod
+check-mod: # verifies that module changes for go.mod and go.sum are checked in
+	@hack/ci/check_mods.sh
+
 .PHONY: mod
 mod:
 	@go mod tidy

@@ -15,6 +15,9 @@ jobs:
       - run:
           name: Lint
           command: make LINTER_BIN="./bin/golangci-lint" lint
+      - run:
+          name: Check go modules
+          command: make check-mod
   test:
     docker:
       - image: golang:1.11
