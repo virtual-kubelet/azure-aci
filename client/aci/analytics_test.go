@@ -7,7 +7,7 @@ import (
 )
 
 func TestLogAnalyticsFileParsingSuccess(t *testing.T) {
-	diagnostics, err := NewContainerGroupDiagnosticsFromFile("../../../../loganalytics.json")
+	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("TEST_LOGANALYTICS_JSON"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,8 +2,8 @@ version: 2
 jobs:
   validate:
     docker:
-      - image: circleci/golang:1.11
-    working_directory: /go/src/github.com/virtual-kubelet/virtual-kubelet
+      - image: golang:1.11
+    working_directory: /go/src/github.com/virtual-kubelet/azure-aci
     steps:
       - checkout
       - run:
@@ -17,18 +17,16 @@ jobs:
           command: make LINTER_BIN="./bin/golangci-lint" lint
   test:
     docker:
-      - image: circleci/golang:1.11
+      - image: golang:1.11
     working_directory: /go/src/github.com/virtual-kubelet/azure-aci
     steps:
       - checkout
       - run:
           name: Create the credentials file
-          command: sh hack/ci/create_credentials.sh
-      - run: |
-          echo 'export AZURE_AUTH_LOCATION=${outputPathCredsfile}' >> $BASH_ENV
+          command: make ci
       - run:
           name: Tests
-          command: go test -v $(go list ./...)
+          command: make test
 
 workflows:
   version: 2

@@ -55,7 +55,7 @@ func setupAuth() error {
 	authOnce.Do(func() {
 		testAuth, err = azure.NewAuthenticationFromFile(os.Getenv("AZURE_AUTH_LOCATION"))
 		if err != nil {
-			testAuth, err = azure.NewAuthenticationFromFile("../../../../credentials.json")
+			testAuth, err = azure.NewAuthenticationFromFile(os.Getenv("TEST_CREDENTIALS_JSON"))
 		}
 		if err != nil {
 			err = errors.Wrap(err, "failed to load Azure authentication file")

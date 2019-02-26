@@ -1,6 +1,7 @@
 package resourcegroups
 
 import (
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
@@ -20,7 +21,7 @@ func init() {
 }
 
 func TestNewClient(t *testing.T) {
-	auth, err := azure.NewAuthenticationFromFile("../../../../credentials.json")
+	auth, err := azure.NewAuthenticationFromFile(os.Getenv("TEST_CREDENTIALS_JSON"))
 	if err != nil {
 		t.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
