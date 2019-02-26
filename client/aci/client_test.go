@@ -31,7 +31,7 @@ func init() {
 // The TestMain function creates a resource group for testing
 // and deletes in when it's done.
 func TestMain(m *testing.M) {
-	auth, err := azure.NewAuthenticationFromFile(os.Getenv("TEST_CREDENTIALS_JSON"))
+	auth, err := azure.NewAuthenticationFromFile(os.Getenv("AZURE_AUTH_LOCATION"))
 	if err != nil {
 		log.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestNewClient(t *testing.T) {
-	auth, err := azure.NewAuthenticationFromFile(os.Getenv("TEST_CREDENTIALS_JSON"))
+	auth, err := azure.NewAuthenticationFromFile(os.Getenv("AZURE_AUTH_LOCATION"))
 	if err != nil {
 		log.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
@@ -416,7 +416,7 @@ func TestCreateContainerGroupWithReadinessProbe(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithLogAnalytics(t *testing.T) {
-	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("TEST_LOGANALYTICS_JSON"))
+	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +510,7 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
 	networkProfileId := "/subscriptions/ae43b1e3-c35d-4c8c-bc0d-f148b4c52b78/resourceGroups/aci-connector/providers/Microsoft.Network/networkprofiles/aci-connector-network-profile-westus"
-	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("TEST_LOGANALYTICS_JSON"))
+	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
 	}

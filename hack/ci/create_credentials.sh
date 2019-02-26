@@ -1,4 +1,9 @@
 #!/bin/bash
+
+set -e -u
+
+mkdir -p $(dirname "${TEST_CREDENTIALS_JSON}")
+
 # This will build the credentials during the CI
 cat <<EOF > "${TEST_CREDENTIALS_JSON}"
 {
@@ -12,13 +17,5 @@ cat <<EOF > "${TEST_CREDENTIALS_JSON}"
   "sqlManagementEndpointUrl": "$sqlManagementEndpointUrl",
   "galleryEndpointUrl": "$galleryEndpointUrl",
   "managementEndpointUrl": "$managementEndpointUrl"
-}
-EOF
-
-# This will build the log analytics credentials during CI
-cat <<EOF > "${TEST_LOGANALYTICS_JSON}"
-{
-    "workspaceID": "$omsworkspaceID",
-    "workspaceKey": "$omsworkspaceKey"
 }
 EOF

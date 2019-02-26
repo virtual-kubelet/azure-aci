@@ -21,7 +21,7 @@ func init() {
 }
 
 func TestNewClient(t *testing.T) {
-	auth, err := azure.NewAuthenticationFromFile(os.Getenv("TEST_CREDENTIALS_JSON"))
+	auth, err := azure.NewAuthenticationFromFile(os.Getenv("AZURE_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatalf("Failed to load Azure authentication file: %v", err)
 	}

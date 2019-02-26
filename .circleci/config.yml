@@ -22,11 +22,8 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Create the credentials file
-          command: make ci
-      - run:
           name: Tests
-          command: make test
+          command: make testauth test
 
 workflows:
   version: 2

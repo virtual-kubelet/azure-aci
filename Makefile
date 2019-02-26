@@ -12,7 +12,8 @@ export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
 .PHONY: test
 test:
-	@go test -v $(packages)
+	@echo running tests
+	@AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(packages)
 
 .PHONY: vet
 vet:
@@ -26,12 +27,13 @@ lint:
 mod:
 	@go mod tidy
 
-.PHONY: ci
-ci: $(TEST_CREDENTIALS_JSON) $(TEST_LOGANALYTICS_JSON)
+.PHONY: testauth
+testauth: $(TEST_CREDENTIALS_JSON) $(TEST_LOGANALYTICS_JSON)
 
-$(TEST_CREDENTIALS_JSON) $(TEST_LOGANALYTICS_JSON): $(TEST_CREDENTIALS_DIR)
+$(TEST_CREDENTIALS_JSON):
+	@echo Building test credentials
 	@hack/ci/create_credentials.sh
 
-$(TEST_CREDENTIALS_DIR):
-	@mkdir -p $(TEST_CREDENTIALS_DIR)
-
+$(TEST_LOGANALYTICS_JSON):
+	@echo Building log analytics credentials
+	@hack/ci/create_loganalytics_auth.sh
