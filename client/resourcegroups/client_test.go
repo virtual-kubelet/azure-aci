@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	azure "github.com/virtual-kubelet/virtual-kubelet/providers/azure/client"
+	azure "github.com/virtual-kubelet/azure-aci/client"
 )
 
 var (

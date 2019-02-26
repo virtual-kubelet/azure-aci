@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	azure "github.com/virtual-kubelet/virtual-kubelet/providers/azure/client"
-	"github.com/virtual-kubelet/virtual-kubelet/providers/azure/client/resourcegroups"
+	azure "github.com/virtual-kubelet/azure-aci/client"
+	"github.com/virtual-kubelet/azure-aci/client/resourcegroups"
 )
 
 var (
