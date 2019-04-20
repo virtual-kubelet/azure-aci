@@ -1,4 +1,18 @@
-package cmd
+// Copyright © 2017 The virtual-kubelet authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package root
 
 import (
 	"context"
@@ -8,11 +22,10 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 
-	"github.com/cpuguy83/strongerrors"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
+	"github.com/virtual-kubelet/virtual-kubelet/providers"
 	"github.com/virtual-kubelet/virtual-kubelet/vkubelet"
 )
 
@@ -44,7 +57,7 @@ func loadTLSConfig(certPath, keyPath string) (*tls.Config, error) {
 	}, nil
 }
 
-func setupHTTPServer(ctx context.Context, cfg *apiServerConfig) (cancel func(), retErr error) {
+func setupHTTPServer(ctx context.Context, p providers.Provider, cfg *apiServerConfig) (cancel func(), retErr error) {
 	var closers []io.Closer
 	cancel = func() {
 		for _, c := range closers {
@@ -121,18 +134,14 @@ type apiServerConfig struct {
 	MetricsAddr string
 }
 
-func getAPIConfig(metricsAddr string) (*apiServerConfig, error) {
+func getAPIConfig(c Opts) (*apiServerConfig, error) {
 	config := apiServerConfig{
 		CertPath: os.Getenv("APISERVER_CERT_LOCATION"),
 		KeyPath:  os.Getenv("APISERVER_KEY_LOCATION"),
 	}
 
-	port, err := strconv.Atoi(os.Getenv("KUBELET_PORT"))
-	if err != nil {
-		return nil, strongerrors.InvalidArgument(errors.Wrap(err, "error parsing KUBELET_PORT variable"))
-	}
-	config.Addr = fmt.Sprintf(":%d", port)
-	config.MetricsAddr = metricsAddr
+	config.Addr = fmt.Sprintf(":%d", c.ListenPort)
+	config.MetricsAddr = c.MetricsAddr
 
 	return &config, nil
 }
