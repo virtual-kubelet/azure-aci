@@ -22,12 +22,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/virtual-kubelet/azure-aci"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/node"
 	"github.com/virtual-kubelet/virtual-kubelet/providers"
-	"github.com/virtual-kubelet/virtual-kubelet/providers/register"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -120,18 +120,13 @@ func runRootCommand(ctx context.Context, c Opts) error {
 		return err
 	}
 
-	initConfig := register.InitConfig{
-		ConfigPath:      c.ProviderConfigPath,
-		NodeName:        c.NodeName,
-		OperatingSystem: c.OperatingSystem,
-		ResourceManager: rm,
-		DaemonPort:      int32(c.ListenPort),
-		InternalIP:      os.Getenv("VKUBELET_POD_IP"),
+	if c.Provider != "" && c.Provider != "azure" {
+		return errors.New("azure is the only supported provider")
 	}
 
-	p, err := register.GetProvider(c.Provider, initConfig)
+	p, err := azure.NewACIProvider(c.ProviderConfigPath, rm, c.NodeName, c.OperatingSystem, os.Getenv("VKUBELET_POD_IP"), int32(c.ListenPort))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "error initializing aci provider")
 	}
 
 	ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
