@@ -2,7 +2,7 @@ version: 2
 jobs:
   validate:
     docker:
-      - image: golang:1.11
+      - image: golang:1.12
     working_directory: /go/src/github.com/virtual-kubelet/azure-aci
     steps:
       - checkout
@@ -11,7 +11,7 @@ jobs:
           command: make vet
       - run:
           name: Install linters
-          command: curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s v1.15.0
+          command: curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | bash -s v1.16.0
       - run:
           name: Lint
           command: make LINTER_BIN="./bin/golangci-lint" lint
@@ -20,10 +20,13 @@ jobs:
           command: make check-mod
   test:
     docker:
-      - image: golang:1.11
+      - image: golang:1.12
     working_directory: /go/src/github.com/virtual-kubelet/azure-aci
     steps:
       - checkout
+      - run:
+          name: Build
+          command: make build
       - run:
           name: Tests
           command: make testauth test

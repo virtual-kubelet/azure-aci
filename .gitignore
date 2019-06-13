@@ -13,3 +13,5 @@
 
 vendor/
 .azure
+
+bin/
