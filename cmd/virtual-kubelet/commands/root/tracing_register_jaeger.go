@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !no_jaeger_exporter
+// +build include_jaeger_exporter
 
 package root
 
