@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"github.com/pkg/errors"
@@ -36,6 +37,7 @@ import (
 var (
 	buildVersion = "N/A"
 	buildTime    = "N/A"
+	k8sVersion   = "v1.14.3" // This should follow the version of k8s.io/kubernetes we are importing
 )
 
 func main() {
@@ -52,6 +54,7 @@ func main() {
 
 	var opts root.Opts
 	optsErr := root.SetDefaultOpts(&opts)
+	opts.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
 
 	rootCmd := root.NewCommand(ctx, filepath.Base(os.Args[0]), opts)
 	rootCmd.AddCommand(version.NewCommand(buildVersion, buildTime), providers.NewCommand())
