@@ -177,8 +177,8 @@ github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UV
 github.com/tmc/grpc-websocket-proxy v0.0.0-20170815181823-89b8d40f7ca8/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8 h1:3SVOIvH7Ae1KRYyQWRjXWJEA9sS/c/pjvH++55Gr648=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
-github.com/virtual-kubelet/virtual-kubelet v0.9.1-0.20190613171314-bd742d5d99ea h1:EqjyPOOGRuZVBIbzGdJ8HCZ81fVIeLTOarlY2Y41SBc=
-github.com/virtual-kubelet/virtual-kubelet v0.9.1-0.20190613171314-bd742d5d99ea/go.mod h1:GTnTwt2tO+sTCJtAzyTbazuGA9pOKJL2u5g1K43b8pQ=
+github.com/virtual-kubelet/virtual-kubelet v0.10.1-0.20190618101111-a00c2f4b8b2c h1:Yx8Zv+bXt9jo2CEieJ/6sL49z8GkwbAORUMi4vycgP8=
+github.com/virtual-kubelet/virtual-kubelet v0.10.1-0.20190618101111-a00c2f4b8b2c/go.mod h1:GTnTwt2tO+sTCJtAzyTbazuGA9pOKJL2u5g1K43b8pQ=
 github.com/xiang90/probing v0.0.0-20160813154853-07dd2e8dfe18/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 go.opencensus.io v0.18.1-0.20181204023538-aab39bd6a98b h1:6ayHMBPtdP3jNuk+Sfhso+PTB7ZJQ5E1FBo403m2H8w=

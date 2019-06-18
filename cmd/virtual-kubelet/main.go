@@ -25,11 +25,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/virtual-kubelet/azure-aci/cmd/virtual-kubelet/commands/providers"
-	"github.com/virtual-kubelet/azure-aci/cmd/virtual-kubelet/commands/root"
-	"github.com/virtual-kubelet/azure-aci/cmd/virtual-kubelet/commands/version"
+	cmdproviders "github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/commands/providers"
+	"github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/commands/root"
+	"github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/commands/version"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
+	"github.com/virtual-kubelet/virtual-kubelet/providers"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	"github.com/virtual-kubelet/virtual-kubelet/trace/opencensus"
 )
@@ -54,10 +55,12 @@ func main() {
 
 	var opts root.Opts
 	optsErr := root.SetDefaultOpts(&opts)
+	opts.Provider = "azure"
 	opts.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
 
-	rootCmd := root.NewCommand(ctx, filepath.Base(os.Args[0]), opts)
-	rootCmd.AddCommand(version.NewCommand(buildVersion, buildTime), providers.NewCommand())
+	s := providers.NewStore()
+	rootCmd := root.NewCommand(ctx, filepath.Base(os.Args[0]), s, opts)
+	rootCmd.AddCommand(version.NewCommand(buildVersion, buildTime), cmdproviders.NewCommand(s))
 	preRun := rootCmd.PreRunE
 
 	var logLevel string
@@ -65,6 +68,7 @@ func main() {
 		if optsErr != nil {
 			return optsErr
 		}
+
 		if preRun != nil {
 			return preRun(cmd, args)
 		}
@@ -80,6 +84,10 @@ func main() {
 				return errors.Wrap(err, "could not parse log level")
 			}
 			logrus.SetLevel(lvl)
+		}
+
+		if err := registerACI(s); err != nil {
+			return errors.Wrap(err, "error registering azure provider")
 		}
 		return nil
 	}
