@@ -1,7 +1,7 @@
 module github.com/virtual-kubelet/azure-aci
 
 require (
-	contrib.go.opencensus.io/exporter/ocagent v0.4.6
+	contrib.go.opencensus.io/exporter/ocagent v0.4.6 // indirect
 	github.com/Azure/azure-sdk-for-go v26.0.0+incompatible
 	github.com/Azure/go-autorest v11.5.0+incompatible
 	github.com/BurntSushi/toml v0.3.1
@@ -20,7 +20,6 @@ require (
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/json-iterator/go v1.1.6 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/onsi/ginkgo v1.8.0 // indirect
@@ -28,7 +27,6 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.5
-	github.com/spf13/pflag v1.0.3
 	github.com/virtual-kubelet/virtual-kubelet v0.9.1
 	go.opencensus.io v0.18.1-0.20181204023538-aab39bd6a98b
 	golang.org/x/net v0.0.0-20190404232315-eb5bcb51f2a3 // indirect
@@ -46,12 +44,11 @@ require (
 	k8s.io/apimachinery v0.0.0-20190612125636-6a5db36e93ad
 	k8s.io/apiserver v0.0.0-20190612130503-88b97c97967f // indirect
 	k8s.io/client-go v11.0.0+incompatible
-	k8s.io/klog v0.3.1
 	k8s.io/kubernetes v1.14.3
 	k8s.io/utils v0.0.0-20190607212802-c55fbcfc754a // indirect
 )
 
-replace github.com/virtual-kubelet/virtual-kubelet => github.com/virtual-kubelet/virtual-kubelet v0.9.1-0.20190613171314-bd742d5d99ea
+replace github.com/virtual-kubelet/virtual-kubelet => github.com/virtual-kubelet/virtual-kubelet v0.10.1-0.20190618101111-a00c2f4b8b2c
 
 replace k8s.io/api => k8s.io/api v0.0.0-20190606204050-af9c91bd2759
 
