@@ -64,7 +64,7 @@ func main() {
 		cli.WithBaseOpts(o),
 		cli.WithCLIVersion(buildVersion, buildTime),
 		cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
-			return azprovider.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort)
+			return azprovider.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort, cfg.KubeClusterDomain)
 		}),
 		cli.WithPersistentFlags(logConfig.FlagSet()),
 		cli.WithPersistentPreRunCallback(func() error {
