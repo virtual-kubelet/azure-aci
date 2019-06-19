@@ -11,14 +11,15 @@ import (
 )
 
 type providerConfig struct {
-	ResourceGroup   string
-	Region          string
-	OperatingSystem string
-	CPU             string
-	Memory          string
-	Pods            string
-	SubnetName      string
-	SubnetCIDR      string
+	ResourceGroup      string
+	Region             string
+	OperatingSystem    string
+	CPU                string
+	Memory             string
+	Pods               string
+	SubnetName         string
+	SubnetCIDR         string
+	NetworkProfileName string
 }
 
 func (p *ACIProvider) loadConfig(r io.Reader) error {
@@ -69,6 +70,9 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 		}
 	}
 
+	if config.NetworkProfileName != "" {
+		p.networkProfileName = config.NetworkProfileName
+	}
 	p.operatingSystem = config.OperatingSystem
 	return nil
 }
