@@ -78,6 +78,7 @@ type ACIProvider struct {
 	diagnostics        *aci.ContainerGroupDiagnostics
 	subnetName         string
 	subnetCIDR         string
+	networkProfileName string
 	vnetName           string
 	vnetResourceGroup  string
 	networkProfile     string
@@ -281,6 +282,9 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 	if subnetName := os.Getenv("ACI_SUBNET_NAME"); p.vnetName != "" && subnetName != "" {
 		p.subnetName = subnetName
 	}
+	if networkProfileName := os.Getenv("ACI_NETWORK_PROFILE_NAME"); networkProfileName != "" {
+		p.networkProfileName = networkProfileName
+	}
 	if subnetCIDR := os.Getenv("ACI_SUBNET_CIDR"); subnetCIDR != "" {
 		if p.subnetName == "" {
 			return nil, fmt.Errorf("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR")
@@ -418,10 +422,12 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
 	}
+	if p.networkProfileName == "" {
+		p.networkProfileName = getNetworkProfileName(*subnet.ID)
+	}
 
-	networkProfileName := getNetworkProfileName(*subnet.ID)
 
-	profile, err := c.GetProfile(p.resourceGroup, networkProfileName)
+	profile, err := c.GetProfile(p.resourceGroup, p.networkProfileName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up network profile: %v", err)
 	}
@@ -437,7 +443,7 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 	}
 
 	// at this point, profile should be nil
-	profile = network.NewNetworkProfile(networkProfileName, p.region, *subnet.ID)
+	profile = network.NewNetworkProfile(p.networkProfileName, p.region, *subnet.ID)
 	profile, err = c.CreateOrUpdateProfile(p.resourceGroup, profile)
 	if err != nil {
 		return err
