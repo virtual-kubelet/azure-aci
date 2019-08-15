@@ -16,21 +16,16 @@ package main
 
 import (
 	"context"
-	"os"
-	"os/signal"
-	"path/filepath"
 	"strings"
-	"syscall"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
-	cmdproviders "github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/commands/providers"
-	"github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/commands/root"
-	"github.com/virtual-kubelet/virtual-kubelet/cmd/virtual-kubelet/commands/version"
+	"github.com/virtual-kubelet/azure-aci"
+	cli "github.com/virtual-kubelet/node-cli"
+	logruscli "github.com/virtual-kubelet/node-cli/logrus"
+	"github.com/virtual-kubelet/node-cli/opts"
+	"github.com/virtual-kubelet/node-cli/provider"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
-	"github.com/virtual-kubelet/virtual-kubelet/providers"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	"github.com/virtual-kubelet/virtual-kubelet/trace/opencensus"
 )
@@ -42,57 +37,38 @@ var (
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sig
-		cancel()
-	}()
+	ctx := cli.ContextWithCancelOnSignal(context.Background())
 
-	log.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
+	logger := logrus.StandardLogger()
+	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
+	logConfig := &logruscli.Config{LogLevel: "info"}
 	trace.T = opencensus.Adapter{}
 
-	var opts root.Opts
-	optsErr := root.SetDefaultOpts(&opts)
-	opts.Provider = "azure"
-	opts.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
+	o, err := opts.FromEnv()
+	if err != nil {
+		log.G(ctx).Fatal(err)
+	}
+	o.Provider = "azure"
+	o.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
 
-	s := providers.NewStore()
-	rootCmd := root.NewCommand(ctx, filepath.Base(os.Args[0]), s, opts)
-	rootCmd.AddCommand(version.NewCommand(buildVersion, buildTime), cmdproviders.NewCommand(s))
-	preRun := rootCmd.PreRunE
+	node, err := cli.New(ctx,
+		cli.WithBaseOpts(o),
+		cli.WithCLIVersion(buildVersion, buildTime),
+		cli.WithKubernetesNodeVersion(k8sVersion),
+		cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
+			return azure.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort)
+		}),
+		cli.WithPersistentFlags(logConfig.FlagSet()),
+		cli.WithPersistentPreRunCallback(func() error {
+			return logruscli.Configure(logConfig, logger)
+		}),
+	)
 
-	var logLevel string
-	rootCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
-		if optsErr != nil {
-			return optsErr
-		}
-
-		if preRun != nil {
-			return preRun(cmd, args)
-		}
-		return nil
+	if err != nil {
+		log.G(ctx).Fatal(err)
 	}
 
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
-
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		if logLevel != "" {
-			lvl, err := logrus.ParseLevel(logLevel)
-			if err != nil {
-				return errors.Wrap(err, "could not parse log level")
-			}
-			logrus.SetLevel(lvl)
-		}
-
-		if err := registerACI(s); err != nil {
-			return errors.Wrap(err, "error registering azure provider")
-		}
-		return nil
-	}
-
-	if err := rootCmd.Execute(); err != nil && errors.Cause(err) != context.Canceled {
+	if err := node.Run(); err != nil {
 		log.G(ctx).Fatal(err)
 	}
 }

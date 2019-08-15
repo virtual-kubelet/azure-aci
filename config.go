@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/virtual-kubelet/virtual-kubelet/providers"
+	"github.com/virtual-kubelet/node-cli/provider"
 )
 
 type providerConfig struct {
@@ -48,12 +48,12 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 
 	// Default to Linux if the operating system was not defined in the config.
 	if config.OperatingSystem == "" {
-		config.OperatingSystem = providers.OperatingSystemLinux
+		config.OperatingSystem = provider.OperatingSystemLinux
 	} else {
 		// Validate operating system from config.
-		ok, _ := providers.ValidOperatingSystems[config.OperatingSystem]
+		ok := provider.ValidOperatingSystems[config.OperatingSystem]
 		if !ok {
-			return fmt.Errorf("%q is not a valid operating system, try one of the following instead: %s", config.OperatingSystem, strings.Join(providers.ValidOperatingSystems.Names(), " | "))
+			return fmt.Errorf("%q is not a valid operating system, try one of the following instead: %s", config.OperatingSystem, strings.Join(provider.ValidOperatingSystems.Names(), " | "))
 		}
 	}
 

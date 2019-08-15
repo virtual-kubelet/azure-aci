@@ -23,9 +23,9 @@ import (
 	client "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/azure-aci/client/network"
+	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
-	"github.com/virtual-kubelet/virtual-kubelet/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
@@ -425,7 +425,6 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 	if p.networkProfileName == "" {
 		p.networkProfileName = getNetworkProfileName(*subnet.ID)
 	}
-
 
 	profile, err := c.GetProfile(p.resourceGroup, p.networkProfileName)
 	if err != nil && !network.IsNotFound(err) {
@@ -895,6 +894,12 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	return ctx.Err()
+}
+
+// ConfigureNode enables a provider to configure the node object that
+// will be used for Kubernetes.
+func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
+	// noop
 }
 
 // GetPodStatus returns the status of a pod by name that is running inside ACI
