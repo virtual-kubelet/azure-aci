@@ -545,7 +545,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	var containerGroup aci.ContainerGroup
 	containerGroup.Location = p.region
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
-	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.OperatingSystem())
+	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
 	// get containers
 	containers, err := p.getContainers(pod)
@@ -899,7 +899,16 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 // ConfigureNode enables a provider to configure the node object that
 // will be used for Kubernetes.
 func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
-	// noop
+	ctx, span := trace.StartSpan(ctx, "aci.ConfigureNode")
+	defer span.End()
+	ctx = addAzureAttributes(ctx, span, p)
+
+	node.Status.Capacity = p.capacity()
+	node.Status.Allocatable = p.capacity()
+	node.Status.Conditions = p.nodeConditions()
+	node.Status.Addresses = p.nodeAddresses()
+	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
+	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
 }
 
 // GetPodStatus returns the status of a pod by name that is running inside ACI
@@ -954,8 +963,8 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	return pods, nil
 }
 
-// Capacity returns a resource list containing the capacity limits set for ACI.
-func (p *ACIProvider) Capacity(ctx context.Context) v1.ResourceList {
+// capacity returns a resource list containing the capacity limits set for ACI.
+func (p *ACIProvider) capacity() v1.ResourceList {
 	resourceList := v1.ResourceList{
 		v1.ResourceCPU:    resource.MustParse(p.cpu),
 		v1.ResourceMemory: resource.MustParse(p.memory),
@@ -969,9 +978,9 @@ func (p *ACIProvider) Capacity(ctx context.Context) v1.ResourceList {
 	return resourceList
 }
 
-// NodeConditions returns a list of conditions (Ready, OutOfDisk, etc), for updates to the node status
+// nodeConditions returns a list of conditions (Ready, OutOfDisk, etc), for updates to the node status
 // within Kubernetes.
-func (p *ACIProvider) NodeConditions(ctx context.Context) []v1.NodeCondition {
+func (p *ACIProvider) nodeConditions() []v1.NodeCondition {
 	// TODO: Make these dynamic and augment with custom ACI specific conditions of interest
 	return []v1.NodeCondition{
 		{
@@ -1017,9 +1026,9 @@ func (p *ACIProvider) NodeConditions(ctx context.Context) []v1.NodeCondition {
 	}
 }
 
-// NodeAddresses returns a list of addresses for the node status
+// nodeAddresses returns a list of addresses for the node status
 // within Kubernetes.
-func (p *ACIProvider) NodeAddresses(ctx context.Context) []v1.NodeAddress {
+func (p *ACIProvider) nodeAddresses() []v1.NodeAddress {
 	// TODO: Make these dynamic and augment with custom ACI specific conditions of interest
 	return []v1.NodeAddress{
 		{
@@ -1029,19 +1038,14 @@ func (p *ACIProvider) NodeAddresses(ctx context.Context) []v1.NodeAddress {
 	}
 }
 
-// NodeDaemonEndpoints returns NodeDaemonEndpoints for the node status
+// nodeDaemonEndpoints returns NodeDaemonEndpoints for the node status
 // within Kubernetes.
-func (p *ACIProvider) NodeDaemonEndpoints(ctx context.Context) *v1.NodeDaemonEndpoints {
-	return &v1.NodeDaemonEndpoints{
+func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
+	return v1.NodeDaemonEndpoints{
 		KubeletEndpoint: v1.DaemonEndpoint{
 			Port: p.daemonEndpointPort,
 		},
 	}
-}
-
-// OperatingSystem returns the operating system that was provided by the config.
-func (p *ACIProvider) OperatingSystem() string {
-	return p.operatingSystem
 }
 
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCredential, error) {
