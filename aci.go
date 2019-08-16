@@ -899,10 +899,6 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 // ConfigureNode enables a provider to configure the node object that
 // will be used for Kubernetes.
 func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
-	ctx, span := trace.StartSpan(ctx, "aci.ConfigureNode")
-	defer span.End()
-	ctx = addAzureAttributes(ctx, span, p)
-
 	node.Status.Capacity = p.capacity()
 	node.Status.Allocatable = p.capacity()
 	node.Status.Conditions = p.nodeConditions()
