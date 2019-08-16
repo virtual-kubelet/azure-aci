@@ -7,13 +7,21 @@ trigger:
 - master
 
 pool:
-  vmImage: 'ubuntu-latest'
+  name: Hosted Ubuntu 1604
 
 steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
 
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
+- task: Docker@0
+  displayName: 'Build an image'
+  inputs:
+    azureSubscription: 'Cloud Console Development (ae43b1e3-c35d-4c8c-bc0d-f148b4c52b78)'
+    dockerFile: Dockerfile
+    imageName: 'virtual-kubelet-aci:$(Build.SourceBranchName)_$(Build.BuildNumber)'
+
+- task: Docker@0
+  displayName: 'Push an image'
+  inputs:
+    azureSubscription: 'Cloud Console Development (ae43b1e3-c35d-4c8c-bc0d-f148b4c52b78)'
+    azureContainerRegistry: '{"loginServer":"vkaci.azurecr.io", "id" : "/subscriptions/ae43b1e3-c35d-4c8c-bc0d-f148b4c52b78/resourceGroups/virtual-kubelet/providers/Microsoft.ContainerRegistry/registries/vkaci"}'
+    action: 'Push an image'
+    imageName: 'virtual-kubelet-aci:$(Build.SourceBranchName)_$(Build.BuildNumber)'
