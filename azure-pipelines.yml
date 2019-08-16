@@ -23,7 +23,7 @@ steps:
   inputs:
     command: buildAndPush
     repository: vkaci
-    dockerfile: Dockerfile
+    dockerfile: '**/Dockerfile'
     containerRegistry: UploadToVKRegistries
     tags: |
       '$(Build.SourceBranchName)_$(Build.BuildNumber)'
