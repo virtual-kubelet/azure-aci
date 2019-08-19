@@ -22,8 +22,7 @@ steps:
     repository: vkaci
     dockerfile: $(Build.SourcesDirectory)/Dockerfile
     containerRegistry: UploadToVKRegistries
-    tags: |
-      '$(Build.SourceBranchName)_$(Build.BuildNumber)'
+    tags: $(Build.SourceBranchName)_$(Build.BuildNumber)
 
 - task: Docker@2
   displayName: Logout of ACR
