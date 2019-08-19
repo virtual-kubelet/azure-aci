@@ -8,6 +8,14 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
+DOCKER_IMAGE := virtual-kubelet
+VERSION      := $(shell git describe --tags --always --dirty="-dev")
+
+.PHONY: safebuild
+safebuild:
+	@echo "Building image..."
+	docker build -t $(DOCKER_IMAGE):$(VERSION) .
+
 .PHONY: build
 build: bin/virtual-kubelet
 
