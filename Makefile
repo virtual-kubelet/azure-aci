@@ -12,6 +12,7 @@ DOCKER_IMAGE := virtual-kubelet
 VERSION      := $(shell git describe --tags --always --dirty="-dev")
 
 .PHONY: safebuild
+# docker build
 safebuild:
 	@echo "Building image..."
 	docker build -t $(DOCKER_IMAGE):$(VERSION) .
