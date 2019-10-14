@@ -22,6 +22,9 @@ func NewSerializer() *YamlSerializer {
 // Serialize the objects
 func (y *YamlSerializer) Serialize(obj runtime.Object) string {
 	buff := bytes.NewBufferString("")
-	y.s.Encode(obj, buff)
+	if err := y.s.Encode(obj, buff); err != nil {
+		return ""
+	}
+
 	return buff.String()
 }
