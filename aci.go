@@ -480,7 +480,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 			clientcmdv1.NamedCluster{
 				Name: name,
 				Cluster: clientcmdv1.Cluster{
-					Server:                   masterURI,
+					Server: masterURI,
 					CertificateAuthorityData: ca,
 				},
 			},
@@ -758,7 +758,10 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 	cg, status, err := p.aciClient.GetContainerGroup(ctx, p.resourceGroup, fmt.Sprintf("%s-%s", namespace, name))
 	if err != nil {
 		if status != nil && *status == http.StatusNotFound {
-			return nil, nil
+			// There is bug in vk v1.1 (in Sync loop used as a substitute for async provider updates api) which causes crash if we returned
+			// a (nil, nil) from GetPodStatus() for a newly created pod, will return NotFound instead.
+			// TODO: This loop isn't going to be available beyond v1.1, changes on provider needs to handle it.
+			return nil, errdefs.NotFound("cg not found")
 		}
 		return nil, err
 	}
