@@ -54,7 +54,6 @@ func main() {
 	node, err := cli.New(ctx,
 		cli.WithBaseOpts(o),
 		cli.WithCLIVersion(buildVersion, buildTime),
-		cli.WithKubernetesNodeVersion(k8sVersion),
 		cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
 			return azure.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort)
 		}),
