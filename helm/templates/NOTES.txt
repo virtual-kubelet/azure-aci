@@ -1,0 +1,5 @@
+The virtual kubelet with Azure provider is getting deployed on your cluster.
+
+To verify that virtual kubelet has started, run:
+
+  kubectl --namespace={{ .Release.Namespace }} describe deployment "{{ .Chart.Name }}"

@@ -1,0 +1,63 @@
+image:
+  repository: virtualkubelet.azurecr.io
+  repositoryReadOnlyPrincipalId: 98961725-8311-48ef-8f11-2cc3911ee807
+  repositoryReadOnlyPrincipalSecret: MH]/FD2.9RwhDmQZQAxu.p0z4fBuR=DG
+  tag: 1.1
+
+nodeName: "virtual-node-aci-linux-helm"
+nodeOsType: "Linux"
+monitoredNamespace: ""
+apiserverCert: 
+apiserverKey: 
+logLevel: 
+
+taint:
+  enabled: true
+  key: virtual-kubelet.io/provider
+  value: "{{ .Values.provider }}"
+  ## `effect` must be `NoSchedule`, `PreferNoSchedule` or `NoExecute`.
+  effect: NoSchedule
+
+trace:
+  exporter: ""
+  serviceName: "{{ .Values.nodeName }}"
+  sampleRate: 0
+
+providers:
+  azure:
+    ## Set to true if deploying to Azure Kubernetes Service (AKS), otherwise false
+    targetAKS: true
+    clientId: 
+    clientKey: 
+    tenantId: 
+    subscriptionId: 
+    ## `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments
+    aciResourceGroup: 
+    aciRegion: 
+    masterUri: 
+    loganalytics:
+      enabled: false
+      workspaceId: 
+      workspaceKey: 
+      clusterResourceId: 
+    vnet:
+      enabled: true
+      subnetName: virtual-node-aci
+      ## If subnet already created on vnet, don't pass subnetCidr if it doesn't match the existing one.
+      ## If cluster subnet has a different range, please specify its value in clusterCidr
+      subnetCidr: 10.241.0.0/16
+      # clusterCidr defaults to 10.240.0.0/16 if not specified
+      clusterCidr:
+      # kubeDnsIp defaults to 10.0.0.10 if not specified
+      kubeDnsIp:
+
+provider: azure
+
+## Install Default RBAC roles and bindings
+rbac:
+  install: true
+  serviceAccountName: virtual-kubelet-helm
+  ## RBAC api version
+  apiVersion: v1beta1
+  ## Cluster role reference
+  roleRef: cluster-admin
