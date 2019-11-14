@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ template "vk.fullname" . }}
 {{ include "vk.labels" . | indent 2 }}
     component: kubelet
 spec:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: {{ template "vk.fullname" . }}
-        image: "{{ .Values.image.repository }}/virtual-kubelet:{{ .Values.image.tag }}"
+        image: "{{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
         - name: KUBELET_PORT
@@ -122,7 +122,7 @@ spec:
           "--os", "{{ .Values.nodeOsType }}"
         ]
       imagePullSecrets:
-      - name: virtual-kubelet-aci-acr
+      - name: {{ template "vk.fullname" . }}-{{ .Values.image.secretName }}
       volumes:
       - name: credentials
         secret:
@@ -135,6 +135,6 @@ spec:
           type: File
 {{- end }}
 {{- end }}
-      serviceAccountName: {{ if .Values.rbac.install }} "{{ .Values.rbac.serviceAccountName }}" {{ end }}
+      serviceAccountName: {{ if .Values.rbac.install }} "{{ template "vk.fullname" . }}-{{ .Values.rbac.serviceAccountName }}" {{ end }}
       nodeSelector:
         beta.kubernetes.io/os: linux
