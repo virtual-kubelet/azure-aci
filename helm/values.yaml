@@ -1,4 +1,5 @@
 image:
+  secretName: virtual-kubelet-aci-acr
   repository: virtualkubelet.azurecr.io
   repositoryReadOnlyPrincipalId: 98961725-8311-48ef-8f11-2cc3911ee807
   repositoryReadOnlyPrincipalSecret: MH]/FD2.9RwhDmQZQAxu.p0z4fBuR=DG
