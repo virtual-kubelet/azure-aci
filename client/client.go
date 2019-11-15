@@ -60,7 +60,10 @@ func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Clien
 	}
 
 	uat := userAgentTransport{
-		base:      http.DefaultTransport,
+		base: &http.Transport{
+			DisableKeepAlives:   true,
+			MaxIdleConnsPerHost: -1,
+		},
 		userAgent: nonEmptyUserAgent,
 		client:    client,
 	}
