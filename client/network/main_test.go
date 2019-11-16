@@ -10,17 +10,21 @@ import (
 	"github.com/pkg/errors"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/resourcegroups"
+	"github.com/virtual-kubelet/azure-aci/test/config"
 )
 
 var (
-	location      = "westus"
-	resourceGroup = "virtual-kubelet-tests"
 	testAuth      *azure.Authentication
+	resourceGroup string
+	location      string
 )
 
 func TestMain(m *testing.M) {
+	cfg := config.FromEnv()
 	uid := uuid.New()
-	resourceGroup += "-" + uid.String()[0:6]
+	cfg.ResourceGroup += "-" + uid.String()[0:6]
+	resourceGroup = cfg.ResourceGroup
+	location = cfg.Location
 
 	if err := setupAuth(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error setting up auth:", err)
@@ -31,9 +35,9 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		os.Exit(1)
 	}
-	_, err = c.CreateResourceGroup(resourceGroup, resourcegroups.Group{
-		Name:     resourceGroup,
-		Location: location,
+	_, err = c.CreateResourceGroup(cfg.ResourceGroup, resourcegroups.Group{
+		Name:     cfg.ResourceGroup,
+		Location: cfg.Location,
 	})
 	if err != nil {
 		os.Exit(1)
@@ -41,7 +45,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	if err := c.DeleteResourceGroup(resourceGroup); err != nil {
+	if err := c.DeleteResourceGroup(cfg.ResourceGroup); err != nil {
 		fmt.Fprintln(os.Stderr, "error removing resource group:", err)
 	}
 

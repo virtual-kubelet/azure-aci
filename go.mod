@@ -33,3 +33,5 @@ replace k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75
 replace k8s.io/client-go => k8s.io/client-go v0.0.0-20190805141520-2fe0317bcee0
 
 replace k8s.io/kubernetes => k8s.io/kubernetes v1.14.3
+
+go 1.13

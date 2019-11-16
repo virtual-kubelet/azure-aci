@@ -12,21 +12,16 @@ import (
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/resourcegroups"
+	"github.com/virtual-kubelet/azure-aci/test/config"
 )
 
 var (
 	client         *Client
-	location       = "westus"
-	resourceGroup  = "virtual-kubelet-tests"
 	containerGroup = "virtual-kubelet-test-container-group"
 	subscriptionID string
+	location       string
+	resourceGroup  string
 )
-
-func init() {
-	//Create a resource group name with uuid.
-	uid := uuid.New()
-	resourceGroup += "-" + uid.String()[0:6]
-}
 
 // The TestMain function creates a resource group for testing
 // and deletes in when it's done.
@@ -38,6 +33,13 @@ func TestMain(m *testing.M) {
 
 	subscriptionID = auth.SubscriptionID
 
+	cfg := config.FromEnv()
+	//Create a resource group name with uuid.
+	uid := uuid.New()
+	cfg.ResourceGroup += "-" + uid.String()[0:6]
+	resourceGroup = cfg.ResourceGroup
+	location = cfg.Location
+
 	// Check if the resource group exists and create it if not.
 	rgCli, err := resourcegroups.NewClient(auth, "unit-test")
 	if err != nil {
@@ -45,15 +47,15 @@ func TestMain(m *testing.M) {
 	}
 
 	// Check if the resource group exists.
-	exists, err := rgCli.ResourceGroupExists(resourceGroup)
+	exists, err := rgCli.ResourceGroupExists(cfg.ResourceGroup)
 	if err != nil {
 		log.Fatalf("checking if resource group exists failed: %v", err)
 	}
 
 	if !exists {
 		// Create the resource group.
-		_, err := rgCli.CreateResourceGroup(resourceGroup, resourcegroups.Group{
-			Location: location,
+		_, err := rgCli.CreateResourceGroup(cfg.ResourceGroup, resourcegroups.Group{
+			Location: cfg.Location,
 		})
 		if err != nil {
 			log.Fatalf("creating resource group failed: %v", err)
@@ -64,8 +66,8 @@ func TestMain(m *testing.M) {
 	merr := m.Run()
 
 	// Delete the resource group.
-	if err := rgCli.DeleteResourceGroup(resourceGroup); err != nil {
-		log.Printf("Couldn't delete resource group %q: %v", resourceGroup, err)
+	if err := rgCli.DeleteResourceGroup(cfg.ResourceGroup); err != nil {
+		log.Printf("Couldn't delete resource group %q: %v", cfg.ResourceGroup, err)
 
 	}
 
