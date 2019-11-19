@@ -330,9 +330,9 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 	logger := log.G(ctx).WithField("method", "setupCapacity")
 
 	// Set sane defaults for Capacity in case config is not supplied
-	p.cpu = "800"
+	p.cpu = "10000"
 	p.memory = "4Ti"
-	p.pods = "800"
+	p.pods = "5000"
 
 	if cpuQuota := os.Getenv("ACI_QUOTA_CPU"); cpuQuota != "" {
 		p.cpu = cpuQuota
