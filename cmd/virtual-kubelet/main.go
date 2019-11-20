@@ -34,7 +34,7 @@ var (
 	buildVersion    = "N/A"
 	buildTime       = "N/A"
 	k8sVersion      = "v1.14.3" // This should follow the version of k8s.io/kubernetes we are importing
-	numberOfWorkers = 40
+	numberOfWorkers = 25
 )
 
 func main() {
