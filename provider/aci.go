@@ -1,4 +1,4 @@
-package azure
+package provider
 
 import (
 	"bytes"
@@ -89,6 +89,7 @@ type ACIProvider struct {
 	metricsSync     sync.Mutex
 	metricsSyncTime time.Time
 	lastMetric      *stats.Summary
+	//tracker         *podsTracker
 }
 
 // AuthConfig is the secret returned from an ImageRegistryCredential

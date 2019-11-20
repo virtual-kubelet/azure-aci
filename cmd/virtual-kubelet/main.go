@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	"github.com/virtual-kubelet/azure-aci"
+	azprovider "github.com/virtual-kubelet/azure-aci/provider"
 	cli "github.com/virtual-kubelet/node-cli"
 	logruscli "github.com/virtual-kubelet/node-cli/logrus"
 	"github.com/virtual-kubelet/node-cli/opts"
@@ -55,7 +55,7 @@ func main() {
 		cli.WithBaseOpts(o),
 		cli.WithCLIVersion(buildVersion, buildTime),
 		cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
-			return azure.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort)
+			return azprovider.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort)
 		}),
 		cli.WithPersistentFlags(logConfig.FlagSet()),
 		cli.WithPersistentPreRunCallback(func() error {

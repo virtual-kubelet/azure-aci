@@ -2,7 +2,7 @@
 * Copyright (c) Microsoft.  All rights reserved.
  */
 
-package azure
+package provider
 
 import (
 	"bytes"
