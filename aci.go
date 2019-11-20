@@ -467,7 +467,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 	var authInfo *clientcmdapi.AuthInfo
 
 	// Try loading kubeconfig if path to it is specified.
-	kubeconfig := os.Getenv("kubeconfig")
+	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig != "" {
 		if _, err := os.Stat(kubeconfig); !os.IsNotExist(err) {
 			// Get the kubeconfig from the filepath.
