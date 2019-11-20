@@ -34,7 +34,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	clientcmdv1 "k8s.io/client-go/tools/clientcmd/api/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 )
 
@@ -460,43 +462,75 @@ func getNetworkProfileName(subnetID string) string {
 }
 
 func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Extension, error) {
-	ca, err := ioutil.ReadFile(secretPath + "/ca.crt")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read ca.crt file: %v", err)
-	}
-
-	var token []byte
-	token, err = ioutil.ReadFile(secretPath + "/token")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read token file: %v", err)
-	}
-
 	name := "virtual-kubelet"
+	var certAuthData []byte
+	var authInfo *clientcmdapi.AuthInfo
 
-	config := clientcmdv1.Config{
+	// Try loading kubeconfig if path to it is specified.
+	kubeconfig := os.Getenv("kubeconfig")
+	if kubeconfig != "" {
+		if _, err := os.Stat(kubeconfig); !os.IsNotExist(err) {
+			// Get the kubeconfig from the filepath.
+			var configFromPath *clientcmdapi.Config
+			configFromPath, err = clientcmd.LoadFromFile(kubeconfig)
+			if err == nil &&
+				len(configFromPath.Clusters) > 0 &&
+				len(configFromPath.AuthInfos) > 0 {
+
+				certAuthData = getKubeconfigCertAuthData(configFromPath.Clusters)
+				authInfo = getKubeconfigAuthInfo(configFromPath.AuthInfos)
+			}
+		}
+	}
+
+	if len(certAuthData) <= 0 || authInfo == nil {
+		var err error
+		certAuthData, err = ioutil.ReadFile(secretPath + "/ca.crt")
+		if err != nil {
+			return nil, fmt.Errorf("failed to read ca.crt file: %v", err)
+		}
+
+		var token []byte
+		token, err = ioutil.ReadFile(secretPath + "/token")
+		if err != nil {
+			return nil, fmt.Errorf("failed to read token file: %v", err)
+		}
+
+		authInfo = &clientcmdapi.AuthInfo{
+			Token: string(token),
+		}
+	}
+
+	config := clientcmdapiv1.Config{
 		APIVersion: "v1",
 		Kind:       "Config",
-		Clusters: []clientcmdv1.NamedCluster{
-			clientcmdv1.NamedCluster{
+		Clusters: []clientcmdapiv1.NamedCluster{
+			clientcmdapiv1.NamedCluster{
 				Name: name,
-				Cluster: clientcmdv1.Cluster{
+				Cluster: clientcmdapiv1.Cluster{
 					Server: masterURI,
-					CertificateAuthorityData: ca,
+					CertificateAuthorityData: certAuthData,
 				},
 			},
 		},
-		AuthInfos: []clientcmdv1.NamedAuthInfo{
-			clientcmdv1.NamedAuthInfo{
+		AuthInfos: []clientcmdapiv1.NamedAuthInfo{
+			clientcmdapiv1.NamedAuthInfo{
 				Name: name,
-				AuthInfo: clientcmdv1.AuthInfo{
-					Token: string(token),
+				AuthInfo: clientcmdapiv1.AuthInfo{
+					ClientCertificate:     authInfo.ClientCertificate,
+					ClientCertificateData: authInfo.ClientCertificateData,
+					ClientKey:             authInfo.ClientKey,
+					ClientKeyData:         authInfo.ClientKeyData,
+					Token:                 authInfo.Token,
+					Username:              authInfo.Username,
+					Password:              authInfo.Password,
 				},
 			},
 		},
-		Contexts: []clientcmdv1.NamedContext{
-			clientcmdv1.NamedContext{
+		Contexts: []clientcmdapiv1.NamedContext{
+			clientcmdapiv1.NamedContext{
 				Name: name,
-				Context: clientcmdv1.Context{
+				Context: clientcmdapiv1.Context{
 					Cluster:  name,
 					AuthInfo: name,
 				},
@@ -526,6 +560,22 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 	}
 
 	return &extension, nil
+}
+
+func getKubeconfigCertAuthData(clusters map[string]*clientcmdapi.Cluster) []byte {
+	for _, v := range clusters {
+		return v.CertificateAuthorityData
+	}
+
+	return make([]byte, 0)
+}
+
+func getKubeconfigAuthInfo(authInfos map[string]*clientcmdapi.AuthInfo) *clientcmdapi.AuthInfo {
+	for _, v := range authInfos {
+		return v
+	}
+
+	return nil
 }
 
 func addAzureAttributes(ctx context.Context, span trace.Span, p *ACIProvider) context.Context {
