@@ -89,7 +89,7 @@ type ACIProvider struct {
 	metricsSync     sync.Mutex
 	metricsSyncTime time.Time
 	lastMetric      *stats.Summary
-	//tracker         *podsTracker
+	tracker         *podsTracker
 }
 
 // AuthConfig is the secret returned from an ImageRegistryCredential
@@ -106,7 +106,9 @@ type AuthConfig struct {
 // See https://azure.microsoft.com/en-us/status/ for valid regions.
 var validAciRegions = []string{
 	"australiaeast",
+	"brazilsouth",
 	"canadacentral",
+	"canadaeast",
 	"centralindia",
 	"centralus",
 	"eastasia",
@@ -114,6 +116,7 @@ var validAciRegions = []string{
 	"eastus2",
 	"eastus2euap",
 	"japaneast",
+	"koreacentral",
 	"northcentralus",
 	"northeurope",
 	"southcentralus",
@@ -961,6 +964,26 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	}
 
 	return pods, nil
+}
+
+// NotifyPods instructs the notifier to call the passed in function when
+// the pod status changes.
+// The provided pointer to a Pod is guaranteed to be used in a read-only
+// fashion.
+func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.NotifyPods")
+	defer span.End()
+
+	// Capture the notifier to be used for communicating updates to VK
+	p.tracker = &podsTracker{
+		rm: p.resourceManager,
+		podFetcher: func(ns, pn string) (*v1.Pod, error) {
+			return p.GetPod(ctx, ns, pn)
+		},
+		updateHandler: notifierCb,
+	}
+
+	go p.tracker.StartTracking(ctx)
 }
 
 // capacity returns a resource list containing the capacity limits set for ACI.
