@@ -22,6 +22,7 @@ import (
 	azprovider "github.com/virtual-kubelet/azure-aci/provider"
 	cli "github.com/virtual-kubelet/node-cli"
 	logruscli "github.com/virtual-kubelet/node-cli/logrus"
+	opencensuscli "github.com/virtual-kubelet/node-cli/opencensus"
 	"github.com/virtual-kubelet/node-cli/opts"
 	"github.com/virtual-kubelet/node-cli/provider"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -31,9 +32,10 @@ import (
 )
 
 var (
-	buildVersion = "N/A"
-	buildTime    = "N/A"
-	k8sVersion   = "v1.14.3" // This should follow the version of k8s.io/kubernetes we are importing
+	buildVersion    = "N/A"
+	buildTime       = "N/A"
+	k8sVersion      = "v1.14.3" // This should follow the version of k8s.io/kubernetes we are importing
+	numberOfWorkers = 25
 )
 
 func main() {
@@ -42,7 +44,13 @@ func main() {
 	logger := logrus.StandardLogger()
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
 	logConfig := &logruscli.Config{LogLevel: "info"}
+
 	trace.T = opencensus.Adapter{}
+	traceConfig := opencensuscli.Config{
+		AvailableExporters: map[string]opencensuscli.ExporterInitFunc{
+			"ocagent": initOCAgent,
+		},
+	}
 
 	o, err := opts.FromEnv()
 	if err != nil {
@@ -50,6 +58,7 @@ func main() {
 	}
 	o.Provider = "azure"
 	o.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
+	o.PodSyncWorkers = numberOfWorkers
 
 	node, err := cli.New(ctx,
 		cli.WithBaseOpts(o),
@@ -60,6 +69,10 @@ func main() {
 		cli.WithPersistentFlags(logConfig.FlagSet()),
 		cli.WithPersistentPreRunCallback(func() error {
 			return logruscli.Configure(logConfig, logger)
+		}),
+		cli.WithPersistentFlags(traceConfig.FlagSet()),
+		cli.WithPersistentPreRunCallback(func() error {
+			return opencensuscli.Configure(ctx, &traceConfig, o)
 		}),
 	)
 

@@ -29,6 +29,11 @@ type userAgentTransport struct {
 	client    *Client
 }
 
+var (
+	concurrentConnections          = 20
+	throttlingAdditionalRetryCount = 3
+)
+
 // NewClient creates a new Azure API client from an Authentication struct and BaseURI.
 func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Client, error) {
 	resource, err := getResourceForToken(auth, baseURI)
@@ -59,8 +64,13 @@ func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Clien
 		}
 	}
 
+	// As go transport doesn't support a away to force close (not reuse) a specific connection in a selective way
+	// after rountrip completes, we'll disable keepalives.
 	uat := userAgentTransport{
-		base:      http.DefaultTransport,
+		base: &http.Transport{
+			DisableKeepAlives:   true,
+			MaxIdleConnsPerHost: concurrentConnections,
+		},
 		userAgent: nonEmptyUserAgent,
 		client:    client,
 	}
@@ -100,6 +110,17 @@ func (t userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 	// Add the authorization header.
 	newReq.Header["Authorization"] = []string{fmt.Sprintf("Bearer %s", t.client.BearerAuthorizer.tokenProvider.OAuthToken())}
+
+	var retries int
+	for retries = 0; retries < throttlingAdditionalRetryCount; retries++ {
+		response, err := t.base.RoundTrip(&newReq)
+		if err == nil && response.StatusCode == 429 {
+			// We hit throttling, retry to hopefully hit another ARM instance.
+			continue
+		}
+
+		return response, err
+	}
 
 	return t.base.RoundTrip(&newReq)
 }
