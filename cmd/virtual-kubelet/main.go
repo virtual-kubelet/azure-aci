@@ -22,6 +22,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci"
 	cli "github.com/virtual-kubelet/node-cli"
 	logruscli "github.com/virtual-kubelet/node-cli/logrus"
+	opencensuscli "github.com/virtual-kubelet/node-cli/opencensus"
 	"github.com/virtual-kubelet/node-cli/opts"
 	"github.com/virtual-kubelet/node-cli/provider"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -43,7 +44,13 @@ func main() {
 	logger := logrus.StandardLogger()
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
 	logConfig := &logruscli.Config{LogLevel: "info"}
+
 	trace.T = opencensus.Adapter{}
+	traceConfig := opencensuscli.Config{
+		AvailableExporters: map[string]opencensuscli.ExporterInitFunc{
+			"ocagent": initOCAgent,
+		},
+	}
 
 	o, err := opts.FromEnv()
 	if err != nil {
@@ -62,6 +69,10 @@ func main() {
 		cli.WithPersistentFlags(logConfig.FlagSet()),
 		cli.WithPersistentPreRunCallback(func() error {
 			return logruscli.Configure(logConfig, logger)
+		}),
+		cli.WithPersistentFlags(traceConfig.FlagSet()),
+		cli.WithPersistentPreRunCallback(func() error {
+			return opencensuscli.Configure(ctx, &traceConfig, o)
 		}),
 	)
 

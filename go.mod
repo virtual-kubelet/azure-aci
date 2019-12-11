@@ -1,6 +1,7 @@
 module github.com/virtual-kubelet/azure-aci
 
 require (
+	contrib.go.opencensus.io/exporter/ocagent v0.4.12
 	github.com/Azure/azure-sdk-for-go v26.0.0+incompatible
 	github.com/Azure/go-autorest v11.5.0+incompatible
 	github.com/BurntSushi/toml v0.3.1
@@ -33,3 +34,5 @@ replace k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75
 replace k8s.io/client-go => k8s.io/client-go v0.0.0-20190805141520-2fe0317bcee0
 
 replace k8s.io/kubernetes => k8s.io/kubernetes v1.14.3
+
+go 1.13
