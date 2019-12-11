@@ -32,9 +32,10 @@ import (
 )
 
 var (
-	buildVersion = "N/A"
-	buildTime    = "N/A"
-	k8sVersion   = "v1.14.3" // This should follow the version of k8s.io/kubernetes we are importing
+	buildVersion    = "N/A"
+	buildTime       = "N/A"
+	k8sVersion      = "v1.14.3" // This should follow the version of k8s.io/kubernetes we are importing
+	numberOfWorkers = 25
 )
 
 func main() {
@@ -57,6 +58,7 @@ func main() {
 	}
 	o.Provider = "azure"
 	o.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
+	o.PodSyncWorkers = numberOfWorkers
 
 	node, err := cli.New(ctx,
 		cli.WithBaseOpts(o),

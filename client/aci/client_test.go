@@ -509,7 +509,7 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
-	networkProfileID := "/subscriptions/ae43b1e3-c35d-4c8c-bc0d-f148b4c52b78/resourceGroups/aci-connector/providers/Microsoft.Network/networkprofiles/aci-connector-network-profile-westus"
+	networkProfileID := "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/networkProfiles/aci-network-profile-virtual-kubelet-tests-vnet-aci-connector"
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
