@@ -48,8 +48,23 @@ func (pt *podsTracker) StartTracking(ctx context.Context) {
 			return
 		case <-timer.C:
 		}
+
 		pt.updatePods(ctx)
 	}
+}
+
+func (pt *podsTracker) UpdatePodStatus(podNS, podName string, updateCb func(podStatus *v1.PodStatus)) bool {
+	pod := pt.getPodFromK8s(podNS, podName)
+	if pod == nil {
+		// log
+		return false
+	}
+
+	// TODO: retry if update failed (object got updated)
+	updateCb(&pod.Status)
+	pt.updateHandler(pod)
+
+	return true
 }
 
 func (pt *podsTracker) updatePods(ctx context.Context) {
@@ -66,12 +81,17 @@ func (pt *podsTracker) updatePods(ctx context.Context) {
 
 		log.G(ctx).WithField("podName", pod.Name).Infof("processing pod updates...")
 
-		podStatus, _ := pt.getPodStatusFromProvider(pod)
-		// TODO: check failures
+		podStatus, err := pt.getPodStatusFromProvider(pod)
+		if err != nil {
+			log.G(ctx).WithField("podName", pod.Name).Infof("failed to retrieve pod status from provider %v", err)
+			continue
+		}
 
-		updatedPod := pod.DeepCopy()
-		podStatus.DeepCopyInto(&updatedPod.Status)
-		pt.updateHandler(updatedPod)
+		if podStatus != nil { // Pod status is returned from provider.
+			updatedPod := pod.DeepCopy()
+			podStatus.DeepCopyInto(&updatedPod.Status)
+			pt.updateHandler(updatedPod)
+		}
 	}
 }
 
@@ -86,6 +106,8 @@ func (pt *podsTracker) getPodStatusFromProvider(podFromKubernetes *v1.Pod) (*v1.
 	pod, err := pt.podFetcher(podFromKubernetes.Namespace, podFromKubernetes.Name)
 	if pod != nil {
 		podStatus = &pod.Status
+		// Retain existing start time.
+		podStatus.StartTime = podFromKubernetes.Status.StartTime
 	}
 
 	if errdefs.IsNotFound(err) || (err == nil && podStatus == nil) {
@@ -112,12 +134,24 @@ func (pt *podsTracker) getPodStatusFromProvider(podFromKubernetes *v1.Pod) (*v1.
 				}
 				podStatus.ContainerStatuses[i].State.Running = nil
 			}
-		} else {
-			return nil, nil
 		}
+
+		return nil, nil
+
 	} else if err != nil {
 		return nil, err
 	}
 
 	return podStatus, nil
+}
+
+func (pt *podsTracker) getPodFromK8s(podNS, podName string) *v1.Pod {
+	k8sPods := pt.rm.GetPods()
+	for _, pod := range k8sPods {
+		if pod.Namespace == podNS && pod.Name == podName {
+			return pod
+		}
+	}
+
+	return nil
 }
