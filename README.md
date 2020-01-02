@@ -163,6 +163,8 @@ az aks install-connector --resource-group <aks cluster rg> --name <aks cluster n
 
 Once created, [verify the virtual node has been registed](#Validate-the-Virtual-Kubelet-ACI-provider) and you can now [schedule pods in ACI](#Schedule-a-pod-in-ACI). 
 
+:bangbang: The _az aks install-connector_ command will be deprecated shortly. Please follow the **Manual set-up** section below instead. :bangbang:
+
 ## Manual set-up
 
 ### Create a Resource Group for ACI
@@ -178,7 +180,7 @@ export AZURE_RG=aci-group
 ### Create a service principal 
 
 This creates an identity for the Virtual Kubelet ACI provider to use when provisioning
-resources on your account on behalf of Kubernetes. This step is optional if you are provisoning Virtual Kubelet on AKS.
+resources on your account on behalf of Kubernetes. If you are provisioning Virtual Kubelet on AKS, please note: 1) This step is optional 2) The service principal will expire within a year unless [updated](https://docs.microsoft.com/en-us/azure/aks/update-credentials).
 
 1. Create a service principal with RBAC enabled for the quickstart:
     ```cli
