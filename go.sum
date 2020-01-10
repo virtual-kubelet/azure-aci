@@ -84,8 +84,6 @@ github.com/dimchansky/utfbom v1.1.0 h1:FcM3g+nofKgUteL8dm/UpdRXNC9KmADgTpLKsu0TR
 github.com/dimchansky/utfbom v1.1.0/go.mod h1:rO41eb7gLfo8SF1jd9F8HplJm1Fewwi4mQvIirEdv+8=
 github.com/dnaeon/go-vcr v1.0.1/go.mod h1:aBB1+wY4s93YsC3HHjMBMrwTj2R9FHDzUr9KyGc8n1E=
 github.com/docker/distribution v0.0.0-20170726174610-edc3ab29cdff/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
-github.com/docker/distribution v2.7.1+incompatible h1:a5mlkVzth6W5A4fOsS3D2EO5BUmsJpcB+cRlLU7cSug=
-github.com/docker/distribution v2.7.1+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
 github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0 h1:w3NnFcKR5241cfmQU5ZZAsf0xcpId6mWOupTvJlUX2U=
 github.com/docker/docker v0.7.3-0.20190327010347-be7ac8be2ae0/go.mod h1:eEKB0N0r5NX/I1kEveEz05bcu8tLC/8azJZsviup8Sk=
 github.com/docker/go-connections v0.3.0/go.mod h1:Gbd7IOopHjR8Iph03tsViu4nIes5XhDvyHbTtUxmeec=
@@ -388,8 +386,6 @@ github.com/virtual-kubelet/node-cli v0.1.2-0.20190808213126-cd8af9b9bc8c h1:YgtE
 github.com/virtual-kubelet/node-cli v0.1.2-0.20190808213126-cd8af9b9bc8c/go.mod h1:GUXR9zbbY4Mx4jsDyDYYHhAUu5Eolu2PDKBVD+8W/WE=
 github.com/virtual-kubelet/virtual-kubelet v1.0.0 h1:zR1JNFWVtwk1NTzO97+5Lf1Vgxv7l3GCZgzAIvA2X/0=
 github.com/virtual-kubelet/virtual-kubelet v1.0.0/go.mod h1:U/LQr7vG/vQ3BnnPGaHQST7igDltJ7Jrg5kR6VdUIgk=
-github.com/virtual-kubelet/virtual-kubelet v1.1.0 h1:Bqn5KaT3talap6nXuNoUkW8M4oRWpejmV6Q5c7nGKU8=
-github.com/virtual-kubelet/virtual-kubelet v1.1.0/go.mod h1:QGMn8OFqGLGBX9pWbhS8eMKKTDiaMKn77jsta5CbtrE=
 github.com/virtual-kubelet/virtual-kubelet v1.2.1 h1:VvURva/YxqizYd2Humk1RmEhrrYrmU07NHNanrtarxI=
 github.com/virtual-kubelet/virtual-kubelet v1.2.1/go.mod h1:ESTeGjhmKb/9CClm0uYuFaxFNPjyU5aNRNWsJGjZmhY=
 github.com/vishvananda/netlink v0.0.0-20171020171820-b2de5d10e38e/go.mod h1:+SR5DhBJrl6ZM7CoCKvpw5BKroDKQ+PJqOg65H/2ktk=
@@ -546,7 +542,6 @@ k8s.io/api v0.0.0-20190805141119-fdd30b57c827/go.mod h1:TBhBqb1AWbBQbW3XRusr7n7E
 k8s.io/apiextensions-apiserver v0.0.0-20190805143126-cdb999c96590/go.mod h1:31VwenKtjRVPM+9p/9WBr2C4RUlwrs53rbGrhPiTzKk=
 k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719 h1:uV4S5IB5g4Nvi+TBVNf3e9L4wrirlwYJ6w88jUQxTUw=
 k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719/go.mod h1:I4A+glKBHiTgiEjQiCCQfCAIcIMFGt291SmsvcrFzJA=
-k8s.io/apiserver v0.0.0-20181213151703-3ccfe8365421/go.mod h1:6bqaTSOSJavUIXUtfaR9Os9JtTCm8ZqH2SUl2S60C4w=
 k8s.io/apiserver v0.0.0-20190805142138-368b2058237c h1:OxQmmVHy+tsC9ciM88NSUWyX3PWastYCO192eVJ7HNg=
 k8s.io/apiserver v0.0.0-20190805142138-368b2058237c/go.mod h1:k9Vk6Fiw9pZljxzTtvH2MAfADQK6+hPgf7/eRaZb//o=
 k8s.io/cli-runtime v0.0.0-20190805143448-a07e59fb081d/go.mod h1:5w8rmLFPEY2JBGBgRZyieqhi9q0iuUg8oK+zxOdtO7U=
@@ -576,8 +571,6 @@ k8s.io/kube-proxy v0.0.0-20190805143734-7f1675b90353/go.mod h1:REU8MsRh0E7Bq6Lbe
 k8s.io/kube-scheduler v0.0.0-20190805144012-2a1ed1f3d8a4/go.mod h1:JIN72V0gy+lWRlEyk1F5PVARAGZApNsZiFpXWAuqawM=
 k8s.io/kubelet v0.0.0-20190805143852-517ff267f8d1/go.mod h1:xFCK3b5WIEViwd//lUcnLXundamh1B64yiIGgkW9TD0=
 k8s.io/kubernetes v1.13.7/go.mod h1:ocZa8+6APFNC2tX1DZASIbocyYT5jHzqFVsY5aoB7Jk=
-k8s.io/kubernetes v1.14.3 h1:/FQkOJpjc1jGA37s7Rt3U10VwIKW685ejrgOp4UDRFE=
-k8s.io/kubernetes v1.14.3/go.mod h1:ocZa8+6APFNC2tX1DZASIbocyYT5jHzqFVsY5aoB7Jk=
 k8s.io/kubernetes v1.15.2 h1:RO9EuRw5vlN3oa/lnmPxmywOoJRtg9o40KcklHXNIAQ=
 k8s.io/kubernetes v1.15.2/go.mod h1:3RE5ikMc73WK+dSxk4pQuQ6ZaJcPXiZX2dj98RcdCuM=
 k8s.io/legacy-cloud-providers v0.0.0-20190805144654-3d5bf3a310c1/go.mod h1:nqr8H9tPJMAtFWiSk7g5SEQKSzsxKExlgZ1X6jAziPA=
