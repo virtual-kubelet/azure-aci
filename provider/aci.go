@@ -1120,11 +1120,6 @@ func (p *ACIProvider) Ping(ctx context.Context) error {
 	return nil
 }
 
-// NotifyNodeStatus is used to asynchronously monitor the node.
-func (p *ACIProvider) NotifyNodeStatus(ctx context.Context, notifierCb func(*v1.Node)) {
-	// There will be no changes to the Node status from provider side for now.
-}
-
 // getContainerGroup returns a container group from ACI.
 func (p *ACIProvider) getContainerGroup(ctx context.Context, namespace, name string) (*aci.ContainerGroup, error) {
 	cg, status, err := p.aciClient.GetContainerGroup(ctx, p.resourceGroup, fmt.Sprintf("%s-%s", namespace, name))
