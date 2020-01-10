@@ -1,4 +1,4 @@
-package azure
+package provider
 
 import (
 	"context"
@@ -86,7 +86,7 @@ func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summa
 
 			logger.Debug("Acquired semaphore")
 
-			cgName := containerGroupName(pod)
+			cgName := containerGroupName(pod.Namespace, pod.Name)
 			// cpu/mem and net stats are split because net stats do not support container level detail
 			systemStats, err := p.aciClient.GetContainerGroupMetrics(ctx, p.resourceGroup, cgName, aci.MetricsRequest{
 				Dimension:    "containerName eq '*'",
