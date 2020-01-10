@@ -4,151 +4,190 @@ import (
 	"context"
 	"time"
 
-	"github.com/docker/docker/errdefs"
 	"github.com/virtual-kubelet/node-cli/manager"
+	errdef "github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var (
+const (
 	podStatusReasonProviderFailed       = "ProviderFailed"
 	statusReasonNotFound                = "NotFound"
 	statusMessageNotFound               = "The pod may have been deleted from the provider"
 	containerExitCodeNotFound     int32 = -137
+
+	statusUpdatesInterval = 5 * time.Second
+	cleanupInterval       = 5 * time.Minute
 )
 
-type podsTracker struct {
-	rm            *manager.ResourceManager
-	podFetcher    func(string, string) (*v1.Pod, error)
-	updateHandler func(*v1.Pod)
+type PodIdentifier struct {
+	namespace string
+	name      string
 }
 
-func (pt *podsTracker) StartTracking(ctx context.Context) {
-	ctx, span := trace.StartSpan(ctx, "podsTracker.StartTracking")
+type PodsTrackerHandler interface {
+	ListActivePods(ctx context.Context) ([]PodIdentifier, error)
+	FetchPodStatus(ctx context.Context, ns, name string) (*v1.PodStatus, error)
+	CleanupPod(ctx context.Context, ns, name string) error
+}
+
+type PodsTracker struct {
+	rm       *manager.ResourceManager
+	updateCb func(*v1.Pod)
+	handler  PodsTrackerHandler
+}
+
+// StartTracking starts the background tracking for created pods.
+func (pt *PodsTracker) StartTracking(ctx context.Context) {
+	ctx, span := trace.StartSpan(ctx, "PodsTracker.StartTracking")
 	defer span.End()
 
-	interval := 5 * time.Second
-
-	timer := time.NewTimer(interval)
-	defer timer.Stop()
-
-	if !timer.Stop() {
-		<-timer.C
-	}
+	statusUpdatesTimer := time.NewTimer(statusUpdatesInterval)
+	cleanupTimer := time.NewTimer(cleanupInterval)
+	defer statusUpdatesTimer.Stop()
+	defer cleanupTimer.Stop()
 
 	for {
-		log.G(ctx).Debug("Pod status update loop start")
-		timer.Reset(interval)
+		log.G(ctx).Debug("Pod status updates & cleanup loop start")
 
 		select {
 		case <-ctx.Done():
 			log.G(ctx).WithError(ctx.Err()).Debug("Pod status update loop exiting")
 			return
-		case <-timer.C:
+		case <-statusUpdatesTimer.C:
+			pt.updatePodsLoop(ctx)
+			statusUpdatesTimer.Reset(statusUpdatesInterval)
+		case <-cleanupTimer.C:
+			pt.cleanupDanglingPods(ctx)
+			cleanupTimer.Reset(cleanupInterval)
 		}
-
-		pt.updatePods(ctx)
 	}
 }
 
-func (pt *podsTracker) UpdatePodStatus(podNS, podName string, updateCb func(podStatus *v1.PodStatus)) bool {
-	pod := pt.getPodFromK8s(podNS, podName)
+// UpdatePodStatus updates the status of a pod, by posting to update callback.
+func (pt *PodsTracker) UpdatePodStatus(ns, name string, updateHandler func(*v1.PodStatus), forceUpdate bool) error {
+	k8sPods := pt.rm.GetPods()
+	pod := getPodFromList(k8sPods, ns, name)
+
 	if pod == nil {
-		// log
-		return false
+		return errdef.NotFound("pod not found")
 	}
 
-	// TODO: retry if update failed (object got updated)
-	updateCb(&pod.Status)
-	pt.updateHandler(pod)
+	updatedPod := pod.DeepCopy()
+	if forceUpdate {
+		updatedPod.ResourceVersion = ""
+	}
 
-	return true
+	updateHandler(&updatedPod.Status)
+	pt.updateCb(updatedPod)
+	return nil
 }
 
-func (pt *podsTracker) updatePods(ctx context.Context) {
-	ctx, span := trace.StartSpan(ctx, "podsTracker.updatePods")
+func (pt *PodsTracker) updatePodsLoop(ctx context.Context) {
+	ctx, span := trace.StartSpan(ctx, "PodsTracker.updatePods")
 	defer span.End()
 
 	k8sPods := pt.rm.GetPods()
-	log.G(ctx).Infof("%v pods returned", len(k8sPods))
-
 	for _, pod := range k8sPods {
-		if pt.shouldSkipPodStatusUpdate(pod) {
-			continue
-		}
-
-		log.G(ctx).WithField("podName", pod.Name).Infof("processing pod updates...")
-
-		podStatus, err := pt.getPodStatusFromProvider(pod)
-		if err != nil {
-			log.G(ctx).WithField("podName", pod.Name).Infof("failed to retrieve pod status from provider %v", err)
-			continue
-		}
-
-		if podStatus != nil { // Pod status is returned from provider.
-			updatedPod := pod.DeepCopy()
-			podStatus.DeepCopyInto(&updatedPod.Status)
-			pt.updateHandler(updatedPod)
+		updatedPod := pod.DeepCopy()
+		ok := pt.processPodUpdates(ctx, updatedPod)
+		if ok {
+			pt.updateCb(updatedPod)
 		}
 	}
 }
 
-func (pt *podsTracker) shouldSkipPodStatusUpdate(pod *v1.Pod) bool {
-	return pod.Status.Phase == v1.PodSucceeded ||
-		pod.Status.Phase == v1.PodFailed ||
-		pod.Status.Reason == podStatusReasonProviderFailed // Pending phase because of failure
-}
+func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
+	ctx, span := trace.StartSpan(ctx, "PodsTracker.cleanupDanglingPods")
+	defer span.End()
 
-func (pt *podsTracker) getPodStatusFromProvider(podFromKubernetes *v1.Pod) (*v1.PodStatus, error) {
-	var podStatus *v1.PodStatus
-	pod, err := pt.podFetcher(podFromKubernetes.Namespace, podFromKubernetes.Name)
-	if pod != nil {
-		podStatus = &pod.Status
-		// Retain existing start time.
-		podStatus.StartTime = podFromKubernetes.Status.StartTime
+	k8sPods := pt.rm.GetPods()
+	activePods, err := pt.handler.ListActivePods(ctx)
+	if err != nil {
+		log.G(ctx).WithError(err).Errorf("failed to retrive active container groups list")
+		return
 	}
 
-	if errdefs.IsNotFound(err) || (err == nil && podStatus == nil) {
+	if len(activePods) > 0 {
+		for i, _ := range activePods {
+			pod := getPodFromList(k8sPods, activePods[i].namespace, activePods[i].name)
+			if pod != nil {
+				continue
+			}
+
+			log.G(ctx).Errorf("cleaning up dangling pod %v", activePods[i].name)
+
+			err := pt.handler.CleanupPod(ctx, activePods[i].namespace, activePods[i].name)
+			if err != nil && !errdef.IsNotFound(err) {
+				log.G(ctx).WithError(err).Errorf("failed to cleanup pod %v", activePods[i].name)
+			}
+		}
+	}
+}
+
+func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool {
+	ctx, span := trace.StartSpan(ctx, "PodsTracker.processPodUpdates")
+	defer span.End()
+
+	if pt.shouldSkipPodStatusUpdate(pod) {
+		return false
+	}
+
+	podStatusFromProvider, err := pt.handler.FetchPodStatus(ctx, pod.Namespace, pod.Name)
+	if err == nil && podStatusFromProvider != nil {
+		podStatusFromProvider.DeepCopyInto(&pod.Status)
+		return true
+	}
+
+	if errdef.IsNotFound(err) || (err == nil && podStatusFromProvider == nil) {
 		// Only change the status when the pod was already up
-		if podFromKubernetes.Status.Phase == v1.PodRunning {
+		if pod.Status.Phase == v1.PodRunning {
 			// Set the pod to failed, this makes sure if the underlying container implementation is gone that a new pod will be created.
-			podStatus = podFromKubernetes.Status.DeepCopy()
-			podStatus.Phase = v1.PodFailed
-			podStatus.Reason = statusReasonNotFound
-			podStatus.Message = statusMessageNotFound
+			pod.Status.Phase = v1.PodFailed
+			pod.Status.Reason = statusReasonNotFound
+			pod.Status.Message = statusMessageNotFound
 			now := metav1.NewTime(time.Now())
-			for i, c := range podStatus.ContainerStatuses {
-				if c.State.Running == nil {
+			for i, _ := range pod.Status.ContainerStatuses {
+				if pod.Status.ContainerStatuses[i].State.Running == nil {
 					continue
 				}
 
-				podStatus.ContainerStatuses[i].State.Terminated = &v1.ContainerStateTerminated{
+				pod.Status.ContainerStatuses[i].State.Terminated = &v1.ContainerStateTerminated{
 					ExitCode:    containerExitCodeNotFound,
 					Reason:      statusReasonNotFound,
 					Message:     statusMessageNotFound,
 					FinishedAt:  now,
-					StartedAt:   c.State.Running.StartedAt,
-					ContainerID: c.ContainerID,
+					StartedAt:   pod.Status.ContainerStatuses[i].State.Running.StartedAt,
+					ContainerID: pod.Status.ContainerStatuses[i].ContainerID,
 				}
-				podStatus.ContainerStatuses[i].State.Running = nil
+				pod.Status.ContainerStatuses[i].State.Running = nil
 			}
+
+			return true
 		}
 
-		return nil, nil
-
-	} else if err != nil {
-		return nil, err
+		return false
 	}
 
-	return podStatus, nil
+	if err != nil {
+		log.G(ctx).WithError(err).Errorf("failed to retrieve pod %v status from provider", pod.Name)
+	}
+
+	return false
 }
 
-func (pt *podsTracker) getPodFromK8s(podNS, podName string) *v1.Pod {
-	k8sPods := pt.rm.GetPods()
-	for _, pod := range k8sPods {
-		if pod.Namespace == podNS && pod.Name == podName {
+func (pt *PodsTracker) shouldSkipPodStatusUpdate(pod *v1.Pod) bool {
+	return pod.Status.Phase == v1.PodSucceeded || // Pod completed its execution
+		pod.Status.Phase == v1.PodFailed ||
+		pod.Status.Reason == podStatusReasonProviderFailed || // Pending phase because of failure
+		pod.DeletionTimestamp != nil // Terminating
+}
+
+func getPodFromList(list []*v1.Pod, ns, name string) *v1.Pod {
+	for _, pod := range list {
+		if pod.Namespace == ns && pod.Name == name {
 			return pod
 		}
 	}
