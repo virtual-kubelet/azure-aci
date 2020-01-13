@@ -30,7 +30,7 @@ type userAgentTransport struct {
 }
 
 var (
-	concurrentConnections          = 20
+	concurrentConnections          = 200
 	throttlingAdditionalRetryCount = 3
 )
 

@@ -1,4 +1,4 @@
-package azure
+package provider
 
 import (
 	"bytes"
@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
+	credconfig "k8s.io/kubernetes/pkg/credentialprovider"
 	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 )
 
@@ -60,6 +61,12 @@ const (
 const (
 	gpuResourceName   v1.ResourceName = "nvidia.com/gpu"
 	gpuTypeAnnotation                 = "virtual-kubelet.io/gpu-type"
+)
+
+const (
+	statusReasonPodDeleted            = "NotFound"
+	statusMessagePodDeleted           = "The pod may have been deleted from the provider"
+	containerExitCodePodDeleted int32 = 0
 )
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
@@ -91,6 +98,7 @@ type ACIProvider struct {
 	metricsSync     sync.Mutex
 	metricsSyncTime time.Time
 	lastMetric      *stats.Summary
+	tracker         *PodsTracker
 }
 
 // AuthConfig is the secret returned from an ImageRegistryCredential
@@ -107,7 +115,9 @@ type AuthConfig struct {
 // See https://azure.microsoft.com/en-us/status/ for valid regions.
 var validAciRegions = []string{
 	"australiaeast",
+	"brazilsouth",
 	"canadacentral",
+	"canadaeast",
 	"centralindia",
 	"centralus",
 	"eastasia",
@@ -115,6 +125,7 @@ var validAciRegions = []string{
 	"eastus2",
 	"eastus2euap",
 	"japaneast",
+	"koreacentral",
 	"northcentralus",
 	"northeurope",
 	"southcentralus",
@@ -508,7 +519,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 			clientcmdapiv1.NamedCluster{
 				Name: name,
 				Cluster: clientcmdapiv1.Cluster{
-					Server: masterURI,
+					Server:                   masterURI,
 					CertificateAuthorityData: certAuthData,
 				},
 			},
@@ -659,12 +670,27 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	p.amendVnetResources(&containerGroup, pod)
 
-	_, err = p.aciClient.CreateContainerGroup(
+	log.G(ctx).Infof("start creating pod %v", pod.Name)
+	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
+	return p.createContainerGroup(ctx, pod.Namespace, pod.Name, &containerGroup)
+}
+
+func (p *ACIProvider) createContainerGroup(ctx context.Context, podNS, podName string, cg *aci.ContainerGroup) error {
+	ctx, span := trace.StartSpan(ctx, "aci.createContainerGroup")
+	defer span.End()
+	ctx = addAzureAttributes(ctx, span, p)
+
+	cgName := containerGroupName(podNS, podName)
+	_, err := p.aciClient.CreateContainerGroup(
 		ctx,
 		p.resourceGroup,
-		containerGroupName(pod),
-		containerGroup,
+		cgName,
+		*cg,
 	)
+
+	if err != nil {
+		log.G(ctx).WithError(err).Errorf("failed to create container group %v", cgName)
+	}
 
 	return err
 }
@@ -675,7 +701,6 @@ func (p *ACIProvider) amendVnetResources(containerGroup *aci.ContainerGroup, pod
 	}
 
 	containerGroup.NetworkProfile = &aci.NetworkProfileDefinition{ID: p.networkProfile}
-
 	containerGroup.ContainerGroupProperties.Extensions = []*aci.Extension{p.kubeProxyExtension}
 	containerGroup.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod.Spec.DNSPolicy, pod.Spec.DNSConfig)
 }
@@ -779,8 +804,8 @@ func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *aci.ContainerGroupDiagnostics
 	return p.diagnostics
 }
 
-func containerGroupName(pod *v1.Pod) string {
-	return fmt.Sprintf("%s-%s", pod.Namespace, pod.Name)
+func containerGroupName(podNS, podName string) string {
+	return fmt.Sprintf("%s-%s", podNS, podName)
 }
 
 // UpdatePod is a noop, ACI currently does not support live updates of a pod.
@@ -794,8 +819,55 @@ func (p *ACIProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	err := p.aciClient.DeleteContainerGroup(ctx, p.resourceGroup, fmt.Sprintf("%s-%s", pod.Namespace, pod.Name))
-	return wrapError(err)
+	log.G(ctx).Infof("start deleting pod %v", pod.Name)
+	// TODO: Run in a go routine to not block workers.
+	return p.deleteContainerGroup(ctx, pod.Namespace, pod.Name)
+}
+
+func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName string) error {
+	ctx, span := trace.StartSpan(ctx, "aci.deleteContainerGroup")
+	defer span.End()
+	ctx = addAzureAttributes(ctx, span, p)
+
+	cgName := containerGroupName(podNS, podName)
+	err := p.aciClient.DeleteContainerGroup(ctx, p.resourceGroup, cgName)
+	if err != nil {
+		log.G(ctx).WithError(err).Errorf("failed to delete container group %v", cgName)
+		return err
+	}
+
+	if p.tracker != nil {
+		// Delete is not an sync API on ACI yet, but will assume with current implementation that termination is completed. Also, till gracePeriod is supported.
+		updateErr := p.tracker.UpdatePodStatus(
+			podNS,
+			podName,
+			func(podStatus *v1.PodStatus) {
+				now := metav1.NewTime(time.Now())
+				for i, _ := range podStatus.ContainerStatuses {
+					if podStatus.ContainerStatuses[i].State.Running == nil {
+						continue
+					}
+
+					podStatus.ContainerStatuses[i].State.Terminated = &v1.ContainerStateTerminated{
+						ExitCode:    containerExitCodePodDeleted,
+						Reason:      statusReasonPodDeleted,
+						Message:     statusMessagePodDeleted,
+						FinishedAt:  now,
+						StartedAt:   podStatus.ContainerStatuses[i].State.Running.StartedAt,
+						ContainerID: podStatus.ContainerStatuses[i].ContainerID,
+					}
+					podStatus.ContainerStatuses[i].State.Running = nil
+				}
+			},
+			false,
+		)
+
+		if updateErr != nil && !errdefs.IsNotFound(updateErr) {
+			log.G(ctx).WithError(updateErr).Errorf("failed to update termination status for cg %v", cgName)
+		}
+	}
+
+	return nil
 }
 
 // GetPod returns a pod by name that is running inside ACI
@@ -805,19 +877,9 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	cg, status, err := p.aciClient.GetContainerGroup(ctx, p.resourceGroup, fmt.Sprintf("%s-%s", namespace, name))
+	cg, err := p.getContainerGroup(ctx, namespace, name)
 	if err != nil {
-		if status != nil && *status == http.StatusNotFound {
-			// There is bug in vk v1.1 (in Sync loop used as a substitute for async provider updates api) which causes crash if we returned
-			// a (nil, nil) from GetPodStatus() for a newly created pod, will return NotFound instead.
-			// TODO: This loop isn't going to be available beyond v1.1, changes on provider needs to handle it.
-			return nil, errdefs.NotFound("cg not found")
-		}
 		return nil, err
-	}
-
-	if cg.Tags["NodeName"] != p.nodeName {
-		return nil, nil
 	}
 
 	return containerGroupToPod(cg)
@@ -829,13 +891,9 @@ func (p *ACIProvider) GetContainerLogs(ctx context.Context, namespace, podName, 
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	cg, _, err := p.aciClient.GetContainerGroup(ctx, p.resourceGroup, fmt.Sprintf("%s-%s", namespace, podName))
+	cg, err := p.getContainerGroup(ctx, namespace, podName)
 	if err != nil {
 		return nil, err
-	}
-
-	if cg.Tags["NodeName"] != p.nodeName {
-		return nil, errdefs.NotFound("got unexpected pod node name")
 	}
 
 	// get logs from cg
@@ -868,7 +926,7 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 		defer out.Close()
 	}
 
-	cg, _, err := p.aciClient.GetContainerGroup(ctx, p.resourceGroup, p.GetPodFullName(namespace, name))
+	cg, err := p.getContainerGroup(ctx, namespace, name)
 	if err != nil {
 		return err
 	}
@@ -968,16 +1026,12 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	pod, err := p.GetPod(ctx, namespace, name)
+	cg, err := p.getContainerGroup(ctx, namespace, name)
 	if err != nil {
 		return nil, err
 	}
 
-	if pod == nil {
-		return nil, nil
-	}
-
-	return &pod.Status, nil
+	return podStatusFromContainerGroup(cg), nil
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
@@ -1011,6 +1065,76 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	}
 
 	return pods, nil
+}
+
+// NotifyPods instructs the notifier to call the passed in function when
+// the pod status changes.
+// The provided pointer to a Pod is guaranteed to be used in a read-only
+// fashion.
+func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.NotifyPods")
+	defer span.End()
+
+	// Capture the notifier to be used for communicating updates to VK
+	p.tracker = &PodsTracker{
+		rm:       p.resourceManager,
+		updateCb: notifierCb,
+		handler:  p,
+	}
+
+	go p.tracker.StartTracking(ctx)
+}
+
+// PodsTrackerHandler interface impl.
+func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, error) {
+	providerPods, err := p.GetPods(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	podsIdentifiers := make([]PodIdentifier, 0, len(providerPods))
+	for _, pod := range providerPods {
+		podsIdentifiers = append(
+			podsIdentifiers,
+			PodIdentifier{
+				namespace: pod.Namespace,
+				name:      pod.Name,
+			})
+	}
+
+	return podsIdentifiers, nil
+}
+
+func (p *ACIProvider) FetchPodStatus(ctx context.Context, ns, name string) (*v1.PodStatus, error) {
+	return p.GetPodStatus(ctx, ns, name)
+}
+
+func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
+	return p.deleteContainerGroup(ctx, ns, name)
+}
+
+// implement NodeProvider
+
+// Ping checks if the node is still active/ready.
+func (p *ACIProvider) Ping(ctx context.Context) error {
+	return nil
+}
+
+// getContainerGroup returns a container group from ACI.
+func (p *ACIProvider) getContainerGroup(ctx context.Context, namespace, name string) (*aci.ContainerGroup, error) {
+	cg, status, err := p.aciClient.GetContainerGroup(ctx, p.resourceGroup, fmt.Sprintf("%s-%s", namespace, name))
+	if err != nil {
+		if status != nil && *status == http.StatusNotFound {
+			return nil, errdefs.NotFound("cg not found")
+		}
+		return nil, err
+	}
+
+	if cg.Tags["NodeName"] != p.nodeName {
+		return nil, errdefs.NotFound("cg found with mismatching node")
+	}
+
+	return cg, nil
 }
 
 // capacity returns a resource list containing the capacity limits set for ACI.
@@ -1108,9 +1232,6 @@ func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCrede
 		if secret == nil {
 			return nil, fmt.Errorf("error getting image pull secret")
 		}
-		// TODO: Check if secret type is v1.SecretTypeDockercfg and use DockerConfigKey instead of hardcoded value
-		// TODO: Check if secret type is v1.SecretTypeDockerConfigJson and use DockerConfigJsonKey to determine if it's in json format
-		// TODO: Return error if it's not one of these two types
 		switch secret.Type {
 		case v1.SecretTypeDockercfg:
 			ips, err = readDockerCfgSecret(secret, ips)
@@ -1160,6 +1281,20 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageReg
 	return &cred, nil
 }
 
+func makeRegistryCredentialFromDockerConfig(server string, configEntry credconfig.DockerConfigEntry) (*aci.ImageRegistryCredential, error) {
+	if configEntry.Username == "" {
+		return nil, fmt.Errorf("no username present in auth config for server: %s", server)
+	}
+
+	cred := aci.ImageRegistryCredential{
+		Server:   server,
+		Username: configEntry.Username,
+		Password: configEntry.Password,
+	}
+
+	return &cred, nil
+}
+
 func readDockerCfgSecret(secret *v1.Secret, ips []aci.ImageRegistryCredential) ([]aci.ImageRegistryCredential, error) {
 	var err error
 	var authConfigs map[string]AuthConfig
@@ -1194,20 +1329,21 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 		return ips, fmt.Errorf("no dockerconfigjson present in secret")
 	}
 
-	var authConfigs map[string]map[string]AuthConfig
+	// Will use K8s config models to handle marshaling (including auth field handling).
+	var cfgJson credconfig.DockerConfigJson
 
-	err = json.Unmarshal(repoData, &authConfigs)
+	err = json.Unmarshal(repoData, &cfgJson)
 	if err != nil {
 		return ips, err
 	}
 
-	auths, ok := authConfigs["auths"]
-	if !ok {
+	auths := cfgJson.Auths
+	if len(cfgJson.Auths) == 0 {
 		return ips, fmt.Errorf("malformed dockerconfigjson in secret")
 	}
 
 	for server := range auths {
-		cred, err := makeRegistryCredential(server, auths[server])
+		cred, err := makeRegistryCredentialFromDockerConfig(server, auths[server])
 		if err != nil {
 			return ips, err
 		}
@@ -1532,26 +1668,9 @@ func getProtocol(pro v1.Protocol) aci.ContainerNetworkProtocol {
 }
 
 func containerGroupToPod(cg *aci.ContainerGroup) (*v1.Pod, error) {
-	var podCreationTimestamp metav1.Time
-
-	if cg.Tags["CreationTimestamp"] != "" {
-		t, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", cg.Tags["CreationTimestamp"])
-		if err != nil {
-			return nil, err
-		}
-		podCreationTimestamp = metav1.NewTime(t)
-	}
-	containerStartTime := metav1.NewTime(time.Time(cg.Containers[0].ContainerProperties.InstanceView.CurrentState.StartTime))
-
-	// Use the Provisioning State if it's not Succeeded,
-	// otherwise use the state of the instance.
-	aciState := cg.ContainerGroupProperties.ProvisioningState
-	if aciState == "Succeeded" {
-		aciState = cg.ContainerGroupProperties.InstanceView.State
-	}
+	_, creationTime := aciResourceMetaFromContainerGroup(cg)
 
 	containers := make([]v1.Container, 0, len(cg.Containers))
-	containerStatuses := make([]v1.ContainerStatus, 0, len(cg.Containers))
 	for _, c := range cg.Containers {
 		container := v1.Container{
 			Name:    c.Name,
@@ -1581,24 +1700,6 @@ func containerGroupToPod(cg *aci.ContainerGroup) (*v1.Pod, error) {
 		}
 
 		containers = append(containers, container)
-		containerStatus := v1.ContainerStatus{
-			Name:                 c.Name,
-			State:                aciContainerStateToContainerState(c.InstanceView.CurrentState),
-			LastTerminationState: aciContainerStateToContainerState(c.InstanceView.PreviousState),
-			Ready:                aciStateToPodPhase(c.InstanceView.CurrentState.State) == v1.PodRunning,
-			RestartCount:         c.InstanceView.RestartCount,
-			Image:                c.Image,
-			ImageID:              "",
-			ContainerID:          getContainerID(cg.ID, c.Name),
-		}
-
-		// Add to containerStatuses
-		containerStatuses = append(containerStatuses, containerStatus)
-	}
-
-	ip := ""
-	if cg.IPAddress != nil {
-		ip = cg.IPAddress.IP
 	}
 
 	p := v1.Pod{
@@ -1611,26 +1712,85 @@ func containerGroupToPod(cg *aci.ContainerGroup) (*v1.Pod, error) {
 			Namespace:         cg.Tags["Namespace"],
 			ClusterName:       cg.Tags["ClusterName"],
 			UID:               types.UID(cg.Tags["UID"]),
-			CreationTimestamp: podCreationTimestamp,
+			CreationTimestamp: creationTime,
 		},
 		Spec: v1.PodSpec{
 			NodeName:   cg.Tags["NodeName"],
 			Volumes:    []v1.Volume{},
 			Containers: containers,
 		},
-		Status: v1.PodStatus{
-			Phase:             aciStateToPodPhase(aciState),
-			Conditions:        aciStateToPodConditions(aciState, podCreationTimestamp),
-			Message:           "",
-			Reason:            "",
-			HostIP:            "",
-			PodIP:             ip,
-			StartTime:         &containerStartTime,
-			ContainerStatuses: containerStatuses,
-		},
+		Status: *podStatusFromContainerGroup(cg),
 	}
 
 	return &p, nil
+}
+
+func aciResourceMetaFromContainerGroup(cg *aci.ContainerGroup) (string, metav1.Time) {
+	// Use the Provisioning State if it's not Succeeded,
+	// otherwise use the state of the instance.
+	aciState := cg.ContainerGroupProperties.ProvisioningState
+	if aciState == "Succeeded" {
+		aciState = cg.ContainerGroupProperties.InstanceView.State
+	}
+
+	var creationTime metav1.Time
+	if cg.Tags["CreationTimestamp"] != "" {
+		t, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", cg.Tags["CreationTimestamp"])
+		if err == nil {
+			creationTime = metav1.NewTime(t)
+		}
+	}
+
+	return aciState, creationTime
+}
+
+func podStatusFromContainerGroup(cg *aci.ContainerGroup) *v1.PodStatus {
+	aciState, creationTime := aciResourceMetaFromContainerGroup(cg)
+	containerStatuses := make([]v1.ContainerStatus, 0, len(cg.Containers))
+
+	firstContainerStartTime := metav1.NewTime(time.Time(cg.Containers[0].ContainerProperties.InstanceView.CurrentState.StartTime))
+	lastUpdateTime := firstContainerStartTime
+	allReady := true
+	for _, c := range cg.Containers {
+		containerStartTime := metav1.NewTime(time.Time(c.ContainerProperties.InstanceView.CurrentState.StartTime))
+		containerStatus := v1.ContainerStatus{
+			Name:                 c.Name,
+			State:                aciContainerStateToContainerState(c.InstanceView.CurrentState),
+			LastTerminationState: aciContainerStateToContainerState(c.InstanceView.PreviousState),
+			Ready:                aciStateToPodPhase(c.InstanceView.CurrentState.State) == v1.PodRunning,
+			RestartCount:         c.InstanceView.RestartCount,
+			Image:                c.Image,
+			ImageID:              "",
+			ContainerID:          getContainerID(cg.ID, c.Name),
+		}
+
+		if aciStateToPodPhase(c.InstanceView.CurrentState.State) != v1.PodRunning &&
+			aciStateToPodPhase(c.InstanceView.CurrentState.State) != v1.PodSucceeded {
+			allReady = false
+		}
+		if containerStartTime.Time.After(lastUpdateTime.Time) {
+			lastUpdateTime = containerStartTime
+		}
+
+		// Add to containerStatuses
+		containerStatuses = append(containerStatuses, containerStatus)
+	}
+
+	ip := ""
+	if cg.IPAddress != nil {
+		ip = cg.IPAddress.IP
+	}
+
+	return &v1.PodStatus{
+		Phase:             aciStateToPodPhase(aciState),
+		Conditions:        aciStateToPodConditions(aciState, creationTime, lastUpdateTime, allReady),
+		Message:           "",
+		Reason:            "",
+		HostIP:            "",
+		PodIP:             ip,
+		StartTime:         &firstContainerStartTime,
+		ContainerStatuses: containerStatuses,
+	}
 }
 
 func getContainerID(cgID, containerName string) string {
@@ -1669,22 +1829,29 @@ func aciStateToPodPhase(state string) v1.PodPhase {
 	return v1.PodUnknown
 }
 
-func aciStateToPodConditions(state string, transitiontime metav1.Time) []v1.PodCondition {
+func aciStateToPodConditions(state string, creationTime, lastUpdateTime metav1.Time, allReady bool) []v1.PodCondition {
 	switch state {
 	case "Running", "Succeeded":
+		readyConditionStatus := v1.ConditionFalse
+		readyConditionTime := creationTime
+		if allReady {
+			readyConditionStatus = v1.ConditionTrue
+			readyConditionTime = lastUpdateTime
+		}
+
 		return []v1.PodCondition{
 			v1.PodCondition{
 				Type:               v1.PodReady,
-				Status:             v1.ConditionTrue,
-				LastTransitionTime: transitiontime,
+				Status:             readyConditionStatus,
+				LastTransitionTime: readyConditionTime,
 			}, v1.PodCondition{
 				Type:               v1.PodInitialized,
 				Status:             v1.ConditionTrue,
-				LastTransitionTime: transitiontime,
+				LastTransitionTime: creationTime,
 			}, v1.PodCondition{
 				Type:               v1.PodScheduled,
 				Status:             v1.ConditionTrue,
-				LastTransitionTime: transitiontime,
+				LastTransitionTime: creationTime,
 			},
 		}
 	}
@@ -1695,10 +1862,21 @@ func aciContainerStateToContainerState(cs aci.ContainerState) v1.ContainerState 
 	startTime := metav1.NewTime(time.Time(cs.StartTime))
 
 	// Handle the case where the container is running.
-	if cs.State == "Running" || cs.State == "Succeeded" {
+	if cs.State == "Running" {
 		return v1.ContainerState{
 			Running: &v1.ContainerStateRunning{
 				StartedAt: startTime,
+			},
+		}
+	}
+
+	// Handle the case of completion.
+	if cs.State == "Succeeded" {
+		return v1.ContainerState{
+			Terminated: &v1.ContainerStateTerminated{
+				StartedAt:  startTime,
+				Reason:     "Completed",
+				FinishedAt: metav1.NewTime(time.Time(cs.FinishTime)),
 			},
 		}
 	}
