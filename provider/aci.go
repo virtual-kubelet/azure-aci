@@ -120,6 +120,7 @@ var validAciRegions = []string{
 	"canadaeast",
 	"centralindia",
 	"centralus",
+	"centraluseuap",
 	"eastasia",
 	"eastus",
 	"eastus2",
@@ -193,9 +194,14 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 				return nil, fmt.Errorf("ACI only supports Public Azure. '%v' is not supported", acsCredential.Cloud)
 			}
 
+			var clientId string
+			if !strings.EqualFold(acsCredential.ClientID, "msi") {
+				clientId = acsCredential.ClientID
+			}
+
 			azAuth = client.NewAuthentication(
 				acsCredential.Cloud,
-				acsCredential.ClientID,
+				clientId,
 				acsCredential.ClientSecret,
 				acsCredential.SubscriptionID,
 				acsCredential.TenantID)
@@ -217,6 +223,17 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 
 	if clientSecret := os.Getenv("AZURE_CLIENT_SECRET"); clientSecret != "" {
 		azAuth.ClientSecret = clientSecret
+	}
+
+	azAuth.UserIdentityClientId = os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID")
+	azAuth.UseUserIdentity = (len(azAuth.ClientID) == 0)
+
+	if azAuth.UseUserIdentity {
+		if len(azAuth.UserIdentityClientId) == 0 {
+			return nil, fmt.Errorf("Neither AZURE_CLIENT_ID or VIRTUALNODE_USER_IDENTITY_CLIENTID is being set")
+		}
+
+		log.G(context.TODO()).Info("Using user identity for authentication")
 	}
 
 	if tenantID := os.Getenv("AZURE_TENANT_ID"); tenantID != "" {

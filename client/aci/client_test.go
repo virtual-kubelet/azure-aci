@@ -5,21 +5,27 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/resourcegroups"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/plugin/ochttp/propagation/b3"
 )
 
 var (
-	client         *Client
-	location       = "westus"
-	resourceGroup  = "virtual-kubelet-tests"
-	containerGroup = "virtual-kubelet-test-container-group"
-	subscriptionID string
+	client                   *Client
+	location                 = "westus"
+	resourceGroup            = "virtual-kubelet-tests"
+	containerGroup           = "virtual-kubelet-test-container-group"
+	subscriptionID           string
+	testUserIdentityClientId = "97c70c2a-fa56-4b70-95b5-1c67ca26f383"
 )
 
 func init() {
@@ -88,6 +94,54 @@ func TestNewClient(t *testing.T) {
 	}
 
 	client = c
+}
+
+func TestNewMsiClient(t *testing.T) {
+	auth, err := azure.NewAuthenticationFromFile(os.Getenv("AZURE_AUTH_LOCATION"))
+	if err != nil {
+		log.Fatalf("Failed to load Azure authentication file: %v", err)
+	}
+
+	auth.UserIdentityClientId = testUserIdentityClientId
+	auth.UseUserIdentity = true
+
+	c, err := azure.NewClient(auth, "https://management.azure.com", []string{"test-client"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hc := c.HTTPClient
+	hc.Transport = &ochttp.Transport{
+		Base:           hc.Transport,
+		Propagation:    &b3.HTTPFormat{},
+		NewClientTrace: ochttp.NewSpanAnnotatingClientTrace,
+	}
+
+	restClient := &Client{hc: hc, auth: auth}
+
+	s := mocks.NewSender()
+	ds := adal.DecorateSender(s,
+		(func() adal.SendDecorator {
+			return func(s adal.Sender) adal.Sender {
+				return adal.SenderFunc(func(r *http.Request) (*http.Response, error) {
+					expectedRefreshQuery := fmt.Sprintf(
+						"http://169.254.169.254/metadata/identity/oauth2/token?api-version=%v&client_id=%v",
+						"2018-02-01",
+						testUserIdentityClientId)
+
+					if !strings.HasPrefix(r.URL.String(), expectedRefreshQuery) {
+						t.Fatal("token not requested through msi endpoint or client id is not matching")
+					}
+
+					resp := mocks.NewResponseWithBodyAndStatus(mocks.NewBody("{}"), http.StatusOK, "OK")
+					return resp, nil
+				})
+			}
+		})())
+
+	c.SetTokenProviderTestSender(ds)
+
+	restClient.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup)
 }
 
 func TestCreateContainerGroupFails(t *testing.T) {

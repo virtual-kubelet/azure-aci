@@ -23,6 +23,8 @@ type Authentication struct {
 	SQLManagementEndpoint   string `json:"sqlManagementEndpointUrl,omitempty"`
 	GalleryEndpoint         string `json:"galleryEndpointUrl,omitempty"`
 	ManagementEndpoint      string `json:"managementEndpointUrl,omitempty"`
+	UseUserIdentity         bool   `json:"useUserIdentity,omitempty"`
+	UserIdentityClientId    string `json:"userIdentityClientId,omitempty"`
 }
 
 // NewAuthentication returns an authentication struct from user provided
