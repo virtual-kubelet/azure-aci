@@ -144,6 +144,7 @@ func TestNewMsiClient(t *testing.T) {
 	err = restClient.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup)
 	if err != nil {
 		// Expected as no proper response is sent back.
+		return
 	}
 }
 
