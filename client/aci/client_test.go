@@ -141,7 +141,10 @@ func TestNewMsiClient(t *testing.T) {
 
 	c.SetTokenProviderTestSender(ds)
 
-	restClient.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup)
+	err = restClient.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup)
+	if err != nil {
+		// Expected as no proper response is sent back.
+	}
 }
 
 func TestCreateContainerGroupFails(t *testing.T) {
