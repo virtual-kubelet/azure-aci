@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/go-autorest/autorest/azure"
 )
 
 // Client represents authentication details and cloud specific parameters for
@@ -16,6 +17,7 @@ type Client struct {
 	BaseURI          string
 	HTTPClient       *http.Client
 	BearerAuthorizer *BearerAuthorizer
+	spToken          *adal.ServicePrincipalToken
 }
 
 // BearerAuthorizer implements the bearer authorization.
@@ -45,17 +47,32 @@ func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Clien
 		BaseURI:        resource,
 	}
 
-	config, err := adal.NewOAuthConfig(auth.ActiveDirectoryEndpoint, auth.TenantID)
-	if err != nil {
-		return nil, fmt.Errorf("Creating new OAuth config for active directory failed: %v", err)
+	if !auth.UseUserIdentity {
+		config, err := adal.NewOAuthConfig(auth.ActiveDirectoryEndpoint, auth.TenantID)
+		if err != nil {
+			return nil, fmt.Errorf("Creating new OAuth config for active directory failed: %v", err)
+		}
+
+		client.spToken, err = adal.NewServicePrincipalToken(*config, auth.ClientID, auth.ClientSecret, resource)
+		if err != nil {
+			return nil, fmt.Errorf("Creating new service principal token failed: %v", err)
+		}
+	} else {
+		endpoint, err := adal.GetMSIVMEndpoint()
+		if err != nil {
+			return nil, fmt.Errorf("Unable to retrieve managed identity endpoint: %v", err)
+		}
+
+		client.spToken, err = adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
+			endpoint,
+			azure.PublicCloud.ServiceManagementEndpoint,
+			auth.UserIdentityClientId)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to create token provider with managed identity: %v", err)
+		}
 	}
 
-	tp, err := adal.NewServicePrincipalToken(*config, auth.ClientID, auth.ClientSecret, resource)
-	if err != nil {
-		return nil, fmt.Errorf("Creating new service principal token failed: %v", err)
-	}
-
-	client.BearerAuthorizer = &BearerAuthorizer{tokenProvider: tp}
+	client.BearerAuthorizer = &BearerAuthorizer{tokenProvider: client.spToken}
 
 	nonEmptyUserAgent := userAgent[:0]
 	for _, ua := range userAgent {
@@ -80,6 +97,10 @@ func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Clien
 	}
 
 	return client, nil
+}
+
+func (c *Client) SetTokenProviderTestSender(s adal.Sender) {
+	c.spToken.SetSender(s)
 }
 
 func (t userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {

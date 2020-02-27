@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-08-01/network"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/api"
@@ -40,13 +41,21 @@ func NewClient(azAuth *azure.Authentication, extraUserAgent string) (*Client, er
 		return nil, fmt.Errorf("Creating Azure client failed: %v", err)
 	}
 
-	authorizer, err := auth.NewClientCredentialsConfig(azAuth.ClientID, azAuth.ClientSecret, azAuth.TenantID).Authorizer()
+	var networkAuth autorest.Authorizer
+	if !azAuth.UseUserIdentity {
+		networkAuth, err = auth.NewClientCredentialsConfig(azAuth.ClientID, azAuth.ClientSecret, azAuth.TenantID).Authorizer()
+	} else {
+		msiConfig := auth.NewMSIConfig()
+		msiConfig.ClientID = azAuth.UserIdentityClientId
+		networkAuth, err = msiConfig.Authorizer()
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
 	sc := network.NewSubnetsClient(azAuth.SubscriptionID)
-	sc.Authorizer = authorizer
+	sc.Authorizer = networkAuth
 
 	return &Client{
 		sc:   sc,
