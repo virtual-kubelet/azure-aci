@@ -25,7 +25,7 @@ func (c *Client) LaunchExec(resourceGroup, containerGroupName, containerName, co
 	}
 
 	// Create the url to call Azure REST API
-	uri := api.ResolveRelative(baseURI, containerExecURLPath)
+	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerExecURLPath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	var xc ExecRequest

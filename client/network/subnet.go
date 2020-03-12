@@ -49,7 +49,7 @@ func (c *Client) GetSubnet(resourceGroup, vnet, name string) (*network.Subnet, e
 	}
 
 	// Create the url.
-	uri := api.ResolveRelative(baseURI, subnetPath)
+	uri := api.ResolveRelative(c.sc.BaseClient.BaseURI, subnetPath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	req, err := http.NewRequest("GET", uri, nil)
@@ -92,7 +92,7 @@ func (c *Client) CreateOrUpdateSubnet(resourceGroup, vnet string, s *network.Sub
 	}
 
 	// Create the url.
-	uri := api.ResolveRelative(baseURI, subnetPath)
+	uri := api.ResolveRelative(c.sc.BaseClient.BaseURI, subnetPath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	// Create the request.

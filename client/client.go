@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/Azure/go-autorest/autorest/adal"
-	"github.com/Azure/go-autorest/autorest/azure"
 )
 
 // Client represents authentication details and cloud specific parameters for
@@ -37,14 +36,10 @@ var (
 )
 
 // NewClient creates a new Azure API client from an Authentication struct and BaseURI.
-func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Client, error) {
-	resource, err := getResourceForToken(auth, baseURI)
-	if err != nil {
-		return nil, fmt.Errorf("Getting resource for token failed: %v", err)
-	}
+func NewClient(auth *Authentication, userAgent []string) (*Client, error) {
 	client := &Client{
 		Authentication: auth,
-		BaseURI:        resource,
+		BaseURI:        auth.ResourceManagerEndpoint,
 	}
 
 	if !auth.UseUserIdentity {
@@ -53,7 +48,7 @@ func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Clien
 			return nil, fmt.Errorf("Creating new OAuth config for active directory failed: %v", err)
 		}
 
-		client.spToken, err = adal.NewServicePrincipalToken(*config, auth.ClientID, auth.ClientSecret, resource)
+		client.spToken, err = adal.NewServicePrincipalToken(*config, auth.ClientID, auth.ClientSecret, auth.ResourceManagerEndpoint)
 		if err != nil {
 			return nil, fmt.Errorf("Creating new service principal token failed: %v", err)
 		}
@@ -65,7 +60,7 @@ func NewClient(auth *Authentication, baseURI string, userAgent []string) (*Clien
 
 		client.spToken, err = adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
 			endpoint,
-			azure.PublicCloud.ServiceManagementEndpoint,
+			auth.ManagementEndpoint,
 			auth.UserIdentityClientId)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to create token provider with managed identity: %v", err)
@@ -144,27 +139,4 @@ func (t userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error)
 	}
 
 	return t.base.RoundTrip(&newReq)
-}
-
-func getResourceForToken(auth *Authentication, baseURI string) (string, error) {
-	// Compare dafault base URI from the SDK to the endpoints from the public cloud
-	// Base URI and token resource are the same string. This func finds the authentication
-	// file field that matches the SDK base URI. The SDK defines the public cloud
-	// endpoint as its default base URI
-	if !strings.HasSuffix(baseURI, "/") {
-		baseURI += "/"
-	}
-	switch baseURI {
-	case PublicCloud.ServiceManagementEndpoint:
-		return auth.ManagementEndpoint, nil
-	case PublicCloud.ResourceManagerEndpoint:
-		return auth.ResourceManagerEndpoint, nil
-	case PublicCloud.ActiveDirectoryEndpoint:
-		return auth.ActiveDirectoryEndpoint, nil
-	case PublicCloud.GalleryEndpoint:
-		return auth.GalleryEndpoint, nil
-	case PublicCloud.GraphEndpoint:
-		return auth.GraphResourceID, nil
-	}
-	return "", fmt.Errorf("baseURI provided %q not found in endpoints", baseURI)
 }

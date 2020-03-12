@@ -137,6 +137,7 @@ var validAciRegions = []string{
 	"westus",
 	"westus2",
 	"westeurope",
+	"usgovvirginia",
 }
 
 // isValidACIRegion checks to make sure we're using a valid ACI region
@@ -190,10 +191,6 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		}
 
 		if acsCredential != nil {
-			if acsCredential.Cloud != client.PublicCloud.Name {
-				return nil, fmt.Errorf("ACI only supports Public Azure. '%v' is not supported", acsCredential.Cloud)
-			}
-
 			var clientId string
 			if !strings.EqualFold(acsCredential.ClientID, "msi") {
 				clientId = acsCredential.ClientID

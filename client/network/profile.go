@@ -54,7 +54,7 @@ func (c *Client) GetProfile(resourceGroup, name string) (*network.Profile, error
 	}
 
 	// Create the url.
-	uri := api.ResolveRelative(baseURI, profilePath)
+	uri := api.ResolveRelative(c.sc.BaseClient.BaseURI, profilePath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	// Create the request.
@@ -102,7 +102,7 @@ func (c *Client) CreateOrUpdateProfile(resourceGroup string, p *network.Profile)
 	}
 
 	// Create the url.
-	uri := api.ResolveRelative(baseURI, profilePath)
+	uri := api.ResolveRelative(c.sc.BaseClient.BaseURI, profilePath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	// Create the request.
