@@ -138,6 +138,7 @@ var validAciRegions = []string{
 	"westus2",
 	"westeurope",
 	"usgovvirginia",
+	"usgovarizona",
 }
 
 // isValidACIRegion checks to make sure we're using a valid ACI region
