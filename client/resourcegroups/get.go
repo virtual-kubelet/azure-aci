@@ -18,7 +18,7 @@ func (c *Client) GetResourceGroup(resourceGroup string) (*Group, error) {
 	}
 
 	// Create the url.
-	uri := api.ResolveRelative(BaseURI, resourceGroupURLPath)
+	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, resourceGroupURLPath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	// Create the request.

@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	baseURI          = "https://management.azure.com"
 	defaultUserAgent = "virtual-kubelet/azure-arm-network/2018-08-01"
 	apiVersion       = "2018-08-01"
 )
@@ -36,17 +35,16 @@ func NewClient(azAuth *azure.Authentication, extraUserAgent string) (*Client, er
 		userAgent = append(userAgent, extraUserAgent)
 	}
 
-	client, err := azure.NewClient(azAuth, baseURI, userAgent)
+	client, err := azure.NewClient(azAuth, userAgent)
 	if err != nil {
 		return nil, fmt.Errorf("Creating Azure client failed: %v", err)
 	}
 
 	var networkAuth autorest.Authorizer
 	if !azAuth.UseUserIdentity {
-		networkAuth, err = auth.NewClientCredentialsConfig(azAuth.ClientID, azAuth.ClientSecret, azAuth.TenantID).Authorizer()
+		networkAuth, err = NewClientConfigByCloud(azAuth).Authorizer()
 	} else {
-		msiConfig := auth.NewMSIConfig()
-		msiConfig.ClientID = azAuth.UserIdentityClientId
+		msiConfig := NewMSIConfigByCloud(azAuth)
 		networkAuth, err = msiConfig.Authorizer()
 	}
 
@@ -54,7 +52,7 @@ func NewClient(azAuth *azure.Authentication, extraUserAgent string) (*Client, er
 		return nil, err
 	}
 
-	sc := network.NewSubnetsClient(azAuth.SubscriptionID)
+	sc := network.NewSubnetsClientWithBaseURI(azAuth.ResourceManagerEndpoint, azAuth.SubscriptionID)
 	sc.Authorizer = networkAuth
 
 	return &Client{
@@ -73,5 +71,22 @@ func IsNotFound(err error) bool {
 		return e.StatusCode == http.StatusNotFound
 	default:
 		return false
+	}
+}
+
+func NewClientConfigByCloud(azAuth *azure.Authentication) auth.ClientCredentialsConfig {
+	return auth.ClientCredentialsConfig{
+		ClientID:     azAuth.ClientID,
+		ClientSecret: azAuth.ClientSecret,
+		TenantID:     azAuth.TenantID,
+		Resource:     azAuth.ResourceManagerEndpoint,
+		AADEndpoint:  azAuth.ActiveDirectoryEndpoint,
+	}
+}
+
+func NewMSIConfigByCloud(azAuth *azure.Authentication) auth.MSIConfig {
+	return auth.MSIConfig{
+		Resource: azAuth.ResourceManagerEndpoint,
+		ClientID: azAuth.UserIdentityClientId,
 	}
 }

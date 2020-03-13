@@ -20,7 +20,7 @@ func (c *Client) CreateResourceGroup(resourceGroup string, properties Group) (*G
 	}
 
 	// Create the url.
-	uri := api.ResolveRelative(BaseURI, resourceGroupURLPath)
+	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, resourceGroupURLPath)
 	uri += "?" + url.Values(urlParams).Encode()
 
 	// Create the body for the request.

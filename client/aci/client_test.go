@@ -105,7 +105,7 @@ func TestNewMsiClient(t *testing.T) {
 	auth.UserIdentityClientId = testUserIdentityClientId
 	auth.UseUserIdentity = true
 
-	c, err := azure.NewClient(auth, "https://management.azure.com", []string{"test-client"})
+	c, err := azure.NewClient(auth, []string{"test-client"})
 	if err != nil {
 		t.Fatal(err)
 	}
