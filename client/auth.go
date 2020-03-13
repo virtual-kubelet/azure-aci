@@ -38,6 +38,8 @@ func NewAuthentication(azureCloud, clientID, clientSecret, subscriptionID, tenan
 		break
 	case USGovernmentCloud.Name:
 		environment = USGovernmentCloud
+		// Update the aad endpoint as used package is not up to date
+		environment.ActiveDirectoryEndpoint = "https://login.microsoftonline.us/"
 		break
 	case ChinaCloud.Name:
 		environment = ChinaCloud

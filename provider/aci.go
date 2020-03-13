@@ -376,9 +376,9 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 	metadata, err := p.aciClient.GetResourceProviderMetadata(ctx)
 
 	if err != nil {
-		msg := "Unable to fetch the ACI metadata"
+		msg := "Unable to fetch the ACI metadata, skipping GPU availability check. GPU capacity will be disabled"
 		logger.WithError(err).Error(msg)
-		return err
+		return nil
 	}
 
 	if metadata == nil || metadata.GPURegionalSKUs == nil {
