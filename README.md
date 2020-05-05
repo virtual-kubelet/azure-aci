@@ -37,7 +37,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Using service principal credentials to pull ACR images ([see workaround](#Private-registry))
 * Liveness and readiness probes 
 * [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet 
-* VNet peering
+* Global VNet peering
 * Argument support for exec 
 * Init containers 
 * [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support 
@@ -65,7 +65,7 @@ brew install azure-cli
 
 #### Windows
 
-Download and run the [Azure CLI Installer (MSI)](https://aka.ms/InstallAzureCliWindows).
+Download and run the [Azure CLI Installer (MI)](https://aka.ms/InstallAzureCliWindows).
 
 #### Ubuntu 64-bit
 
@@ -144,28 +144,6 @@ First let's identify your Azure subscription and save it for use later on in the
    az provider register -n Microsoft.ContainerInstance
    ```
 
-## Quick set up with AKS
-
-### Linux containers with Virtual Nodes
-
-Azure Kubernetes Service has an efficient way of setting up virtual kubelet with the ACI provider with a feature called virtual node. You can easily install a virtual node that will deploy Linux workloads to ACI. The pods that spin out will automatically get private IPs and will be within a subnet that is within the AKS cluster's Virtual Network. **Virtual Nodes is the recommended path for using the ACI provider on Linux AKS clusters.** 
-
-To install virtual node in the Azure portal go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-portal). To install virtual node in the Azure CLI go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli). 
-
-### Windows containers
-
-The virtual nodes experience does not exist for Windows containers yet including no virtual networking support. You can use the following command to install the ACI provider for Windows. 
-
-**Bash**
-```cli 
-az aks install-connector --resource-group <aks cluster rg> --name <aks cluster name> --os-type windows 
-```
-
-Once created, [verify the virtual node has been registed](#Validate-the-Virtual-Kubelet-ACI-provider) and you can now [schedule pods in ACI](#Schedule-a-pod-in-ACI). 
-
-:bangbang: The _az aks install-connector_ command will be deprecated shortly. Please follow the **Manual set-up** section below instead. :bangbang:
-
-## Manual set-up
 
 ### Create a Resource Group for ACI
 
