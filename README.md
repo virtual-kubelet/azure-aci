@@ -10,7 +10,7 @@ This document details configuring the Virtual Kubelet ACI provider.
 
 * [Feature set](#current-feature-set)
 * [Prerequiste](#prerequisite)
-* [Set-up virtual node in AKS](#set-up-virtual-node-in-AKS)
+* [Set-up Virtual Node in AKS](#set-up-virtual-node-in-AKS)
 * [Quick set-up with the ACI Connector](#quick-set-up-with-the-aci-connector)
 * [Manual set-up](#manual-set-up)
 * [Create a cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
@@ -29,7 +29,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Secure env variables, config maps
 * Bring your own virtual network (VNet)
 * Network security group support 
-* Basic Azure Networking support within AKS virtual node 
+* Basic Azure Networking support within AKS Virtual Node 
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances 
 * Azure Monitor integration or formally known as OMS
 
