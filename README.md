@@ -76,7 +76,9 @@ Download and run the [Azure CLI Installer (MSI)](https://aka.ms/InstallAzureCliW
     ```
 2. Run the following commands to install the Azure CLI and its dependencies:
     ```cli
-    sudo apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893
+    curl -sL https://packages.microsoft.com/keys/microsoft.asc |
+        gpg --dearmor |
+        sudo tee /etc/apt/trusted.gpg.d/microsoft.asc.gpg > /dev/null
     sudo apt-get install apt-transport-https
     sudo apt-get update && sudo apt-get install azure-cli
     ```
