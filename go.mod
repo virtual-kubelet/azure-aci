@@ -5,16 +5,14 @@ require (
 	github.com/Azure/azure-sdk-for-go v26.0.0+incompatible
 	github.com/Azure/go-autorest v11.5.0+incompatible
 	github.com/BurntSushi/toml v0.3.1
-	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dimchansky/utfbom v1.1.0
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/golang/groupcache v0.0.0-20190129154638-5b532d6fd5ef // indirect
 	github.com/google/uuid v1.1.0
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.0
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
-	github.com/virtual-kubelet/node-cli v0.1.2-0.20190808213126-cd8af9b9bc8c
+	github.com/virtual-kubelet/node-cli v0.2.0
 	github.com/virtual-kubelet/virtual-kubelet v1.2.1
 	go.opencensus.io v0.21.0
 	golang.org/x/sync v0.0.0-20190227155943-e225da77a7e6
