@@ -838,7 +838,7 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*AC
 		return nil, err
 	}
 
-	provider, err := NewACIProvider("example.toml", rm, fakeNodeName, "Linux", "0.0.0.0", 10250)
+	provider, err := NewACIProvider("example.toml", rm, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}

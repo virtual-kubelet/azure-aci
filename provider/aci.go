@@ -91,6 +91,7 @@ type ACIProvider struct {
 	vnetName           string
 	vnetResourceGroup  string
 	networkProfile     string
+	clusterDomain      string
 	kubeProxyExtension *aci.Extension
 	kubeDNSIP          string
 	extraUserAgent     string
@@ -156,11 +157,12 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32) (*ACIProvider, error) {
+func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
 	var p ACIProvider
 	var err error
 
 	p.resourceManager = rm
+	p.clusterDomain = clusterDomain
 
 	if config != "" {
 		f, err := os.Open(config)
@@ -716,25 +718,27 @@ func (p *ACIProvider) amendVnetResources(containerGroup *aci.ContainerGroup, pod
 	}
 
 	containerGroup.NetworkProfile = &aci.NetworkProfileDefinition{ID: p.networkProfile}
+	containerGroup.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
+
 	containerGroup.ContainerGroupProperties.Extensions = []*aci.Extension{p.kubeProxyExtension}
-	containerGroup.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod.Spec.DNSPolicy, pod.Spec.DNSConfig)
 }
 
-func (p *ACIProvider) getDNSConfig(dnsPolicy v1.DNSPolicy, dnsConfig *v1.PodDNSConfig) *aci.DNSConfig {
+func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *aci.DNSConfig {
 	nameServers := make([]string, 0)
+	searchDomains := []string{}
 
-	if dnsPolicy == v1.DNSClusterFirst || dnsPolicy == v1.DNSClusterFirstWithHostNet {
+	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
 		nameServers = append(nameServers, p.kubeDNSIP)
+		searchDomains = p.generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod)
 	}
 
-	searchDomains := []string{}
 	options := []string{}
 
-	if dnsConfig != nil {
-		nameServers = omitDuplicates(append(nameServers, dnsConfig.Nameservers...))
-		searchDomains = omitDuplicates(dnsConfig.Searches)
+	if pod.Spec.DNSConfig != nil {
+		nameServers = omitDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
+		searchDomains = omitDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
 
-		for _, option := range dnsConfig.Options {
+		for _, option := range pod.Spec.DNSConfig.Options {
 			op := option.Name
 			if option.Value != nil && *(option.Value) != "" {
 				op = op + ":" + *(option.Value)
@@ -754,6 +758,25 @@ func (p *ACIProvider) getDNSConfig(dnsPolicy v1.DNSPolicy, dnsConfig *v1.PodDNSC
 	}
 
 	return &result
+}
+
+// This is taken from the kubelet equivalent -  https://github.com/kubernetes/kubernetes/blob/d24fe8a801748953a5c34fd34faa8005c6ad1770/pkg/kubelet/network/dns/dns.go#L141-L151
+func (p *ACIProvider) generateSearchesForDNSClusterFirst(dnsConfig *v1.PodDNSConfig, pod *v1.Pod) []string {
+
+	hostSearch := []string{}
+
+	if dnsConfig != nil {
+		hostSearch = dnsConfig.Searches
+	}
+	if p.clusterDomain == "" {
+		return hostSearch
+	}
+
+	nsSvcDomain := fmt.Sprintf("%s.svc.%s", pod.Namespace, p.clusterDomain)
+	svcDomain := fmt.Sprintf("svc.%s", p.clusterDomain)
+	clusterSearch := []string{nsSvcDomain, svcDomain, p.clusterDomain}
+
+	return omitDuplicates(append(clusterSearch, hostSearch...))
 }
 
 func omitDuplicates(strs []string) []string {
