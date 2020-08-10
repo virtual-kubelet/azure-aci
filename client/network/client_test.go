@@ -39,7 +39,7 @@ func ensureVnet(t *testing.T, name string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := result.WaitForCompletion(context.Background(), client.Client); err != nil {
+	if err := result.WaitForCompletionRef(context.Background(), client.Client); err != nil {
 		t.Fatal(err)
 	}
 }
