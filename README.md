@@ -91,27 +91,7 @@ az aks install-cli
 
 ### Install the Helm CLI
 
-[Helm](https://github.com/kubernetes/helm) is a tool for installing pre-configured applications on Kubernetes.
-Install `helm` by running the following command:
-
-#### MacOS
-
-```cli
-brew install kubernetes-helm
-```
-
-#### Windows
-
-1. Download the latest [Helm release](https://storage.googleapis.com/kubernetes-helm/helm-v2.7.2-windows-amd64.tar.gz).
-2. Decompress the tar file.
-3. Copy **helm.exe** to a directory on your PATH.
-
-#### Linux
-
-```cli
-curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
-```
----
+[Helm](https://github.com/helm/helm) is a tool for installing pre-configured applications on Kubernetes. Install `helm` for macOS, Windows, or Linux [via binary releases or package managers](https://github.com/helm/helm#install) or check the detailed [Helm install guide](https://helm.sh/docs/intro/install/) for more options including building from source.
 
 ## Cluster and Azure Account Setup
 
@@ -224,7 +204,7 @@ export VK_RELEASE=virtual-kubelet-latest
 export NODE_NAME=virtual-kubelet
 export CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
 
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.masterUri=$MASTER_URI
@@ -236,7 +216,7 @@ RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
 CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
 
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set rbac.install=true \
   --set providers.azure.targetAKS=false \
@@ -729,7 +709,7 @@ az aks upgrade-connector --resource-group <aks cluster rg> --name <aks cluster n
 You can remove your Virtual Kubelet node by deleting the Helm deployment. Run the following command:
 
 ```cli
-helm delete virtual-kubelet --purge
+helm uninstall virtual-kubelet
 ```
 If you used the ACI Connector installation then use the following command to remove the the ACI Connector from your cluster.
 
