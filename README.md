@@ -13,7 +13,7 @@ This document details configuring the Virtual Kubelet ACI provider.
 * [Set-up virtual node in AKS](#set-up-virtual-node-in-AKS)
 * [Quick set-up with the ACI Connector](#quick-set-up-with-the-aci-connector)
 * [Manual set-up](#manual-set-up)
-* [Create a cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
+* [Create a AKS cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
 * [Validate the Virtual Kubelet ACI provider](#validate-the-virtual-kubelet-aci-provider)
 * [Schedule a pod in ACI](#schedule-a-pod-in-aci)
 * [Work arounds](#work-arounds-for-the-aci-connector)
@@ -430,10 +430,22 @@ helm install "$CHART_URL" --name "$RELEASE_NAME" \
 For any other type of cluster: 
 
 ```cli
+# the resource group where the virtual network localte in
+export ACI_VNET_RESOURCE_GROUP=<resource group>
+
+# the virtual network name where container will deploy to
+export ACI_VNET_NAME=<virtual network name>
+# subnet name where ACI will deploy to. Virtual Kubelet will automatically create subnet resource if it not exists
+export ACI_SUBNET_NAME=<subnet name>
+# subnet's IP range, for example 10.1.0.0/16. You don't need specific this system variable if subnet has been exists
+export ACI_SUBNET_RANGE=<subnet name where ACI will run in>
+
 helm install "$CHART_URL" --name "$RELEASE_NAME" \
   --set provider=azure \
   --set providers.azure.targetAKS=false \
   --set providers.azure.vnet.enabled=true \
+  --set providers.azure.vnet.vnetResourceGroup=$ACI_VNET_RESOURCE_GROUP \
+  --set providers.azure.vnet.vnetName=$ACI_VNET_NAME \
   --set providers.azure.vnet.subnetName=$ACI_SUBNET_NAME \
   --set providers.azure.vent.subnetCidr=$ACI_SUBNET_RANGE \
   --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
@@ -442,7 +454,10 @@ helm install "$CHART_URL" --name "$RELEASE_NAME" \
   --set providers.azure.aciResourceGroup=$AZURE_RG \
   --set providers.azure.aciRegion=$ACI_REGION \
   --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.clientId=$AZURE_CLIENT_ID \
+  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
   ```
+
 
 ## Validate the Virtual Kubelet ACI provider
 
