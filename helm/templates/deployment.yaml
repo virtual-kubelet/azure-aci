@@ -78,6 +78,10 @@ spec:
           value: {{ printf "helm-chart/other/%s/%s" $.Chart.Name $.Chart.Version }}
 {{- end }}
 {{- if .vnet.enabled }}
+        - name: ACI_VNET_RESOURCE_GROUP
+          value: {{ .vnet.vnetResourceGroup}}
+        - name: ACI_VNET_NAME
+          value: {{ .vnet.vnetName}}
         - name: ACI_SUBNET_NAME
           value: {{ required "subnetName is required" .vnet.subnetName }}
         - name: ACI_SUBNET_CIDR

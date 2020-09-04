@@ -589,6 +589,7 @@ github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV
 github.com/vektah/gqlparser v1.1.2/go.mod h1:1ycwN7Ij5njmMkPPAOaRFY4rET2Enx7IkVv3vaXspKw=
 github.com/virtual-kubelet/node-cli v0.3.0 h1:gPDlxbx8sirQWrd7tA92ONkqdltZJEciHPpP0NuSots=
 github.com/virtual-kubelet/node-cli v0.3.0/go.mod h1:82mtWxoh93U2Tu/XySeYmMrhE60FMozD6hWbSqzTzo4=
+github.com/virtual-kubelet/node-cli v0.3.1/go.mod h1:82mtWxoh93U2Tu/XySeYmMrhE60FMozD6hWbSqzTzo4=
 github.com/virtual-kubelet/virtual-kubelet v1.3.0 h1:ixQRrPcVcRHoMO0WcQolyOs/ScZqa7kryYBiZE3Xa94=
 github.com/virtual-kubelet/virtual-kubelet v1.3.0/go.mod h1:kuDs8O1dU0pLMLxzx7zvf4haeS6jB3YMbD73zWe1sV4=
 github.com/vishvananda/netlink v1.0.0/go.mod h1:+SR5DhBJrl6ZM7CoCKvpw5BKroDKQ+PJqOg65H/2ktk=
