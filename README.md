@@ -416,7 +416,7 @@ CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$
 If your cluster is an AKS cluster: 
 
 ```cli
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.vnet.enabled=true \
@@ -440,7 +440,7 @@ export ACI_SUBNET_NAME=<subnet name>
 # subnet's IP range, for example 10.1.0.0/16. You don't need specific this system variable if subnet has been exists
 export ACI_SUBNET_RANGE=<subnet name where ACI will run in>
 
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=false \
   --set providers.azure.vnet.enabled=true \
