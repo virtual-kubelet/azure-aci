@@ -45,7 +45,7 @@ const (
 	// The service account secret mount path.
 	serviceAccountSecretMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
 
-	virtualKubeletDNSNameLabel = "virtualkubelet.io/dnsnamelabel"
+	virtualKubeletDNSNameLabel = "virtual-kubelet.io/dnsnamelabel"
 
 	subnetsAction           = "Microsoft.Network/virtualNetworks/subnets/action"
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"

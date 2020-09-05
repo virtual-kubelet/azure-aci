@@ -550,7 +550,7 @@ helloworld-2559879000-8vmjw  myResourceGroup    Succeeded            microsoft/a
 <!--
 ### Schedule an ACI pod with a DNS Name label
 
-Add an annotation to your Pod manifest, `virtualkubelet.io/dnsnamelabel` keyed to what you'd like the Azure Container Instance to receive as a DNS Name, and deploy it.
+Add an annotation to your Pod manifest, `virtual-kubelet.io/dnsnamelabel` keyed to what you'd like the Azure Container Instance to receive as a DNS Name, and deploy it.
 
 ```yaml
 apiVersion: v1
@@ -558,7 +558,7 @@ kind: Pod
 metadata:
   name: helloworld
   annotations:
-    virtualkubelet.io/dnsnamelabel: "helloworld-aci"
+    virtual-kubelet.io/dnsnamelabel: "helloworld-aci"
 spec:
   containers:
   - image: microsoft/aci-helloworld
