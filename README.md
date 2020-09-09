@@ -13,7 +13,7 @@ This document details configuring the Virtual Kubelet ACI provider.
 * [Set-up virtual node in AKS](#set-up-virtual-node-in-AKS)
 * [Quick set-up with the ACI Connector](#quick-set-up-with-the-aci-connector)
 * [Manual set-up](#manual-set-up)
-* [Create a cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
+* [Create a AKS cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
 * [Validate the Virtual Kubelet ACI provider](#validate-the-virtual-kubelet-aci-provider)
 * [Schedule a pod in ACI](#schedule-a-pod-in-aci)
 * [Work arounds](#work-arounds-for-the-aci-connector)
@@ -89,7 +89,7 @@ Install `kubectl` by running the following command:
 az aks install-cli
 ```
 
-### Install the Helm CLI
+### Install the Helm 3.x CLI
 
 [Helm](https://github.com/helm/helm) is a tool for installing pre-configured applications on Kubernetes. Install `helm` for macOS, Windows, or Linux [via binary releases or package managers](https://github.com/helm/helm#install) or check the detailed [Helm install guide](https://helm.sh/docs/intro/install/) for more options including building from source.
 
@@ -396,7 +396,7 @@ CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$
 If your cluster is an AKS cluster: 
 
 ```cli
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.vnet.enabled=true \
@@ -410,10 +410,22 @@ helm install "$CHART_URL" --name "$RELEASE_NAME" \
 For any other type of cluster: 
 
 ```cli
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+# the resource group where the virtual network localte in
+export ACI_VNET_RESOURCE_GROUP=<resource group>
+
+# the virtual network name where container will deploy to
+export ACI_VNET_NAME=<virtual network name>
+# subnet name where ACI will deploy to. Virtual Kubelet will automatically create subnet resource if it not exists
+export ACI_SUBNET_NAME=<subnet name>
+# subnet's IP range, for example 10.1.0.0/16. You don't need specific this system variable if subnet has been exists
+export ACI_SUBNET_RANGE=<subnet name where ACI will run in>
+
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=false \
   --set providers.azure.vnet.enabled=true \
+  --set providers.azure.vnet.vnetResourceGroup=$ACI_VNET_RESOURCE_GROUP \
+  --set providers.azure.vnet.vnetName=$ACI_VNET_NAME \
   --set providers.azure.vnet.subnetName=$ACI_SUBNET_NAME \
   --set providers.azure.vent.subnetCidr=$ACI_SUBNET_RANGE \
   --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
@@ -422,7 +434,10 @@ helm install "$CHART_URL" --name "$RELEASE_NAME" \
   --set providers.azure.aciResourceGroup=$AZURE_RG \
   --set providers.azure.aciRegion=$ACI_REGION \
   --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.clientId=$AZURE_CLIENT_ID \
+  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
   ```
+
 
 ## Validate the Virtual Kubelet ACI provider
 

@@ -217,6 +217,13 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		}
 	}
 
+	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
+		p.vnetName = vnetName
+	}
+	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
+		p.vnetResourceGroup = vnetResourceGroup
+	}
+
 	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
 		azAuth.ClientID = clientID
 	}

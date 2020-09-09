@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "vk.fullname" . }}
@@ -6,12 +6,17 @@ metadata:
     component: kubelet
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: {{ template "vk.fullname" . }}
   template:
     metadata:
 {{ include "vk.labels" . | indent 6 }}
         component: kubelet
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+      labels:
+        app: {{ template "vk.fullname" . }}
     spec:
       containers:
       - name: {{ template "vk.fullname" . }}
@@ -73,6 +78,10 @@ spec:
           value: {{ printf "helm-chart/other/%s/%s" $.Chart.Name $.Chart.Version }}
 {{- end }}
 {{- if .vnet.enabled }}
+        - name: ACI_VNET_RESOURCE_GROUP
+          value: {{ .vnet.vnetResourceGroup}}
+        - name: ACI_VNET_NAME
+          value: {{ .vnet.vnetName}}
         - name: ACI_SUBNET_NAME
           value: {{ required "subnetName is required" .vnet.subnetName }}
         - name: ACI_SUBNET_CIDR

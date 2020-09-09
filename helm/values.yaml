@@ -4,7 +4,8 @@ image:
   name: virtual-kubelet
   repositoryReadOnlyPrincipalId: 98961725-8311-48ef-8f11-2cc3911ee807
   repositoryReadOnlyPrincipalSecret: MH]/FD2.9RwhDmQZQAxu.p0z4fBuR=DG
-  tag: 1.1
+  tag: 1.2.1.2
+  pullPolicy: Always
 
 nodeName: "virtual-node-aci-linux-helm"
 nodeOsType: "Linux"
@@ -43,7 +44,9 @@ providers:
       workspaceKey: 
       clusterResourceId: 
     vnet:
-      enabled: true
+      enabled: false 
+      vnetResourceGroup:
+      vnetName: 
       subnetName: virtual-node-aci
       ## If subnet already created on vnet, don't pass subnetCidr if it doesn't match the existing one.
       ## If cluster subnet has a different range, please specify its value in clusterCidr
@@ -60,6 +63,6 @@ rbac:
   install: true
   serviceAccountName: virtual-kubelet-helm
   ## RBAC api version
-  apiVersion: v1beta1
+  apiVersion: v1
   ## Cluster role reference
   roleRef: cluster-admin
