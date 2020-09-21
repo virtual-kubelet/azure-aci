@@ -222,7 +222,7 @@ If your cluster is an AKS cluster:
 export RELEASE_NAME=virtual-kubelet
 export VK_RELEASE=virtual-kubelet-latest
 export NODE_NAME=virtual-kubelet
-export CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
+export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
@@ -234,7 +234,7 @@ For any other type of Kubernetes cluster:
 ```cli
 RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
-CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
+CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
@@ -410,7 +410,7 @@ Set the following values for the helm chart.
 ```cli
 RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
-CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
+CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 ```
 
 If your cluster is an AKS cluster: 
