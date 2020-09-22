@@ -6,41 +6,43 @@ The Azure Container Instances provider for the Virtual Kubelet configures an ACI
 
 This document details configuring the Virtual Kubelet ACI provider.
 
-#### Table of Contents
+## Table of Contents
 
 * [Feature set](#current-feature-set)
-* [Prerequiste](#prerequisites)
+* [Prerequisites](#prerequisites)
 * [Set-up virtual node in AKS](#cluster-and-azure-account-setup)
 * [Quick set-up with the ACI Connector](#quick-set-up-with-aks)
 * [Manual set-up](#manual-set-up)
 * [Create a AKS cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
 * [Validate the Virtual Kubelet ACI provider](#validate-the-virtual-kubelet-aci-provider)
 * [Schedule a pod in ACI](#schedule-a-pod-in-aci)
-* [Work arounds](#work-arounds-for-the-aci-connector-pod)
-* [Upgrade the ACI Connector ](#upgrade-the-aci-provider)
+* [Work around](#work-around-for-the-aci-connector-pod)
+* [Upgrade the ACI Connector](#upgrade-the-aci-provider)
 * [Remove the Virtual Kubelet](#remove-the-virtual-kubelet)
 
 ## Current feature set
 
-Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Container Instances provide. Please check the Azure documentation accurate details on region avaliability, pricing and new features. The list here attempts to give an accurate reference for the features we support in ACI and the ACI provider within Virtual Kubelet. 
+Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Container Instances provide. Please check the Azure documentation accurate details on region availability, pricing and new features. The list here attempts to give an accurate reference for the features we support in ACI and the ACI provider within Virtual Kubelet.
 
-**Features**
+### features
+
 * Volumes: empty dir, github repo, Azure Files
 * Secure env variables, config maps
 * Bring your own virtual network (VNet)
-* Network security group support 
-* Basic Azure Networking support within AKS virtual node 
-* [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances 
+* Network security group support
+* Basic Azure Networking support within AKS virtual node
+* [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
 * Azure Monitor integration or formally known as OMS
 
-**Limitations**
+### Limitations
+
 * Using service principal credentials to pull ACR images ([see workaround](#Private-registry))
-* Liveness and readiness probes 
-* [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet 
+* Liveness and readiness probes
+* [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet
 * VNet peering
-* Argument support for exec 
-* Init containers 
-* [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support 
+* Argument support for exec
+* Init containers
+* [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support
 
 ## Prerequisites
 
@@ -50,7 +52,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Install the [Kubernetes CLI](#install-the-kubernetes-cli).
 * Install the [Helm CLI](#install-the-helm-cli).
 
-You may also use [Azure cloud shell](https://docs.microsoft.com/azure/cloud-shell/overview) which has the above CLI's already installed.
+You may also use [Azure cloud shell](https://docs.microsoft.com/azure/cloud-shell/overview) which has the above tools already installed.
 
 ### Install the Azure CLI
 
@@ -59,7 +61,7 @@ See the [full installation instructions](https://docs.microsoft.com/cli/azure/in
 
 #### MacOS
 
-```cli
+```bash
 brew install azure-cli
 ```
 
@@ -70,22 +72,25 @@ Download and run the [Azure CLI Installer (MSI)](https://aka.ms/InstallAzureCliW
 #### Ubuntu 64-bit
 
 1. Add the azure-cli repo to your sources:
-    ```cli
+
+```bash
     echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ wheezy main" | \
          sudo tee /etc/apt/sources.list.d/azure-cli.list
-    ```
+```
+
 2. Run the following commands to install the Azure CLI and its dependencies:
-    ```cli
+
+```bash
     sudo apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893
     sudo apt-get install apt-transport-https
     sudo apt-get update && sudo apt-get install azure-cli
-    ```
+```
 
 ### Install the Kubernetes CLI
 
 Install `kubectl` by running the following command:
 
-```cli
+```bash
 az aks install-cli
 ```
 
@@ -103,24 +108,28 @@ First let's identify your Azure subscription and save it for use later on in the
 
 1. Run `az login` and follow the instructions in the command output to authorize `az` to use your account
 2. List your Azure subscriptions:
-    ```cli
+
+    ```bash
     az account list -o table
     ```
+
 3. Copy your subscription ID and save it in an environment variable:
 
     **Bash**
-    ```cli
+
+    ```bash
     export AZURE_SUBSCRIPTION_ID="<SubscriptionId>"
     ```
 
     **PowerShell**
-    ```cli
+
+    ```powershell
     $env:AZURE_SUBSCRIPTION_ID = "<SubscriptionId>"
     ```
 
 4. Enable ACI in your subscription:
 
-   ```cli
+   ```bash
    az provider register -n Microsoft.ContainerInstance
    ```
 
@@ -128,20 +137,19 @@ First let's identify your Azure subscription and save it for use later on in the
 
 ### Linux containers with Virtual Nodes
 
-Azure Kubernetes Service has an efficient way of setting up virtual kubelet with the ACI provider with a feature called virtual node. You can easily install a virtual node that will deploy Linux workloads to ACI. The pods that spin out will automatically get private IPs and will be within a subnet that is within the AKS cluster's Virtual Network. **Virtual Nodes is the recommended path for using the ACI provider on Linux AKS clusters.** 
+Azure Kubernetes Service has an efficient way of setting up virtual kubelet with the ACI provider with a feature called virtual node. You can easily install a virtual node that will deploy Linux workloads to ACI. The pods that spin out will automatically get private IPs and will be within a subnet that is within the AKS cluster's Virtual Network. **Virtual Nodes is the recommended path for using the ACI provider on Linux AKS clusters.**
 
-To install virtual node in the Azure portal go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-portal). To install virtual node in the Azure CLI go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli). 
+To install virtual node in the Azure portal go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-portal). To install virtual node in the Azure CLI go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli).
 
 ### Windows containers
 
-The virtual nodes experience does not exist for Windows containers yet including no virtual networking support. You can use the following command to install the ACI provider for Windows. 
+The virtual nodes experience does not exist for Windows containers yet including no virtual networking support. You can use the following command to install the ACI provider for Windows.
 
-**Bash**
-```cli 
-az aks install-connector --resource-group <aks cluster rg> --name <aks cluster name> --os-type windows 
+```bash
+az aks install-connector --resource-group <aks cluster rg> --name <aks cluster name> --os-type windows
 ```
 
-Once created, [verify the virtual node has been registed](#Validate-the-Virtual-Kubelet-ACI-provider) and you can now [schedule pods in ACI](#Schedule-a-pod-in-ACI). 
+Once created, [verify the virtual node has been registered](#Validate-the-Virtual-Kubelet-ACI-provider) and you can now [schedule pods in ACI](#Schedule-a-pod-in-ACI).
 
 :bangbang: The _az aks install-connector_ command will be deprecated shortly. Please follow the **Manual set-up** section below instead. :bangbang:
 
@@ -151,32 +159,36 @@ Once created, [verify the virtual node has been registed](#Validate-the-Virtual-
 
 To use Azure Container Instances, you must provide a resource group. Create one with the az cli using the following command.
 
-```cli
+```bash
 export ACI_REGION=eastus
 az group create --name aci-group --location "$ACI_REGION"
 export AZURE_RG=aci-group
 ```
 
-### Create a service principal 
+### Create a service principal
 
 This creates an identity for the Virtual Kubelet ACI provider to use when provisioning
-resources on your account on behalf of Kubernetes. If you are provisioning Virtual Kubelet on AKS, please note: 1) This step is optional 2) The service principal will expire within a year unless [updated](https://docs.microsoft.com/en-us/azure/aks/update-credentials).
+resources on your account on behalf of Kubernetes. If you are provisioning Virtual Kubelet on AKS, please note: 1) This step is optional 2) The service principal will expire within a year unless [updated](https://docs.microsoft.com/azure/aks/update-credentials).
 
 1. Create a service principal with RBAC enabled for the quickstart:
-    ```cli
-    az ad sp create-for-rbac --name virtual-kubelet-quickstart -o table
-    ```
+
+```bash
+   az ad sp create-for-rbac --name virtual-kubelet-quickstart -o table
+```
+
 2. Save the values from the command output in environment variables:
 
     **Bash**
-    ```cli
+
+    ```bash
     export AZURE_TENANT_ID=<Tenant>
     export AZURE_CLIENT_ID=<AppId>
     export AZURE_CLIENT_SECRET=<Password>
     ```
 
     **PowerShell**
-    ```cli
+
+    ```powershell
     $env:AZURE_TENANT_ID = "<Tenant>"
     $env:AZURE_CLIENT_ID = "<AppId>"
     $env:AZURE_CLIENT_SECRET = "<Password>"
@@ -186,19 +198,20 @@ resources on your account on behalf of Kubernetes. If you are provisioning Virtu
 
 Run these commands to deploy the virtual kubelet which connects your Kubernetes cluster to Azure Container Instances.
 
-```cli
+```bash
 export VK_RELEASE=virtual-kubelet-latest
 ```
 
 Grab the public master URI for your Kubernetes cluster and save the value.
 
-```cli 
+```bash
 kubectl cluster-info
 export MASTER_URI=<Kubernetes Master>
 ```
 
 If your cluster is an AKS cluster:
-```cli
+
+```bash
 export RELEASE_NAME=virtual-kubelet
 export VK_RELEASE=virtual-kubelet-latest
 export NODE_NAME=virtual-kubelet
@@ -211,7 +224,8 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
 ```
 
 For any other type of Kubernetes cluster:
-```cli
+
+```bash
 RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
 CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
@@ -258,42 +272,43 @@ The virtual kubelet is getting deployed on your cluster.
 
 To verify that virtual kubelet has started, run:
 
-```cli
+```bash
   kubectl --namespace=default get pods -l "app=virtual-kubelet-virtual-kubelet"
 ```
-##  Create an AKS cluster with VNet
 
-  Run the following commands to create an AKS cluster with a new Azure virtual network. Also, create two subnets. One will be delegated to the cluster and the other will be delegated to Azure Container Instances. 
+## Create an AKS cluster with VNet
 
-### Create an Azure virtual network and subnets 
+  Run the following commands to create an AKS cluster with a new Azure virtual network. Also, create two subnets. One will be delegated to the cluster and the other will be delegated to Azure Container Instances.
 
-  First, set the following variables for your VNet range and two subnet ranges within that VNet. The following ranges are recommended for those just trying out the connector with VNet. 
+### Create an Azure virtual network and subnets
 
-  **Bash**
-  ```cli
-    export VNET_RANGE=10.0.0.0/8  
-    export CLUSTER_SUBNET_RANGE=10.240.0.0/16 
-    export ACI_SUBNET_RANGE=10.241.0.0/16 
-    export VNET_NAME=myAKSVNet 
-    export CLUSTER_SUBNET_NAME=myAKSSubnet 
-    export ACI_SUBNET_NAME=myACISubnet 
-    export AKS_CLUSTER_RG=myresourcegroup 
-    export KUBE_DNS_IP=10.0.0.10
-  ```
-  Run the following command to create a virtual network within Azure, and a subnet within that VNet. The subnet will be dedicated to the nodes in the AKS cluster.
+  First, set the following variables for your VNet range and two subnet ranges within that VNet. The following ranges are recommended for those just trying out the connector with VNet.
 
-    ```cli
-    az network vnet create \
-    --resource-group $AKS_CLUSTER_RG \
-    --name $VNET_NAME \
-    --address-prefixes $VNET_RANGE \
-    --subnet-name $CLUSTER_SUBNET_NAME \
-    --subnet-prefix $CLUSTER_SUBNET_RANGE
-    ```
+```bash
+  export VNET_RANGE=10.0.0.0/8  
+  export CLUSTER_SUBNET_RANGE=10.240.0.0/16
+  export ACI_SUBNET_RANGE=10.241.0.0/16
+  export VNET_NAME=myAKSVNet
+  export CLUSTER_SUBNET_NAME=myAKSSubnet
+  export ACI_SUBNET_NAME=myACISubnet
+  export AKS_CLUSTER_RG=myresourcegroup
+  export KUBE_DNS_IP=10.0.0.10
+```
 
-Create a subnet that will be delegated to just resources within ACI, note that this needs to be an empty subnet, but within the same VNet that you already created. 
+Run the following command to create a virtual network within Azure, and a subnet within that VNet. The subnet will be dedicated to the nodes in the AKS cluster.
 
-```cli
+```bash
+az network vnet create \
+--resource-group $AKS_CLUSTER_RG \
+--name $VNET_NAME \
+--address-prefixes $VNET_RANGE \
+--subnet-name $CLUSTER_SUBNET_NAME \
+--subnet-prefix $CLUSTER_SUBNET_RANGE
+```
+
+Create a subnet that will be delegated to just resources within ACI, note that this needs to be an empty subnet, but within the same VNet that you already created.
+
+```bash
 az network vnet subnet create \
     --resource-group $AKS_CLUSTER_RG \
     --vnet-name $VNET_NAME \
@@ -303,14 +318,14 @@ az network vnet subnet create \
 
 ### Create a service principal (OPTIONAL)
 
-Create an Azure Active Directory service principal to allow AKS to interact with other Azure resources. You can use a pre-created service principal too. 
+Create an Azure Active Directory service principal to allow AKS to interact with other Azure resources. You can use a pre-created service principal too.
 
-```cli
+```bash
 az ad sp create-for-rbac -n "virtual-kubelet-sp" --skip-assignment
 ```
 
-The output should look similar to the following. 
- 
+The output should look similar to the following.
+
 ```console
 {
   "appId": "bef76eb3-d743-4a97-9534-03e9388811fc",
@@ -320,48 +335,49 @@ The output should look similar to the following.
   "tenant": "72f988bf-86f1-41af-91ab-2d7cd011db48"
 }
 ```
-Save the output values from the command output in enviroment variables. 
 
-```cli
+Save the output values from the command output in environment variables.
+
+```bash
 export AZURE_TENANT_ID=<Tenant>
 export AZURE_CLIENT_ID=<AppId>
 export AZURE_CLIENT_SECRET=<Password>
 ```
 
-These values can be integrated into the `az aks create` as a field ` --service-principal $AZURE_CLIENT_ID \`.
+These values can be integrated into the `az aks create` as a field `--service-principal $AZURE_CLIENT_ID`.
 
 ### Integrating Azure VNet Resource
 
-If you want to integrate an already created Azure VNet resource with your AKS cluster than follow these steps. 
+If you want to integrate an already created Azure VNet resource with your AKS cluster than follow these steps.
 Grab the virtual network resource id with the following command:
 
-```cli
+```bash
 az network vnet show --resource-group $AKS_CLUSTER_RG --name $VNET_NAME --query id -o tsv
 ```
 
-Grant access to the AKS cluster to use the virtual network by creating a role and assigning it. 
+Grant access to the AKS cluster to use the virtual network by creating a role and assigning it.
 
-```cli
+```bash
 az role assignment create --assignee $AZURE_CLIENT_ID --scope <vnetId> --role NetworkContributor
 ```
 
 ### Create an AKS cluster with a virtual network
 
-Grab the id of the cluster subnet you created earlier with the following command. 
+Grab the id of the cluster subnet you created earlier with the following command.
 
-```cli
+```bash
 az network vnet subnet show --resource-group $AKS_CLUSTER_RG --vnet-name $VNET_NAME --name $CLUSTER_SUBNET_NAME --query id -o tsv
 ```
 
-Save the entire output starting witn "/subscriptions/..." in the following environment variable. 
+Save the entire output starting with "/subscriptions/..." in the following environment variable.
 
-```cli 
+```bash
 export VNET_SUBNET_ID=<subnet-resource>
 ```
 
-Use the following command to create an AKS cluster with the virtual network you've already created. 
+Use the following command to create an AKS cluster with the virtual network you've already created.
 
-```cli
+```bash
 az aks create \
     --resource-group myResourceGroup \
     --name myAKSCluster \
@@ -376,26 +392,26 @@ az aks create \
 
 ### Deploy Virtual Kubelet
 
-Manually deploy the Virtual Kubelet, the following env. variables have already been set earlier. You do need to pass through the subnet you created for ACI earlier, otherwise the container instances will not be able to participate with the other pods within the cluster subnet. 
+Manually deploy the Virtual Kubelet, the following env. variables have already been set earlier. You do need to pass through the subnet you created for ACI earlier, otherwise the container instances will not be able to participate with the other pods within the cluster subnet.
 
 Grab the public master URI for your Kubernetes cluster and save the value.
 
-```cli 
+```bash
 kubectl cluster-info
 export MASTER_URI=<public uri>
 ```
 
-Set the following values for the helm chart. 
+Set the following values for the helm chart.
 
-```cli
+```bash
 RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
 CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 ```
 
-If your cluster is an AKS cluster: 
+If your cluster is an AKS cluster:
 
-```cli
+```bash
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
@@ -407,10 +423,10 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.masterUri=$MASTER_URI
 ```
 
-For any other type of cluster: 
+For any other type of cluster:
 
-```cli
-# the resource group where the virtual network localte in
+```bash
+# the resource group where the virtual network is located in
 export ACI_VNET_RESOURCE_GROUP=<resource group>
 
 # the virtual network name where container will deploy to
@@ -438,12 +454,11 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
   ```
 
-
 ## Validate the Virtual Kubelet ACI provider
 
 To validate that the Virtual Kubelet has been installed, return a list of Kubernetes nodes using the [kubectl get nodes][kubectl-get] command. You should see a node that matches the name given to the ACI connector.
 
-```cli
+```bash
 kubectl get nodes
 ```
 
@@ -510,6 +525,7 @@ Notice that Virtual-Kubelet nodes are tainted by default to avoid unexpected pod
 ```
 
 ### Private registry
+
 If your image is on a private registry, you need to [add a kubernetes secret to your cluster](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/#create-a-secret-by-providing-credentials-on-the-command-line) and reference it in the pod spec.
 
 ```yaml
@@ -525,13 +541,13 @@ If your image is on a private registry, you need to [add a kubernetes secret to 
 
 Run the application with the [kubectl create][kubectl-create] command.
 
-```cli
+```bash
 kubectl create -f virtual-kubelet-test.yaml
 ```
 
 Use the [kubectl get pods][kubectl-get] command with the `-o wide` argument to output a list of pods with the scheduled node.
 
-```cli
+```bash
 kubectl get pods -o wide
 ```
 
@@ -542,7 +558,8 @@ NAME                                            READY     STATUS    RESTARTS   A
 aci-helloworld-2559879000-8vmjw                 1/1       Running   0          39s       52.179.3.180   virtual-kubelet-aci-linux
 
 ```
-If the AKS cluster was configured with a virtual network, then the output will look like the following. The container instance will get a private ip rather than a public one. 
+
+If the AKS cluster was configured with a virtual network, then the output will look like the following. The container instance will get a private ip rather than a public one.
 
 ```console
 NAME                            READY     STATUS    RESTARTS   AGE       IP           NODE
@@ -551,7 +568,7 @@ aci-helloworld-9b55975f-bnmfl   1/1       Running   0          4m        10.241.
 
 To validate that the container is running in an Azure Container Instance, use the [az container list][az-container-list] Azure CLI command.
 
-```cli
+```bash
 az container list -o table
 ```
 
@@ -562,6 +579,7 @@ Name                             ResourceGroup    ProvisioningState    Image    
 -------------------------------  ---------------  -------------------  ------------------------  ---------------  ---------------  --------  ----------
 helloworld-2559879000-8vmjw  myResourceGroup    Succeeded            microsoft/aci-helloworld  52.179.3.180:80  1.0 core/1.5 gb  Linux     eastus
 ```
+
 <!--
 ### Schedule an ACI pod with a DNS Name label
 
@@ -611,28 +629,29 @@ Output:
 "helloworld-aci.westus.azurecontainer.io"
 ```
 -->
-## Work arounds for the ACI Connector pod
 
-If your pod that's scheduled onto the Virtual Kubelet node is in a pending state please add these workarounds to your Virtual Kubelet pod spec. 
+## Work around for the ACI Connector pod
+
+If your pod that's scheduled onto the Virtual Kubelet node is in a pending state please add this workaround to your Virtual Kubelet pod spec.
 
 First, grab the logs from your ACI Connector pod, with the following command. You can get the pod name from the `kubectl get pods` command  
 
-```cli
-kubectl logs virtual-kubelet-virtual-kubelet-7bcf5dc749-6mvgp 
+```bash
+kubectl logs virtual-kubelet-virtual-kubelet-7bcf5dc749-6mvgp
 ```
 
-### Stream or pod watcher errors 
+### Stream or pod watcher errors
 
-If you see the following errors in the logs: 
+If you see the following errors in the logs:
 
-```console 
+```console
 ERROR: logging before flag.Parse: E0914 00:02:01.546132       1 streamwatcher.go:109] Unable to decode an event from the watch stream: stream error: stream ID 181; INTERNAL_ERROR
 time="2018-09-14T00:02:01Z" level=error msg="Pod watcher connection is closed unexpectedly" namespace= node=virtual-kubelet-myconnector-linux operatingSystem=Linux provider=azure
 ```
 
-Then copy the master URI with cluster-info. 
+Then copy the master URI with cluster-info.
 
-```cli
+```bash
 kubectl cluster-info
 ```
 
@@ -642,10 +661,10 @@ Output:
 Kubernetes master is running at https://aksxxxx-xxxxx-xxxx-xxxxxxx.hcp.uksouth.azmk8s.io:443
 ```
 
-Edit your aci-connector deployment by first getting the deployment name. 
+Edit your aci-connector deployment by first getting the deployment name.
 
-```cli
-kubectl get deploy 
+```bash
+kubectl get deploy
 ```
 
 Output:
@@ -656,13 +675,13 @@ virtual-kubelet-virtual-kubelet 1         1         1            1           5d
 aci-helloworld                  1         1         1            0           12m
 ```
 
-Edit the deployment. 
+Edit the deployment.
 
-```cli 
-kubectl edit deploy virtual-kubelet-virtual-kubelet 
+```bash
+kubectl edit deploy virtual-kubelet-virtual-kubelet
 ```
 
-Add the following name and value to the deployment in the enviorment section. Use your copied AKS master URI. 
+Add the following name and value to the deployment in the environment section. Use your copied AKS master URI.
 
 ```yaml
 --name: MASTER_URI
@@ -673,14 +692,14 @@ Add the following name and value to the deployment in the enviorment section. Us
 
 If you see the following errors in the logs:
 
-```console 
+```console
 Flag --taint has been deprecated, Taint key should now be configured using the VK_TAINT_KEY environment variable
 ```
 
 Then edit your aci-connector deployment by first grabbing the deployment name.  
 
-```cli
-kubectl get deploy 
+```bash
+kubectl get deploy
 ```
 
 Output:
@@ -693,11 +712,11 @@ aci-helloworld                  1         1         1            0           12m
 
 Edit the connector deployment.
 
-```cli 
-kubectl edit deploy virtual-kubelet-virtual-kubelet 
+```bash
+kubectl edit deploy virtual-kubelet-virtual-kubelet
 ```
 
-Add the following as an enviorment variable within the deployment. 
+Add the following as an environment variable within the deployment.
 
 ```yaml
 --name: VK_TAINT_KEY
@@ -706,16 +725,16 @@ Add the following as an enviorment variable within the deployment.
 
 Also, delete the following argument in your pod spec:
 
-```yaml 
+```yaml
 - --taint
   - azure.com/aci
 ```
 
-## Upgrade the ACI Provider 
+## Upgrade the ACI Provider
 
 Run the following command to upgrade your ACI Connector. **This does not apply if you used Virtual Node since the system pod gets updated with AKS updates**
 
-```cli
+```bash
 az aks upgrade-connector --resource-group <aks cluster rg> --name <aks cluster name> --connector-name virtual-kubelet --os-type linux
 ```
 
@@ -723,12 +742,13 @@ az aks upgrade-connector --resource-group <aks cluster rg> --name <aks cluster n
 
 You can remove your Virtual Kubelet node by deleting the Helm deployment. Run the following command:
 
-```cli
+```bash
 helm uninstall virtual-kubelet
 ```
+
 If you used the ACI Connector installation then use the following command to remove the the ACI Connector from your cluster.
 
-```cli
+```bash
 az aks remove-connector --resource-group <aks cluster rg> --name <aks cluster name> --connector-name virtual-kubelet --os-type linux
 ```
 
