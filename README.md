@@ -9,15 +9,15 @@ This document details configuring the Virtual Kubelet ACI provider.
 #### Table of Contents
 
 * [Feature set](#current-feature-set)
-* [Prerequiste](#prerequisite)
-* [Set-up virtual node in AKS](#set-up-virtual-node-in-AKS)
-* [Quick set-up with the ACI Connector](#quick-set-up-with-the-aci-connector)
+* [Prerequiste](#prerequisites)
+* [Set-up virtual node in AKS](#cluster-and-azure-account-setup)
+* [Quick set-up with the ACI Connector](#quick-set-up-with-aks)
 * [Manual set-up](#manual-set-up)
 * [Create a AKS cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
 * [Validate the Virtual Kubelet ACI provider](#validate-the-virtual-kubelet-aci-provider)
 * [Schedule a pod in ACI](#schedule-a-pod-in-aci)
-* [Work arounds](#work-arounds-for-the-aci-connector)
-* [Upgrade the ACI Connector ](#upgrade-the-aci-connector)
+* [Work arounds](#work-arounds-for-the-aci-connector-pod)
+* [Upgrade the ACI Connector ](#upgrade-the-aci-provider)
 * [Remove the Virtual Kubelet](#remove-the-virtual-kubelet)
 
 ## Current feature set
