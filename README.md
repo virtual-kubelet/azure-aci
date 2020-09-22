@@ -11,13 +11,11 @@ This document details configuring the Virtual Kubelet ACI provider.
 * [Feature set](#current-feature-set)
 * [Prerequisites](#prerequisites)
 * [Set-up virtual node in AKS](#cluster-and-azure-account-setup)
-* [Quick set-up with the ACI Connector](#quick-set-up-with-aks)
 * [Manual set-up](#manual-set-up)
 * [Create a AKS cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
 * [Validate the Virtual Kubelet ACI provider](#validate-the-virtual-kubelet-aci-provider)
 * [Schedule a pod in ACI](#schedule-a-pod-in-aci)
-* [Work around](#work-around-for-the-aci-connector-pod)
-* [Upgrade the ACI Connector](#upgrade-the-aci-provider)
+* [Work around for the virtual kubelet pod](#Work-around-for-the-virtual-kubelet-pod)
 * [Remove the Virtual Kubelet](#remove-the-virtual-kubelet)
 
 ## Current feature set
@@ -140,18 +138,6 @@ First let's identify your Azure subscription and save it for use later on in the
 Azure Kubernetes Service has an efficient way of setting up virtual kubelet with the ACI provider with a feature called virtual node. You can easily install a virtual node that will deploy Linux workloads to ACI. The pods that spin out will automatically get private IPs and will be within a subnet that is within the AKS cluster's Virtual Network. **Virtual Nodes is the recommended path for using the ACI provider on Linux AKS clusters.**
 
 To install virtual node in the Azure portal go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-portal). To install virtual node in the Azure CLI go [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli).
-
-### Windows containers
-
-The virtual nodes experience does not exist for Windows containers yet including no virtual networking support. You can use the following command to install the ACI provider for Windows.
-
-```bash
-az aks install-connector --resource-group <aks cluster rg> --name <aks cluster name> --os-type windows
-```
-
-Once created, [verify the virtual node has been registered](#Validate-the-Virtual-Kubelet-ACI-provider) and you can now [schedule pods in ACI](#Schedule-a-pod-in-ACI).
-
-:bangbang: The _az aks install-connector_ command will be deprecated shortly. Please follow the **Manual set-up** section below instead. :bangbang:
 
 ## Manual set-up
 
@@ -282,7 +268,7 @@ To verify that virtual kubelet has started, run:
 
 ### Create an Azure virtual network and subnets
 
-  First, set the following variables for your VNet range and two subnet ranges within that VNet. The following ranges are recommended for those just trying out the connector with VNet.
+  First, set the following variables for your VNet range and two subnet ranges within that VNet.
 
 ```bash
   export VNET_RANGE=10.0.0.0/8  
@@ -456,7 +442,7 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
 
 ## Validate the Virtual Kubelet ACI provider
 
-To validate that the Virtual Kubelet has been installed, return a list of Kubernetes nodes using the [kubectl get nodes][kubectl-get] command. You should see a node that matches the name given to the ACI connector.
+To validate that the Virtual Kubelet has been installed, return a list of Kubernetes nodes using the [kubectl get nodes][kubectl-get] command.
 
 ```bash
 kubectl get nodes
@@ -471,8 +457,6 @@ aks-nodepool1-39289454-0                    Ready     agent     22h       v1.12.
 aks-nodepool1-39289454-1                    Ready     agent     22h       v1.12.6
 aks-nodepool1-39289454-2                    Ready     agent     22h       v1.12.6
 ```
-
-If you installed the Windows provider, your node name will be something similar to `virtual-kubelet-aci-connector-windows-<region name>`
 
 ## Schedule a pod in ACI
 
@@ -630,11 +614,11 @@ Output:
 ```
 -->
 
-## Work around for the ACI Connector pod
+## Work around for the virtual kubelet pod
 
 If your pod that's scheduled onto the Virtual Kubelet node is in a pending state please add this workaround to your Virtual Kubelet pod spec.
 
-First, grab the logs from your ACI Connector pod, with the following command. You can get the pod name from the `kubectl get pods` command  
+First, grab the logs from your virtual kubelet pod, with the following command. You can get the pod name from the `kubectl get pods` command  
 
 ```bash
 kubectl logs virtual-kubelet-virtual-kubelet-7bcf5dc749-6mvgp
@@ -661,7 +645,7 @@ Output:
 Kubernetes master is running at https://aksxxxx-xxxxx-xxxx-xxxxxxx.hcp.uksouth.azmk8s.io:443
 ```
 
-Edit your aci-connector deployment by first getting the deployment name.
+Edit virtual kubelet deployment by first getting the deployment name.
 
 ```bash
 kubectl get deploy
@@ -696,7 +680,7 @@ If you see the following errors in the logs:
 Flag --taint has been deprecated, Taint key should now be configured using the VK_TAINT_KEY environment variable
 ```
 
-Then edit your aci-connector deployment by first grabbing the deployment name.  
+Then edit your virtual kubelet deployment by first grabbing the deployment name.  
 
 ```bash
 kubectl get deploy
@@ -710,7 +694,7 @@ virtual-kubelet-virtual-kubelet 1         1         1            1           5d
 aci-helloworld                  1         1         1            0           12m
 ```
 
-Edit the connector deployment.
+Edit the virtual kubelet deployment.
 
 ```bash
 kubectl edit deploy virtual-kubelet-virtual-kubelet
@@ -730,26 +714,12 @@ Also, delete the following argument in your pod spec:
   - azure.com/aci
 ```
 
-## Upgrade the ACI Provider
-
-Run the following command to upgrade your ACI Connector. **This does not apply if you used Virtual Node since the system pod gets updated with AKS updates**
-
-```bash
-az aks upgrade-connector --resource-group <aks cluster rg> --name <aks cluster name> --connector-name virtual-kubelet --os-type linux
-```
-
 ## Remove the Virtual Kubelet
 
 You can remove your Virtual Kubelet node by deleting the Helm deployment. Run the following command:
 
 ```bash
 helm uninstall virtual-kubelet
-```
-
-If you used the ACI Connector installation then use the following command to remove the the ACI Connector from your cluster.
-
-```bash
-az aks remove-connector --resource-group <aks cluster rg> --name <aks cluster name> --connector-name virtual-kubelet --os-type linux
 ```
 
 If you used Virtual Nodes, can follow the steps [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli#remove-virtual-nodes) to remove the add-on
