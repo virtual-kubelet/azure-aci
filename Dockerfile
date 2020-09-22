@@ -1,9 +1,9 @@
-FROM golang:1.12 as builder
+FROM golang:1.15 as builder
 ENV PATH /go/bin:/usr/local/go/bin:$PATH
 ENV GOPATH /go
 COPY . /go/src/github.com/virtual-kubelet/azure-aci
 WORKDIR /go/src/github.com/virtual-kubelet/azure-aci
-RUN make build
+RUN make clean && make build
 RUN cp bin/virtual-kubelet /usr/bin/virtual-kubelet
 
 FROM scratch

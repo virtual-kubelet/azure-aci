@@ -13,7 +13,7 @@ This document details configuring the Virtual Kubelet ACI provider.
 * [Set-up virtual node in AKS](#cluster-and-azure-account-setup)
 * [Quick set-up with the ACI Connector](#quick-set-up-with-aks)
 * [Manual set-up](#manual-set-up)
-* [Create a cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
+* [Create a AKS cluster with a Virtual Network](#create-an-aks-cluster-with-vnet)
 * [Validate the Virtual Kubelet ACI provider](#validate-the-virtual-kubelet-aci-provider)
 * [Schedule a pod in ACI](#schedule-a-pod-in-aci)
 * [Work arounds](#work-arounds-for-the-aci-connector-pod)
@@ -89,29 +89,9 @@ Install `kubectl` by running the following command:
 az aks install-cli
 ```
 
-### Install the Helm CLI
+### Install the Helm 3.x CLI
 
-[Helm](https://github.com/kubernetes/helm) is a tool for installing pre-configured applications on Kubernetes.
-Install `helm` by running the following command:
-
-#### MacOS
-
-```cli
-brew install kubernetes-helm
-```
-
-#### Windows
-
-1. Download the latest [Helm release](https://storage.googleapis.com/kubernetes-helm/helm-v2.7.2-windows-amd64.tar.gz).
-2. Decompress the tar file.
-3. Copy **helm.exe** to a directory on your PATH.
-
-#### Linux
-
-```cli
-curl https://raw.githubusercontent.com/kubernetes/helm/master/scripts/get | bash
-```
----
+[Helm](https://github.com/helm/helm) is a tool for installing pre-configured applications on Kubernetes. Install `helm` for macOS, Windows, or Linux [via binary releases or package managers](https://github.com/helm/helm#install) or check the detailed [Helm install guide](https://helm.sh/docs/intro/install/) for more options including building from source.
 
 ## Cluster and Azure Account Setup
 
@@ -222,9 +202,9 @@ If your cluster is an AKS cluster:
 export RELEASE_NAME=virtual-kubelet
 export VK_RELEASE=virtual-kubelet-latest
 export NODE_NAME=virtual-kubelet
-export CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
+export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.masterUri=$MASTER_URI
@@ -234,9 +214,9 @@ For any other type of Kubernetes cluster:
 ```cli
 RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
-CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
+CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set rbac.install=true \
   --set providers.azure.targetAKS=false \
@@ -410,13 +390,13 @@ Set the following values for the helm chart.
 ```cli
 RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
-CHART_URL=https://github.com/virtual-kubelet/virtual-kubelet/raw/master/charts/$VK_RELEASE.tgz
+CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 ```
 
 If your cluster is an AKS cluster: 
 
 ```cli
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.vnet.enabled=true \
@@ -430,10 +410,22 @@ helm install "$CHART_URL" --name "$RELEASE_NAME" \
 For any other type of cluster: 
 
 ```cli
-helm install "$CHART_URL" --name "$RELEASE_NAME" \
+# the resource group where the virtual network localte in
+export ACI_VNET_RESOURCE_GROUP=<resource group>
+
+# the virtual network name where container will deploy to
+export ACI_VNET_NAME=<virtual network name>
+# subnet name where ACI will deploy to. Virtual Kubelet will automatically create subnet resource if it not exists
+export ACI_SUBNET_NAME=<subnet name>
+# subnet's IP range, for example 10.1.0.0/16. You don't need specific this system variable if subnet has been exists
+export ACI_SUBNET_RANGE=<subnet name where ACI will run in>
+
+helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=false \
   --set providers.azure.vnet.enabled=true \
+  --set providers.azure.vnet.vnetResourceGroup=$ACI_VNET_RESOURCE_GROUP \
+  --set providers.azure.vnet.vnetName=$ACI_VNET_NAME \
   --set providers.azure.vnet.subnetName=$ACI_SUBNET_NAME \
   --set providers.azure.vent.subnetCidr=$ACI_SUBNET_RANGE \
   --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
@@ -442,7 +434,10 @@ helm install "$CHART_URL" --name "$RELEASE_NAME" \
   --set providers.azure.aciResourceGroup=$AZURE_RG \
   --set providers.azure.aciRegion=$ACI_REGION \
   --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.clientId=$AZURE_CLIENT_ID \
+  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
   ```
+
 
 ## Validate the Virtual Kubelet ACI provider
 
@@ -729,7 +724,7 @@ az aks upgrade-connector --resource-group <aks cluster rg> --name <aks cluster n
 You can remove your Virtual Kubelet node by deleting the Helm deployment. Run the following command:
 
 ```cli
-helm delete virtual-kubelet --purge
+helm uninstall virtual-kubelet
 ```
 If you used the ACI Connector installation then use the following command to remove the the ACI Connector from your cluster.
 

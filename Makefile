@@ -63,3 +63,9 @@ bin/virtual-kubelet: VERSION_FLAGS    := -ldflags='-X "main.buildVersion=$(BUILD
 
 bin/%:
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -o bin/$(*) $(VERSION_FLAGS) ./cmd/$(*)
+
+.PHONY: helm
+helm: bin/virtual-kubelet.tgz
+
+bin/virtual-kubelet.tgz:
+	rm -rf /tmp/virtual-kubelet && mkdir /tmp/virtual-kubelet && cp -r helm/* /tmp/virtual-kubelet/ &&  tar -zcvf bin/virtual-kubelet.tgz -C /tmp virtual-kubelet
