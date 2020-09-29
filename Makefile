@@ -68,4 +68,4 @@ bin/%:
 helm: bin/virtual-kubelet.tgz
 
 bin/virtual-kubelet.tgz:
-	rm -rf /tmp/virtual-kubelet && mkdir /tmp/virtual-kubelet && cp -r helm/* /tmp/irtual-kubelet/ &&  tar -zcvf virtual-kubelet.tgz -C /tmp virtual-kubelet
+	rm -rf /tmp/virtual-kubelet && mkdir /tmp/virtual-kubelet && cp -r helm/* /tmp/virtual-kubelet/ &&  tar -zcvf virtual-kubelet.tgz -C /tmp virtual-kubelet
