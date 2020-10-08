@@ -1,7 +1,7 @@
 # Pipeline
 
-trigger:
-- master
+## Disabled the trigger, as it's no longer used as part of validating builds.
+trigger: none
 
 pool:
   name: Hosted Ubuntu 1604
