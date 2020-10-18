@@ -77,14 +77,6 @@ var expandTests = []expandTest{
 		},
 		"https://management.azure.com/%2F%5C%40%3A%2C./get",
 	},
-	// mis-matched brackets
-	{
-		"/{{.bucket/get",
-		map[string]string{
-			"bucket": "red",
-		},
-		"https://management.azure.com/%7B%7B.bucket/get",
-	},
 }
 
 func TestExpandURL(t *testing.T) {
@@ -94,7 +86,10 @@ func TestExpandURL(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Parsing url %q failed: %v", test.in, err)
 		}
-		ExpandURL(u, test.expansions)
+		err = ExpandURL(u, test.expansions)
+		if err != nil {
+			t.Fatalf("Expand url %q failed: %v", test.expansions, err)
+		}
 		got := u.String()
 		if got != test.want {
 			t.Errorf("got %q expected %q in test %d", got, test.want, i+1)

@@ -111,7 +111,7 @@ func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 	}
 
 	if len(activePods) > 0 {
-		for i, _ := range activePods {
+		for i := range activePods {
 			pod := getPodFromList(k8sPods, activePods[i].namespace, activePods[i].name)
 			if pod != nil {
 				continue
@@ -149,7 +149,7 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 			pod.Status.Reason = statusReasonNotFound
 			pod.Status.Message = statusMessageNotFound
 			now := metav1.NewTime(time.Now())
-			for i, _ := range pod.Status.ContainerStatuses {
+			for i := range pod.Status.ContainerStatuses {
 				if pod.Status.ContainerStatuses[i].State.Running == nil {
 					continue
 				}

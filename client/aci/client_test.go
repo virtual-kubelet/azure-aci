@@ -66,6 +66,13 @@ func TestMain(m *testing.M) {
 		}
 	}
 
+	// initialize client in Main
+	c, err := NewClient(auth, "unit-test")
+	if err != nil {
+		log.Fatal(err)
+	}
+	client = c
+
 	// Run the tests.
 	merr := m.Run()
 

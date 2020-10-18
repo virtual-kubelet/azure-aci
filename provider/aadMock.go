@@ -45,8 +45,12 @@ func (mock *AADMock) start() {
 		}
 
 		b := new(bytes.Buffer)
-		json.NewEncoder(b).Encode(token)
-		w.Write(b.Bytes())
+		if err := json.NewEncoder(b).Encode(token); err != nil {
+			panic(err)
+		}
+		if _, err := w.Write(b.Bytes()); err != nil {
+			panic(err)
+		}
 	}))
 }
 
