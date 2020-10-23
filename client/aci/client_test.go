@@ -648,8 +648,8 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	}
 }
 
-/*
 func TestCreateContainerGroupWithGPU(t *testing.T) {
+	t.Skip("Skip GPU test case since it often failed for ACI's GPU capacity")
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 
@@ -703,7 +703,6 @@ func TestCreateContainerGroupWithGPU(t *testing.T) {
 		t.Fatalf("Delete Container Group failed: %s", err.Error())
 	}
 }
-*/
 
 func TestDeleteContainerGroup(t *testing.T) {
 	err := client.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup)
