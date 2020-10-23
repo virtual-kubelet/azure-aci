@@ -14,6 +14,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
+	"github.com/virtual-kubelet/azure-aci/client/api"
 	"github.com/virtual-kubelet/azure-aci/client/resourcegroups"
 	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/plugin/ochttp/propagation/b3"
@@ -649,7 +650,6 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithGPU(t *testing.T) {
-	t.Skip("Skip GPU test case since it often failed for ACI's GPU capacity")
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 
@@ -694,6 +694,9 @@ func TestCreateContainerGroupWithGPU(t *testing.T) {
 	})
 
 	if err != nil {
+		if apierr, ok := err.(*api.Error); ok && apierr.StatusCode == 409 {
+			t.Skip("Skip GPU test case since it often failed for ACI's GPU capacity")
+		}
 		t.Fatal(err)
 	}
 	if cg.Name != containerGroupName {
