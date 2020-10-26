@@ -344,7 +344,7 @@ az network vnet show --resource-group $AKS_CLUSTER_RG --name $VNET_NAME --query 
 Grant access to the AKS cluster to use the virtual network by creating a role and assigning it.
 
 ```bash
-az role assignment create --assignee $AZURE_CLIENT_ID --scope <vnetId> --role NetworkContributor
+az role assignment create --assignee $AZURE_CLIENT_ID --scope <vnetId> --role "Network Contributor"
 ```
 
 ### Create an AKS cluster with a virtual network
