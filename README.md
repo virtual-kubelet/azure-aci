@@ -206,7 +206,8 @@ export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
-  --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName=$NODE_NAME
 ```
 
 For any other type of Kubernetes cluster:
@@ -226,7 +227,8 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.subscriptionId=$AZURE_SUBSCRIPTION_ID \
   --set providers.azure.clientId=$AZURE_CLIENT_ID \
   --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
-  --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName=$NODE_NAME
 ```
 
 If your cluster has RBAC disabled set ```rbac.install=false```
@@ -406,7 +408,8 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.vent.subnetCidr=$ACI_SUBNET_RANGE \
   --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
   --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
-  --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName=$NODE_NAME
 ```
 
 For any other type of cluster:
