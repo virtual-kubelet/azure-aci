@@ -47,7 +47,6 @@ const (
 
 	virtualKubeletDNSNameLabel = "virtualkubelet.io/dnsnamelabel"
 
-	subnetsAction           = "Microsoft.Network/virtualNetworks/subnets/action"
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 )
 
@@ -59,8 +58,8 @@ const (
 )
 
 const (
-	gpuResourceName   v1.ResourceName = "nvidia.com/gpu"
-	gpuTypeAnnotation                 = "virtual-kubelet.io/gpu-type"
+	gpuResourceName   = "nvidia.com/gpu"
+	gpuTypeAnnotation = "virtual-kubelet.io/gpu-type"
 )
 
 const (
@@ -435,12 +434,14 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 		}
 		if subnet.SubnetPropertiesFormat.ServiceAssociationLinks != nil {
 			for _, l := range *subnet.SubnetPropertiesFormat.ServiceAssociationLinks {
-				if l.ServiceAssociationLinkPropertiesFormat != nil && *l.ServiceAssociationLinkPropertiesFormat.LinkedResourceType == subnetDelegationService {
-					createSubnet = false
-					break
+				if l.ServiceAssociationLinkPropertiesFormat != nil {
+					if *l.ServiceAssociationLinkPropertiesFormat.LinkedResourceType == subnetDelegationService {
+						createSubnet = false
+						break
+					} else {
+						return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'.", p.subnetName, l)
+					}
 				}
-
-				return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'.", p.subnetName, l)
 			}
 		} else {
 			for _, d := range *subnet.SubnetPropertiesFormat.Delegations {
@@ -491,7 +492,9 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 
 func getNetworkProfileName(subnetID string) string {
 	h := sha256.New()
-	h.Write([]byte(strings.ToUpper(subnetID)))
+	if _, err := h.Write([]byte(strings.ToUpper(subnetID))); err != nil {
+		panic(err)
+	}
 	hashBytes := h.Sum(nil)
 	return fmt.Sprintf("vk-%s", hex.EncodeToString(hashBytes))
 }
@@ -888,7 +891,7 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 			podName,
 			func(podStatus *v1.PodStatus) {
 				now := metav1.NewTime(time.Now())
-				for i, _ := range podStatus.ContainerStatuses {
+				for i := range podStatus.ContainerStatuses {
 					if podStatus.ContainerStatuses[i].State.Running == nil {
 						continue
 					}
@@ -1001,7 +1004,9 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	password := xcrsp.Password
 
 	c, _, _ := websocket.DefaultDialer.Dial(wsURI, nil)
-	c.WriteMessage(websocket.TextMessage, []byte(password)) // Websocket password needs to be sent before WS terminal is active
+	if err := c.WriteMessage(websocket.TextMessage, []byte(password)); err != nil { // Websocket password needs to be sent before WS terminal is active
+		panic(err)
+	}
 
 	// Cleanup on exit
 	defer c.Close()
@@ -1018,15 +1023,14 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 
 				var msg = make([]byte, 512)
 				n, err := in.Read(msg)
-				if err == io.EOF {
-					// Handle EOF
-				}
 				if err != nil {
 					// Handle errors
 					return
 				}
 				if n > 0 { // Only call WriteMessage if there is data to send
-					c.WriteMessage(websocket.BinaryMessage, msg[:n])
+					if err := c.WriteMessage(websocket.BinaryMessage, msg[:n]); err != nil {
+						panic(err)
+					}
 				}
 			}
 		}()
@@ -1045,7 +1049,9 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 				// Handle errors
 				break
 			}
-			io.Copy(out, cr)
+			if _, err := io.Copy(out, cr); err != nil {
+				panic(err)
+			}
 		}
 	}
 
@@ -1846,7 +1852,9 @@ func getContainerID(cgID, containerName string) string {
 	containerResourceID := fmt.Sprintf("%s/containers/%s", cgID, containerName)
 
 	h := sha256.New()
-	h.Write([]byte(strings.ToUpper(containerResourceID)))
+	if _, err := h.Write([]byte(strings.ToUpper(containerResourceID))); err != nil {
+		panic(err)
+	}
 	hashBytes := h.Sum(nil)
 	return fmt.Sprintf("aci://%s", hex.EncodeToString(hashBytes))
 }

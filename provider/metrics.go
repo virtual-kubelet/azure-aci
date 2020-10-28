@@ -26,7 +26,7 @@ func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summa
 
 	log.G(ctx).Debug("acquired metrics mutex")
 
-	if time.Now().Sub(p.metricsSyncTime) < time.Minute {
+	if time.Since(p.metricsSyncTime) < time.Minute {
 		span.WithFields(ctx, log.Fields{
 			"preCachedResult":        true,
 			"cachedResultSampleTime": p.metricsSyncTime.String(),

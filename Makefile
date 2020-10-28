@@ -36,10 +36,11 @@ vet:
 
 .PHONY: lint
 lint:
-	@$(LINTER_BIN) run --new-from-rev "HEAD~$(git rev-list master.. --count)" ./...
+	@$(LINTER_BIN) run --skip-files "test.go" --new-from-rev "HEAD~$(git rev-list master.. --count)"  ./...
 
 .PHONY: check-mod
 check-mod: # verifies that module changes for go.mod and go.sum are checked in
+	# @chmod a+x hack/ci/check_mods.sh
 	@hack/ci/check_mods.sh
 
 .PHONY: mod
@@ -51,10 +52,12 @@ testauth: $(TEST_CREDENTIALS_JSON) $(TEST_LOGANALYTICS_JSON)
 
 $(TEST_CREDENTIALS_JSON):
 	@echo Building test credentials
+	@chmod a+x hack/ci/create_credentials.sh
 	@hack/ci/create_credentials.sh
 
 $(TEST_LOGANALYTICS_JSON):
 	@echo Building log analytics credentials
+	@chmod a+x hack/ci/create_loganalytics_auth.sh
 	@hack/ci/create_loganalytics_auth.sh
 
 bin/virtual-kubelet: BUILD_VERSION          ?= $(shell git describe --tags --always --dirty="-dev")

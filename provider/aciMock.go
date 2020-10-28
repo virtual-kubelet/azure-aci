@@ -20,10 +20,9 @@ type ACIMock struct {
 }
 
 const (
-	containerGroupsRoute   = "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ContainerInstance/containerGroups"
-	containerGroupRoute    = containerGroupsRoute + "/{containerGroup}"
-	containerGroupLogRoute = containerGroupRoute + "/containers/{containerName}/logs"
-	resourceProviderRoute  = "/providers/Microsoft.ContainerInstance"
+	containerGroupsRoute  = "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ContainerInstance/containerGroups"
+	containerGroupRoute   = containerGroupsRoute + "/{containerGroup}"
+	resourceProviderRoute = "/providers/Microsoft.ContainerInstance"
 )
 
 // NewACIMock creates a new Azure Container Instance mock server.
@@ -44,9 +43,9 @@ func (mock *ACIMock) start() {
 	router.HandleFunc(
 		containerGroupRoute,
 		func(w http.ResponseWriter, r *http.Request) {
-			subscription, _ := mux.Vars(r)["subscriptionId"]
-			resourceGroup, _ := mux.Vars(r)["resourceGroup"]
-			containerGroup, _ := mux.Vars(r)["containerGroup"]
+			subscription := mux.Vars(r)["subscriptionId"]
+			resourceGroup := mux.Vars(r)["resourceGroup"]
+			containerGroup := mux.Vars(r)["containerGroup"]
 
 			var cg aci.ContainerGroup
 			if err := json.NewDecoder(r.Body).Decode(&cg); err != nil {
@@ -57,9 +56,12 @@ func (mock *ACIMock) start() {
 				statusCode, response := mock.OnCreate(subscription, resourceGroup, containerGroup, &cg)
 				w.WriteHeader(statusCode)
 				b := new(bytes.Buffer)
-				json.NewEncoder(b).Encode(response)
-				w.Write(b.Bytes())
-
+				if err := json.NewEncoder(b).Encode(response); err != nil {
+					panic(err)
+				}
+				if _, err := w.Write(b.Bytes()); err != nil {
+					panic(err)
+				}
 				return
 			}
 
@@ -69,17 +71,21 @@ func (mock *ACIMock) start() {
 	router.HandleFunc(
 		containerGroupRoute,
 		func(w http.ResponseWriter, r *http.Request) {
-			subscription, _ := mux.Vars(r)["subscriptionId"]
-			resourceGroup, _ := mux.Vars(r)["resourceGroup"]
-			containerGroup, _ := mux.Vars(r)["containerGroup"]
+			subscription := mux.Vars(r)["subscriptionId"]
+			resourceGroup := mux.Vars(r)["resourceGroup"]
+			containerGroup := mux.Vars(r)["containerGroup"]
 
 			if mock.OnGetContainerGroup != nil {
 				statusCode, response := mock.OnGetContainerGroup(subscription, resourceGroup, containerGroup)
 				w.WriteHeader(statusCode)
 				b := new(bytes.Buffer)
-				json.NewEncoder(b).Encode(response)
-				w.Write(b.Bytes())
+				if err := json.NewEncoder(b).Encode(response); err != nil {
+					panic(err)
+				}
 
+				if _, err := w.Write(b.Bytes()); err != nil {
+					panic(err)
+				}
 				return
 			}
 
@@ -89,15 +95,19 @@ func (mock *ACIMock) start() {
 	router.HandleFunc(
 		containerGroupsRoute,
 		func(w http.ResponseWriter, r *http.Request) {
-			subscription, _ := mux.Vars(r)["subscriptionId"]
-			resourceGroup, _ := mux.Vars(r)["resourceGroup"]
+			subscription := mux.Vars(r)["subscriptionId"]
+			resourceGroup := mux.Vars(r)["resourceGroup"]
 
 			if mock.OnGetContainerGroups != nil {
 				statusCode, response := mock.OnGetContainerGroups(subscription, resourceGroup)
 				w.WriteHeader(statusCode)
 				b := new(bytes.Buffer)
-				json.NewEncoder(b).Encode(response)
-				w.Write(b.Bytes())
+				if err := json.NewEncoder(b).Encode(response); err != nil {
+					panic(err)
+				}
+				if _, err := w.Write(b.Bytes()); err != nil {
+					panic(err)
+				}
 
 				return
 			}
@@ -112,8 +122,12 @@ func (mock *ACIMock) start() {
 				statusCode, response := mock.OnGetRPManifest()
 				w.WriteHeader(statusCode)
 				b := new(bytes.Buffer)
-				json.NewEncoder(b).Encode(response)
-				w.Write(b.Bytes())
+				if err := json.NewEncoder(b).Encode(response); err != nil {
+					panic(err)
+				}
+				if _, err := w.Write(b.Bytes()); err != nil {
+					panic(err)
+				}
 
 				return
 			}
