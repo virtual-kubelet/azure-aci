@@ -463,7 +463,7 @@ aks-nodepool1-39289454-2                    Ready     agent     22h       v1.12.
 
 ## Schedule a pod in ACI
 
-Create a file named `virtual-kubelet-test.yaml` and copy in the following YAML. For Windows containers, use the [Windows sample](https://docs.microsoft.com/azure/aks/virtual-kubelet#run-windows-container) from the AKS docs.
+Create a file named `virtual-kubelet-test.yaml` and copy in the following YAML.
 
 ```yaml
 apiVersion: v1
