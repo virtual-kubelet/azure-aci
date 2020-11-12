@@ -130,8 +130,6 @@ spec:
 {{- end}}
           "--os", "{{ .Values.nodeOsType }}"
         ]
-      imagePullSecrets:
-      - name: {{ template "vk.fullname" . }}-{{ .Values.image.secretName }}
       volumes:
       - name: credentials
         secret:
