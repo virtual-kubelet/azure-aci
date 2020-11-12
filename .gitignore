@@ -15,3 +15,5 @@ vendor/
 .azure
 
 bin/
+
+.DS_Store
