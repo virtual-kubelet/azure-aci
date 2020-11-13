@@ -1068,6 +1068,7 @@ func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
 	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
 	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
 	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
+	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
 }
 
 // GetPodStatus returns the status of a pod by name that is running inside ACI
