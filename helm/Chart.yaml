@@ -2,7 +2,9 @@ description: a Helm chart to install virtual kubelet with Azure provider in an A
 maintainers:
 - email: Mingqi.Shao@microsoft.com
   name: Mingqi Shao
+- email: peni@microsoft.com
+  name: Pengfei Ni
 name: virtual-kubelet-aci-for-aks
 sources:
 - https://github.com/virtual-kubelet/azure-aci
-version: 1.3.0
+version: 1.3.1
