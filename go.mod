@@ -16,7 +16,7 @@ require (
 	github.com/gorilla/websocket v1.4.0
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
-	github.com/virtual-kubelet/node-cli v0.3.1
+	github.com/virtual-kubelet/node-cli v0.4.0
 	github.com/virtual-kubelet/virtual-kubelet v1.3.0
 	go.opencensus.io v0.21.0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
