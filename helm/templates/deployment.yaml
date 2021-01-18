@@ -95,12 +95,15 @@ spec:
 {{- else }}
         - name: MASTER_URI
           value: {{ .masterUri }}
-{{- end }}          
+{{- end }}
 {{- end }}
 {{- end }}
         volumeMounts:
         - name: credentials
           mountPath: "/etc/virtual-kubelet"
+        - name: certificates
+          mountPath: /etc/kubernetes/certs
+          readOnly: true
 {{- if eq (required "You must specify a Virtual Kubelet provider" .Values.provider) "azure" }}
 {{- if .Values.providers.azure.targetAKS }}
         - name: acs-credential
@@ -128,12 +131,20 @@ spec:
           "--trace-service-name", "{{ $serviceName }}",
 {{- end}}
 {{- end}}
+{{- if  .Values.enableAuthenticationTokenWebhook }}
+          "--authentication-token-webhook=true",
+          "--client-verify-ca", "/etc/kubernetes/certs/ca.crt",
+{{- end }}
+          "--no-verify-clients={{ .Values.disableVerifyClients }}",
           "--os", "{{ .Values.nodeOsType }}"
         ]
       volumes:
       - name: credentials
         secret:
           secretName: {{ template "vk.fullname" . }}
+      - name: certificates
+        hostPath:
+          path: /etc/kubernetes/certs
 {{- if eq (required "You must specify a Virtual Kubelet provider" .Values.provider) "azure" }}
 {{- if .Values.providers.azure.targetAKS }}
       - name: acs-credential
