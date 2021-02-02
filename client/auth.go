@@ -29,7 +29,7 @@ type Authentication struct {
 
 // NewAuthentication returns an authentication struct from user provided
 // credentials.
-func NewAuthentication(azureCloud, clientID, clientSecret, subscriptionID, tenantID string) *Authentication {
+func NewAuthentication(azureCloud, clientID, clientSecret, subscriptionID, tenantID, userAssignedIdentityID string) *Authentication {
 	environment := PublicCloud
 
 	switch azureCloud {
@@ -50,6 +50,7 @@ func NewAuthentication(azureCloud, clientID, clientSecret, subscriptionID, tenan
 		ClientSecret:            clientSecret,
 		SubscriptionID:          subscriptionID,
 		TenantID:                tenantID,
+		UserIdentityClientId:    userAssignedIdentityID,
 		ActiveDirectoryEndpoint: environment.ActiveDirectoryEndpoint,
 		ResourceManagerEndpoint: environment.ResourceManagerEndpoint,
 		GraphResourceID:         environment.GraphEndpoint,
