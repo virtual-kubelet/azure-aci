@@ -72,16 +72,19 @@ Download and run the [Azure CLI Installer (MSI)](https://aka.ms/InstallAzureCliW
 1. Add the azure-cli repo to your sources:
 
 ```bash
-    echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ wheezy main" | \
-         sudo tee /etc/apt/sources.list.d/azure-cli.list
+AZ_REPO=$(lsb_release -cs)
+echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" |
+    sudo tee /etc/apt/sources.list.d/azure-cli.list
 ```
 
 2. Run the following commands to install the Azure CLI and its dependencies:
 
 ```bash
-    sudo apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893
-    sudo apt-get install apt-transport-https
-    sudo apt-get update && sudo apt-get install azure-cli
+sudo apt-get install apt-transport-https
+curl -sL https://packages.microsoft.com/keys/microsoft.asc |
+    gpg --dearmor |
+    sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+sudo apt-get update && sudo apt-get install azure-cli
 ```
 
 ### Install the Kubernetes CLI
@@ -727,9 +730,10 @@ helm uninstall virtual-kubelet
 
 If you used Virtual Nodes, can follow the steps [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli#remove-virtual-nodes) to remove the add-on
 
+
 <!-- LINKS -->
 [kubectl-create]: https://kubernetes.io/docs/user-guide/kubectl/v1.6/#create
 [kubectl-get]: https://kubernetes.io/docs/user-guide/kubectl/v1.8/#get
 [az-container-list]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_list
 [az-container-show]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_show
->>>>>>> azure_provider
+
