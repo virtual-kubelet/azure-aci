@@ -203,7 +203,8 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 				clientId,
 				acsCredential.ClientSecret,
 				acsCredential.SubscriptionID,
-				acsCredential.TenantID)
+				acsCredential.TenantID,
+				acsCredential.UserAssignedIdentityID)
 
 			p.resourceGroup = acsCredential.ResourceGroup
 			p.region = acsCredential.Region
@@ -231,7 +232,9 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		azAuth.ClientSecret = clientSecret
 	}
 
-	azAuth.UserIdentityClientId = os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID")
+	if userIdentityClientId := os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID"); userIdentityClientId != "" {
+		azAuth.UserIdentityClientId = userIdentityClientId
+	}
 	azAuth.UseUserIdentity = (len(azAuth.ClientID) == 0)
 
 	if azAuth.UseUserIdentity {

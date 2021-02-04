@@ -36,6 +36,7 @@ const (
 	fakeTenantID      = "8cb81aca-83fe-4c6f-b667-4ec09c45a8bf"
 	fakeNodeName      = "vk"
 	fakeRegion        = "eastus"
+	fakeUserIdentity  = "00000000-0000-0000-0000-000000000000"
 )
 
 // Test make registry credential
@@ -809,7 +810,8 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*AC
 		fakeClientID,
 		fakeClientSecret,
 		fakeSubscription,
-		fakeTenantID)
+		fakeTenantID,
+		fakeUserIdentity)
 
 	auth.ActiveDirectoryEndpoint = aadServerMocker.GetServerURL()
 	auth.ResourceManagerEndpoint = aciServerMocker.GetServerURL()
