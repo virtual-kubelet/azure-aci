@@ -36,6 +36,7 @@ providers:
     clientKey:
     tenantId:
     subscriptionId:
+    managedIdentityID:
     ## `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments
     aciResourceGroup:
     aciRegion:

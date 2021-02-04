@@ -47,6 +47,10 @@ spec:
         - name: CLUSTER_RESOURCE_ID
           value:  {{ .loganalytics.clusterResourceId }}
 {{- end }}
+{{- if .managedIdentityID }}
+        - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
+          value: {{ .managedIdentityID }}
+{{- end }}
 {{- if .targetAKS }}
         - name: ACS_CREDENTIAL_LOCATION
           value: /etc/acs/azure.json
