@@ -13,11 +13,14 @@ import (
 
 // GetContainerLogs returns the logs from an Azure Container Instance
 // in the provided resource group with the given container group name.
-// From: https://docs.microsoft.com/en-us/rest/api/container-instances/ContainerLogs/List
+// From: https://docs.microsoft.com/en-us/rest/api/container-instances/containers/listlogs
 func (c *Client) GetContainerLogs(ctx context.Context, resourceGroup, containerGroupName, containerName string, tail int) (*Logs, error) {
 	urlParams := url.Values{
 		"api-version": []string{apiVersion},
-		"tail":        []string{fmt.Sprintf("%d", tail)},
+	}
+	// by default, kubectl does not provide a tail number so the value is 0, but actually it expects to show all logs.
+	if tail != 0 {
+		urlParams["tail"] = []string{fmt.Sprintf("%d", tail)}
 	}
 
 	// Create the url.
