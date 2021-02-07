@@ -998,7 +998,7 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	ts := aci.TerminalSizeRequest{Height: int(size.Height), Width: int(size.Width)}
-	xcrsp, err := p.aciClient.LaunchExec(p.resourceGroup, cg.Name, container, cmd[0], ts)
+	xcrsp, err := p.aciClient.LaunchExec(p.resourceGroup, cg.Name, container, strings.Join(cmd, " "), ts)
 	if err != nil {
 		return err
 	}
