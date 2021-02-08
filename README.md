@@ -206,11 +206,20 @@ export VK_RELEASE=virtual-kubelet-latest
 export NODE_NAME=virtual-kubelet
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
+# Linux Virtual Node
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.masterUri=$MASTER_URI \
   --set nodeName=$NODE_NAME
+
+# Windows Virtual Node
+helm install "$RELEASE_NAME" "$CHART_URL" \
+  --set provider=azure \
+  --set "nodeOsType=Windows" \
+  --set providers.azure.targetAKS=true \
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName="${NODE_NAME}-win"
 ```
 
 For any other type of Kubernetes cluster:
@@ -220,6 +229,7 @@ RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
 CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
+# Linux Virtual Node
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set rbac.install=true \
@@ -232,6 +242,21 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
   --set providers.azure.masterUri=$MASTER_URI \
   --set nodeName=$NODE_NAME
+
+# Windows Virtual Node
+helm install "$RELEASE_NAME" "$CHART_URL" \
+  --set provider=azure \
+  --set rbac.install=true \
+  --set "nodeOsType=Windows" \
+  --set providers.azure.targetAKS=false \
+  --set providers.azure.aciResourceGroup=$AZURE_RG \
+  --set providers.azure.aciRegion=$ACI_REGION \
+  --set providers.azure.tenantId=$AZURE_TENANT_ID \
+  --set providers.azure.subscriptionId=$AZURE_SUBSCRIPTION_ID \
+  --set providers.azure.clientId=$AZURE_CLIENT_ID \
+  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName="${NODE_NAME}-win"
 ```
 
 If your cluster has RBAC disabled set ```rbac.install=false```
