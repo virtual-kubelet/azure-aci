@@ -602,8 +602,8 @@ github.com/valyala/fasthttp v1.2.0/go.mod h1:4vX61m6KN+xDduDNwXrhIAVZaZaZiQ1luJk
 github.com/valyala/quicktemplate v1.1.1/go.mod h1:EH+4AkTd43SvgIbQHYu59/cJyxDoOVRUAfrukLPuGJ4=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV9WzVtRmSR+PDvWpU/qWl4Wa5LApYYX4ZtKbio=
 github.com/vektah/gqlparser v1.1.2/go.mod h1:1ycwN7Ij5njmMkPPAOaRFY4rET2Enx7IkVv3vaXspKw=
-github.com/virtual-kubelet/node-cli v0.5.0 h1:G8UA1jF32ZvDASINH7hr6iZOvJ8opWMXRZDamWsInZ8=
-github.com/virtual-kubelet/node-cli v0.5.0/go.mod h1:eqHxczlzLL3e8V/Um84jXed1OAVQ/O+r+GsmLSghUl8=
+github.com/virtual-kubelet/node-cli v0.5.1 h1:GvgZ6egtrb5PzmIarwtk07fvlc852hXzMBvqkF7R1Pw=
+github.com/virtual-kubelet/node-cli v0.5.1/go.mod h1:eqHxczlzLL3e8V/Um84jXed1OAVQ/O+r+GsmLSghUl8=
 github.com/virtual-kubelet/virtual-kubelet v1.3.0 h1:ixQRrPcVcRHoMO0WcQolyOs/ScZqa7kryYBiZE3Xa94=
 github.com/virtual-kubelet/virtual-kubelet v1.3.0/go.mod h1:kuDs8O1dU0pLMLxzx7zvf4haeS6jB3YMbD73zWe1sV4=
 github.com/vishvananda/netlink v1.0.0/go.mod h1:+SR5DhBJrl6ZM7CoCKvpw5BKroDKQ+PJqOg65H/2ktk=
