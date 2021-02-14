@@ -27,10 +27,3 @@ labels:
   chartVersion: "{{ .Chart.Version }}"
   app: {{ template "vk.name" . }}
 {{- end -}}
-
-{{/*
-Create a secret to pull private image.
-*/}}
-{{- define "imagePullSecret" }}
-{{- printf "{\"auths\": {\"%s\": {\"auth\": \"%s\"}}}" .Values.image.repository (printf "%s:%s" .Values.image.repositoryReadOnlyPrincipalId .Values.image.repositoryReadOnlyPrincipalSecret | b64enc) | b64enc }}
-{{- end }}
