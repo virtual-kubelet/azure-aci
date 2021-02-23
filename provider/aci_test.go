@@ -852,6 +852,35 @@ func ptrQuantity(q resource.Quantity) *resource.Quantity {
 	return &q
 }
 
+func TestConfigureNode(t *testing.T) {
+	_, _, provider, err := prepareMocks()
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "virtual-kubelet",
+			Labels: map[string]string{
+				"type":                   "virtual-kubelet",
+				"kubernetes.io/role":     "agent",
+				"kubernetes.io/hostname": "virtual-kubelet",
+			},
+		},
+		Spec: v1.NodeSpec{},
+		Status: v1.NodeStatus{
+			NodeInfo: v1.NodeSystemInfo{
+				Architecture:   "amd64",
+				KubeletVersion: "1.18.4",
+			},
+		},
+	}
+	provider.ConfigureNode(context.TODO(), node)
+	assert.Equal(t, "true", node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"], "exclude-balancer label doesn't match")
+	assert.Equal(t, "true", node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"], "exclude-from-external-load-balancers label doesn't match")
+	assert.Equal(t, "false", node.ObjectMeta.Labels["kubernetes.azure.com/managed"], "kubernetes.azure.com/managed label doesn't match")
+}
+
 func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
 
