@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/preview/monitor/mgmt/2019-06-01/insights"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -138,26 +140,27 @@ func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summa
 	return &s, nil
 }
 
-func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) stats.PodStats {
+func collectMetrics(pod *v1.Pod, system, net insights.Response) stats.PodStats {
 	var stat stats.PodStats
 	containerStats := make(map[string]*stats.ContainerStats, len(pod.Status.ContainerStatuses))
 	stat.StartTime = pod.CreationTimestamp
 
-	for _, m := range system.Value {
+	for _, m := range *system.Value {
 		// cpu/mem stats are per container, so each entry in the time series is for a container, not the container group.
-		for _, entry := range m.Timeseries {
-			if len(entry.Data) == 0 {
+		for _, entry := range *m.Timeseries {
+			if entry.Data == nil || len(*entry.Data) == 0 {
 				continue
 			}
+			entryData := *entry.Data
 
 			var cs *stats.ContainerStats
-			for _, v := range entry.MetadataValues {
-				if strings.ToLower(v.Name.Value) != "containername" {
+			for _, v := range *entry.Metadatavalues {
+				if strings.ToLower(to.String(v.Name.Value)) != "containername" {
 					continue
 				}
-				if cs = containerStats[v.Value]; cs == nil {
-					cs = &stats.ContainerStats{Name: v.Value, StartTime: stat.StartTime}
-					containerStats[v.Value] = cs
+				if cs = containerStats[to.String(v.Value)]; cs == nil {
+					cs = &stats.ContainerStats{Name: to.String(v.Value), StartTime: stat.StartTime}
+					containerStats[to.String(v.Value)] = cs
 				}
 			}
 			if cs == nil {
@@ -168,23 +171,27 @@ func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) s
 				stat.Containers = make([]stats.ContainerStats, 0, len(containerStats))
 			}
 
-			data := entry.Data[len(entry.Data)-1] // get only the last entry
-			switch m.Desc.Value {
-			case aci.MetricTypeCPUUsage:
+			data := entryData[len(entryData)-1] // get only the last entry
+			switch to.String(m.Name.Value) {
+			case string(aci.MetricTypeCPUUsage):
 				if cs.CPU == nil {
 					cs.CPU = &stats.CPUStats{}
 				}
 
 				// average is the average number of millicores over a 1 minute interval (which is the interval we are pulling the stats for)
-				nanoCores := uint64(data.Average * 1000000)
+				nanoCores := uint64(to.Float64(data.Average) * 1000000)
 				usageNanoSeconds := nanoCores * 60
-				cs.CPU.Time = metav1.NewTime(data.Timestamp)
+				var timestamp metav1.Time
+				if data.TimeStamp != nil {
+					timestamp = metav1.NewTime(data.TimeStamp.ToTime())
+				}
+				cs.CPU.Time = timestamp
 				cs.CPU.UsageCoreNanoSeconds = &usageNanoSeconds
 				cs.CPU.UsageNanoCores = &nanoCores
 
 				if stat.CPU == nil {
 					var zero uint64
-					stat.CPU = &stats.CPUStats{UsageNanoCores: &zero, UsageCoreNanoSeconds: &zero, Time: metav1.NewTime(data.Timestamp)}
+					stat.CPU = &stats.CPUStats{UsageNanoCores: &zero, UsageCoreNanoSeconds: &zero, Time: timestamp}
 				}
 				podCPUSec := *stat.CPU.UsageCoreNanoSeconds
 				podCPUSec += usageNanoSeconds
@@ -193,18 +200,22 @@ func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) s
 				podCPUCore := *stat.CPU.UsageNanoCores
 				podCPUCore += nanoCores
 				stat.CPU.UsageNanoCores = &podCPUCore
-			case aci.MetricTypeMemoryUsage:
+			case string(aci.MetricTypeMemoryUsage):
 				if cs.Memory == nil {
 					cs.Memory = &stats.MemoryStats{}
 				}
-				cs.Memory.Time = metav1.NewTime(data.Timestamp)
-				bytes := uint64(data.Average)
+				var timestamp metav1.Time
+				if data.TimeStamp != nil {
+					timestamp = metav1.NewTime(data.TimeStamp.ToTime())
+				}
+				cs.Memory.Time = timestamp
+				bytes := uint64(to.Float64(data.Average))
 				cs.Memory.UsageBytes = &bytes
 				cs.Memory.WorkingSetBytes = &bytes
 
 				if stat.Memory == nil {
 					var zero uint64
-					stat.Memory = &stats.MemoryStats{UsageBytes: &zero, WorkingSetBytes: &zero, Time: metav1.NewTime(data.Timestamp)}
+					stat.Memory = &stats.MemoryStats{UsageBytes: &zero, WorkingSetBytes: &zero, Time: timestamp}
 				}
 				podMem := *stat.Memory.UsageBytes
 				podMem += bytes
@@ -214,28 +225,31 @@ func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) s
 		}
 	}
 
-	for _, m := range net.Value {
+	for _, m := range *net.Value {
 		if stat.Network == nil {
 			stat.Network = &stats.NetworkStats{}
 		}
 		// network stats are for the whole container group, so there should only be one entry here.
-		if len(m.Timeseries) == 0 {
+		if len(*m.Timeseries) == 0 {
 			continue
 		}
-		entry := m.Timeseries[0]
-		if len(entry.Data) == 0 {
+		entry := (*m.Timeseries)[0]
+		if entry.Data == nil || len(*entry.Data) == 0 {
 			continue
 		}
-		data := entry.Data[len(entry.Data)-1] // get only the last entry
+		entryData := *entry.Data
+		data := entryData[len(entryData)-1] // get only the last entry
 
-		bytes := uint64(data.Average)
-		switch m.Desc.Value {
-		case aci.MetricTyperNetworkBytesRecievedPerSecond:
+		bytes := uint64(to.Float64(data.Average))
+		switch to.String(m.Name.Value) {
+		case string(aci.MetricTyperNetworkBytesRecievedPerSecond):
 			stat.Network.RxBytes = &bytes
-		case aci.MetricTyperNetworkBytesTransmittedPerSecond:
+		case string(aci.MetricTyperNetworkBytesTransmittedPerSecond):
 			stat.Network.TxBytes = &bytes
 		}
-		stat.Network.Time = metav1.NewTime(data.Timestamp)
+		if data.TimeStamp != nil {
+			stat.Network.Time = metav1.NewTime(data.TimeStamp.ToTime())
+		}
 		stat.Network.InterfaceStats.Name = "eth0"
 	}
 

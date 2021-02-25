@@ -2,23 +2,24 @@ package aci
 
 import (
 	"context"
-	"encoding/json"
-	"net/http"
-	"net/url"
+	"fmt"
 	"path"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/services/preview/monitor/mgmt/2019-06-01/insights"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/azure-aci/client/api"
 )
 
 // GetContainerGroupMetrics gets metrics for the provided container group
-func (c *Client) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options MetricsRequest) (*ContainerGroupMetricsResult, error) {
+func (c *Client) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options MetricsRequest) (insights.Response, error) {
+	//result, err := c.metricsClient.List(ctx, )
+
 	if len(options.Types) == 0 {
-		return nil, errors.New("must provide metrics types to fetch")
+		return insights.Response{}, errors.New("must provide metrics types to fetch")
 	}
 	if options.Start.After(options.End) || options.Start.Equal(options.End) && !options.Start.IsZero() {
-		return nil, errors.Errorf("end parameter must be after start: start=%s, end=%s", options.Start, options.End)
+		return insights.Response{}, errors.Errorf("end parameter must be after start: start=%s, end=%s", options.Start, options.End)
 	}
 
 	var metricNames string
@@ -37,61 +38,27 @@ func (c *Client) GetContainerGroupMetrics(ctx context.Context, resourceGroup, co
 		ag += string(a)
 	}
 
-	urlParams := url.Values{
-		"api-version": []string{"2018-01-01"},
-		"aggregation": []string{ag},
-		"metricnames": []string{metricNames},
-		"interval":    []string{"PT1M"}, // TODO: make configurable?
-	}
-
+	var filter string
 	if options.Dimension != "" {
-		urlParams.Add("$filter", options.Dimension)
+		filter = options.Dimension
 	}
 
+	var timespan string
 	if !options.Start.IsZero() || !options.End.IsZero() {
-		urlParams.Add("timespan", path.Join(options.Start.Format(time.RFC3339), options.End.Format(time.RFC3339)))
+		timespan = path.Join(options.Start.Format(time.RFC3339), options.End.Format(time.RFC3339))
 	}
 
-	// Create the url.
-	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerGroupMetricsURLPath)
-	uri += "?" + url.Values(urlParams).Encode()
-
-	// Create the request.
-	req, err := http.NewRequest("GET", uri, nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "creating get container group metrics uri request failed")
-	}
-	req = req.WithContext(ctx)
-
-	// Add the parameters to the url.
-	if err := api.ExpandURL(req.URL, map[string]string{
-		"subscriptionId":     c.auth.SubscriptionID,
-		"resourceGroup":      resourceGroup,
-		"containerGroupName": containerGroup,
-	}); err != nil {
-		return nil, errors.Wrap(err, "expanding URL with parameters failed")
-	}
-
-	// Send the request.
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "sending get container group metrics request failed")
-	}
-	defer resp.Body.Close()
-
-	// 200 (OK) is a success response.
-	if err := api.CheckResponse(resp); err != nil {
-		return nil, err
-	}
-
-	// Decode the body from the response.
-	if resp.Body == nil {
-		return nil, errors.New("container group metrics returned an empty body in the response")
-	}
-	var metrics ContainerGroupMetricsResult
-	if err := json.NewDecoder(resp.Body).Decode(&metrics); err != nil {
-		return nil, errors.Wrap(err, "decoding get container group metrics response body failed")
-	}
-
-	return &metrics, nil
+	resourceURI := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerInstance/containerGroups/%s", c.auth.SubscriptionID, resourceGroup, containerGroup)
+	return c.metricsClient.List(ctx,
+		resourceURI,
+		timespan,
+		to.StringPtr("PT1M"),
+		metricNames,
+		ag,
+		nil,    // top?
+		"",     //orderyby
+		filter, //filter
+		"",     //resultType
+		"",     //metricnamespace
+	)
 }

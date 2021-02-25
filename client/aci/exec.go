@@ -1,14 +1,10 @@
 package aci
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"net/url"
+	"context"
 
-	"github.com/virtual-kubelet/azure-aci/client/api"
+	"github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2019-12-01/containerinstance"
+	"github.com/Azure/go-autorest/autorest/to"
 )
 
 // TerminalSizeRequest is the terminal size request
@@ -19,66 +15,78 @@ type TerminalSizeRequest struct {
 
 // LaunchExec starts the exec command for a specified container instance in a specified resource group and container group.
 // From: https://docs.microsoft.com/en-us/rest/api/container-instances/startcontainer/launchexec
-func (c *Client) LaunchExec(resourceGroup, containerGroupName, containerName, command string, terminalSize TerminalSizeRequest) (ExecResponse, error) {
-	urlParams := url.Values{
-		"api-version": []string{apiVersion},
+func (c *Client) LaunchExec(ctx context.Context, resourceGroup, containerGroupName, containerName, command string, terminalSize TerminalSizeRequest) (containerinstance.ContainerExecResponse, error) {
+
+	containerExecRequest := containerinstance.ContainerExecRequest{
+		Command: &command,
+		TerminalSize: &containerinstance.ContainerExecRequestTerminalSize{
+			Rows: to.Int32Ptr(int32(terminalSize.Height)),
+			Cols: to.Int32Ptr(int32(terminalSize.Width)),
+		},
 	}
+	return c.containersClient.ExecuteCommand(ctx, resourceGroup, containerGroupName, containerName, containerExecRequest)
 
-	// Create the url to call Azure REST API
-	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerExecURLPath)
-	uri += "?" + url.Values(urlParams).Encode()
+	/*
+		urlParams := url.Values{
+			"api-version": []string{apiVersion},
+		}
 
-	var xc ExecRequest
+		// Create the url to call Azure REST API
+		uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerExecURLPath)
+		uri += "?" + url.Values(urlParams).Encode()
 
-	xc.Command = command
-	xc.TerminalSize.Rows = terminalSize.Height
-	xc.TerminalSize.Cols = terminalSize.Width
+		var xc ExecRequest
 
-	var xcrsp ExecResponse
-	xcrsp.Password = ""
-	xcrsp.WebSocketURI = ""
+		xc.Command = command
+		xc.TerminalSize.Rows = terminalSize.Height
+		xc.TerminalSize.Cols = terminalSize.Width
 
-	b := new(bytes.Buffer)
+		var xcrsp ExecResponse
+		xcrsp.Password = ""
+		xcrsp.WebSocketURI = ""
 
-	if err := json.NewEncoder(b).Encode(xc); err != nil {
-		return xcrsp, fmt.Errorf("Encoding create launch exec body request failed: %v", err)
-	}
+		b := new(bytes.Buffer)
 
-	req, err := http.NewRequest("POST", uri, b)
-	if err != nil {
-		return xcrsp, fmt.Errorf("Creating launch exec uri request failed: %v", err)
-	}
+		if err := json.NewEncoder(b).Encode(xc); err != nil {
+			return xcrsp, fmt.Errorf("Encoding create launch exec body request failed: %v", err)
+		}
 
-	// Add the parameters to the url.
-	if err := api.ExpandURL(req.URL, map[string]string{
-		"subscriptionId":     c.auth.SubscriptionID,
-		"resourceGroup":      resourceGroup,
-		"containerGroupName": containerGroupName,
-		"containerName":      containerName,
-	}); err != nil {
-		return xcrsp, fmt.Errorf("Expanding URL with parameters failed: %v", err)
-	}
+		req, err := http.NewRequest("POST", uri, b)
+		if err != nil {
+			return xcrsp, fmt.Errorf("Creating launch exec uri request failed: %v", err)
+		}
 
-	// Send the request.
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return xcrsp, fmt.Errorf("Sending launch exec request failed: %v", err)
-	}
-	defer resp.Body.Close()
+		// Add the parameters to the url.
+		if err := api.ExpandURL(req.URL, map[string]string{
+			"subscriptionId":     c.auth.SubscriptionID,
+			"resourceGroup":      resourceGroup,
+			"containerGroupName": containerGroupName,
+			"containerName":      containerName,
+		}); err != nil {
+			return xcrsp, fmt.Errorf("Expanding URL with parameters failed: %v", err)
+		}
 
-	// 200 (OK) is a success response.
-	if err := api.CheckResponse(resp); err != nil {
-		return xcrsp, err
-	}
+		// Send the request.
+		resp, err := c.hc.Do(req)
+		if err != nil {
+			return xcrsp, fmt.Errorf("Sending launch exec request failed: %v", err)
+		}
+		defer resp.Body.Close()
 
-	// Decode the body from the response.
-	if resp.Body == nil {
-		return xcrsp, errors.New("Create launch exec returned an empty body in the response")
-	}
+		// 200 (OK) is a success response.
+		if err := api.CheckResponse(resp); err != nil {
+			return xcrsp, err
+		}
 
-	if err := json.NewDecoder(resp.Body).Decode(&xcrsp); err != nil {
-		return xcrsp, fmt.Errorf("Decoding create launch exec response body failed: %v", err)
-	}
+		// Decode the body from the response.
+		if resp.Body == nil {
+			return xcrsp, errors.New("Create launch exec returned an empty body in the response")
+		}
 
-	return xcrsp, nil
+		if err := json.NewDecoder(resp.Body).Decode(&xcrsp); err != nil {
+			return xcrsp, fmt.Errorf("Decoding create launch exec response body failed: %v", err)
+		}
+
+		return xcrsp, nil
+	*/
 }

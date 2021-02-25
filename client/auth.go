@@ -13,6 +13,7 @@ import (
 
 // Authentication represents the authentication file for Azure.
 type Authentication struct {
+	AzureCloud              string `json:"azureCloud,omitempty"`
 	ClientID                string `json:"clientId,omitempty"`
 	ClientSecret            string `json:"clientSecret,omitempty"`
 	SubscriptionID          string `json:"subscriptionId,omitempty"`
@@ -46,6 +47,7 @@ func NewAuthentication(azureCloud, clientID, clientSecret, subscriptionID, tenan
 	}
 
 	return &Authentication{
+		AzureCloud:              azureCloud,
 		ClientID:                clientID,
 		ClientSecret:            clientSecret,
 		SubscriptionID:          subscriptionID,

@@ -35,6 +35,7 @@ var (
 	throttlingAdditionalRetryCount = 3
 )
 
+//ref https://github.com/Azure-Samples/azure-sdk-for-go-samples/blob/ffcdafe9818d55dbc2134db1548e1ed10b4a6092/compute/container_instance.go#L19
 // NewClient creates a new Azure API client from an Authentication struct and BaseURI.
 func NewClient(auth *Authentication, userAgent []string) (*Client, error) {
 	client := &Client{
