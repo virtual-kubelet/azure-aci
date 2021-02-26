@@ -338,7 +338,7 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 	}
 
 	if p.subnetName != "" {
-		if err := p.setupNetworkProfile(azAuth); err != nil {
+		if err := p.setupNetworkProfile(context.TODO(), azAuth); err != nil {
 			return nil, fmt.Errorf("error setting up network profile: %v", err)
 		}
 
@@ -414,14 +414,14 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 	return nil
 }
 
-func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
+func (p *ACIProvider) setupNetworkProfile(ctx context.Context, auth *client.Authentication) error {
 	c, err := network.NewClient(auth, p.extraUserAgent)
 	if err != nil {
 		return fmt.Errorf("error creating azure networking client: %v", err)
 	}
 
 	createSubnet := true
-	subnet, err := c.GetSubnet(p.vnetResourceGroup, p.vnetName, p.subnetName)
+	subnet, err := c.GetSubnet(ctx, p.vnetResourceGroup, p.vnetName, p.subnetName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
@@ -461,7 +461,7 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 
 	if createSubnet {
 		subnet = network.NewSubnetWithContainerInstanceDelegation(p.subnetName, p.subnetCIDR)
-		subnet, err = c.CreateOrUpdateSubnet(p.vnetResourceGroup, p.vnetName, subnet)
+		subnet, err = c.CreateOrUpdateSubnet(ctx, p.vnetResourceGroup, p.vnetName, subnet)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
@@ -470,7 +470,7 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 		p.networkProfileName = getNetworkProfileName(*subnet.ID)
 	}
 
-	profile, err := c.GetProfile(p.resourceGroup, p.networkProfileName)
+	profile, err := c.GetProfile(ctx, p.resourceGroup, p.networkProfileName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up network profile: %v", err)
 	}
@@ -487,7 +487,7 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 
 	// at this point, profile should be nil
 	profile = network.NewNetworkProfile(p.networkProfileName, p.region, *subnet.ID)
-	profile, err = c.CreateOrUpdateProfile(p.resourceGroup, profile)
+	profile, err = c.CreateOrUpdateProfile(ctx, p.resourceGroup, profile)
 	if err != nil {
 		return err
 	}

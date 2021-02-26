@@ -8,6 +8,8 @@ import (
 	"github.com/virtual-kubelet/azure-aci/client/api"
 )
 
+//TODO: DELETE!!
+
 // DeleteResourceGroup deletes an Azure resource group.
 // From: https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/delete
 func (c *Client) DeleteResourceGroup(resourceGroup string) error {

@@ -3,8 +3,14 @@ package resourcegroups
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
-	azure "github.com/virtual-kubelet/azure-aci/client"
+	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2020-06-01/resources"
+	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/go-autorest/autorest/azure"
+	"github.com/golang/glog"
+	azureclient "github.com/virtual-kubelet/azure-aci/client"
 )
 
 const (
@@ -19,12 +25,13 @@ const (
 // Clients should be reused instead of created as needed.
 // The methods of Client are safe for concurrent use by multiple goroutines.
 type Client struct {
-	hc   *http.Client
-	auth *azure.Authentication
+	hc           *http.Client
+	auth         *azureclient.Authentication
+	groupsClient resources.GroupsClient
 }
 
 // NewClient creates a new Azure resource groups client.
-func NewClient(auth *azure.Authentication, extraUserAgent string) (*Client, error) {
+func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client, error) {
 	if auth == nil {
 		return nil, fmt.Errorf("Authentication is not supplied for the Azure client")
 	}
@@ -34,10 +41,44 @@ func NewClient(auth *azure.Authentication, extraUserAgent string) (*Client, erro
 		userAgent = append(userAgent, extraUserAgent)
 	}
 
-	client, err := azure.NewClient(auth, userAgent)
+	client, err := azureclient.NewClient(auth, userAgent)
 	if err != nil {
 		return nil, fmt.Errorf("Creating Azure client failed: %v", err)
 	}
 
-	return &Client{hc: client.HTTPClient, auth: auth}, nil
+	cloudEnv, err := azure.EnvironmentFromName(auth.AzureCloud)
+	var authorizer autorest.Authorizer
+	if auth.UseUserIdentity {
+		glog.Infof("using MSI")
+		msiEP, err := adal.GetMSIVMEndpoint()
+		if err != nil {
+			return nil, fmt.Errorf("unable to get MSI endpoint: %s", err)
+		}
+
+		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
+			msiEP, cloudEnv.ResourceManagerEndpoint, auth.UserIdentityClientId)
+		if err != nil {
+			glog.Fatalf("unable to create MSI authorizer: %s", err)
+		}
+
+		authorizer = autorest.NewBearerAuthorizer(spt)
+	} else {
+		oauthConfig, err := adal.NewOAuthConfig(cloudEnv.ActiveDirectoryEndpoint, auth.TenantID)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create oauth config: %s", err)
+		}
+		spt, err := adal.NewServicePrincipalToken(*oauthConfig, auth.ClientID, auth.ClientSecret, cloudEnv.ResourceManagerEndpoint)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create service principal token: %s", err)
+		}
+		authorizer = autorest.NewBearerAuthorizer(spt)
+	}
+
+	groupsClient := resources.NewGroupsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
+	groupsClient.Authorizer = authorizer
+	groupsClient.AddToUserAgent(strings.Join(userAgent, " "))
+
+	return &Client{hc: client.HTTPClient,
+		auth:         auth,
+		groupsClient: groupsClient}, nil
 }

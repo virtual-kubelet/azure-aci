@@ -91,16 +91,16 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 		}
 		authorizer = autorest.NewBearerAuthorizer(spt)
 	}
-	fmt.Println(authorizer)
-	containerGroupsClient := containerinstance.NewContainerGroupsClient(auth.SubscriptionID)
+
+	containerGroupsClient := containerinstance.NewContainerGroupsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	containerGroupsClient.Authorizer = authorizer
 	containerGroupsClient.AddToUserAgent(strings.Join(userAgent, " "))
 
-	containersClient := containerinstance.NewContainersClient(auth.SubscriptionID)
+	containersClient := containerinstance.NewContainersClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	containersClient.Authorizer = authorizer
 	containersClient.AddToUserAgent(strings.Join(userAgent, " "))
 
-	metricsClient := insights.NewMetricsClient(auth.SubscriptionID)
+	metricsClient := insights.NewMetricsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	metricsClient.Authorizer = authorizer
 	metricsClient.AddToUserAgent(strings.Join(userAgent, " "))
 

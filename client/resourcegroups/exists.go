@@ -8,6 +8,8 @@ import (
 	"github.com/virtual-kubelet/azure-aci/client/api"
 )
 
+//TODO: DELETE!!
+
 // ResourceGroupExists checks if an Azure resource group exists.
 // From: https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/checkexistence
 func (c *Client) ResourceGroupExists(resourceGroup string) (bool, error) {
