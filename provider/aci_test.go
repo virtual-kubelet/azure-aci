@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
@@ -739,15 +740,15 @@ func TestPodToACISecretEnvVar(t *testing.T) {
 	}
 	aciEnvVar := getACIEnvVar(e)
 
-	if aciEnvVar.Value != "" {
+	if to.String(aciEnvVar.Value) != "" {
 		t.Fatalf("ACI Env Variable Value should be empty for a secret")
 	}
 
-	if aciEnvVar.Name != testKey {
+	if to.String(aciEnvVar.Name) != testKey {
 		t.Fatalf("ACI Env Variable Name does not match expected Name")
 	}
 
-	if aciEnvVar.SecureValue != testVal {
+	if to.String(aciEnvVar.SecureValue) != testVal {
 		t.Fatalf("ACI Env Variable Secure Value does not match expected value")
 	}
 }
@@ -764,15 +765,15 @@ func TestPodToACIEnvVar(t *testing.T) {
 	}
 	aciEnvVar := getACIEnvVar(e)
 
-	if aciEnvVar.SecureValue != "" {
+	if to.String(aciEnvVar.SecureValue) != "" {
 		t.Fatalf("ACI Env Variable Secure Value should be empty for non-secret variables")
 	}
 
-	if aciEnvVar.Name != testKey {
+	if to.String(aciEnvVar.Name) != testKey {
 		t.Fatalf("ACI Env Variable Name does not match expected Name")
 	}
 
-	if aciEnvVar.Value != testVal {
+	if to.String(aciEnvVar.Value) != testVal {
 		t.Fatalf("ACI Env Variable Value does not match expected value")
 	}
 }

@@ -2,7 +2,6 @@ package aci
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2019-12-01/containerinstance"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/mocks"
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/api"
@@ -43,6 +44,8 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
 
+	ctx := context.Background()
+
 	subscriptionID = auth.SubscriptionID
 
 	// Check if the resource group exists and create it if not.
@@ -59,7 +62,7 @@ func TestMain(m *testing.M) {
 
 	if !exists {
 		// Create the resource group.
-		_, err := rgCli.CreateResourceGroup(resourceGroup, resourcegroups.Group{
+		_, err := rgCli.CreateResourceGroup(ctx, resourceGroup, resourcegroups.Group{
 			Location: location,
 		})
 		if err != nil {
@@ -157,20 +160,20 @@ func TestNewMsiClient(t *testing.T) {
 }
 
 func TestCreateContainerGroupFails(t *testing.T) {
-	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
 					},
@@ -188,26 +191,26 @@ func TestCreateContainerGroupFails(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithoutResourceLimit(t *testing.T) {
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
 					},
@@ -218,8 +221,8 @@ func TestCreateContainerGroupWithoutResourceLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroup {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroup)
+	if *cg.Name != containerGroup {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroup)
 	}
 
 	if err := client.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup); err != nil {
@@ -228,30 +231,30 @@ func TestCreateContainerGroupWithoutResourceLimit(t *testing.T) {
 }
 
 func TestCreateContainerGroup(t *testing.T) {
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
 					},
@@ -262,49 +265,49 @@ func TestCreateContainerGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroup {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroup)
+	if *cg.Name != containerGroup {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroup)
 	}
 }
 
 func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
-	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
 					},
 				},
 			},
-			NetworkProfile: &NetworkProfileDefinition{
-				ID: fmt.Sprintf(
+			NetworkProfile: &containerinstance.ContainerGroupNetworkProfile{
+				ID: to.StringPtr(fmt.Sprintf(
 					"/subscriptions/%s/resourceGroups/%s/providers"+
 						"/Microsoft.Network/networkProfiles/%s",
 					subscriptionID,
 					resourceGroup,
 					"badNetworkProfile",
-				),
+				)),
 			},
 		},
 	})
@@ -317,12 +320,12 @@ func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 }
 
 func TestGetContainerGroup(t *testing.T) {
-	cg, _, err := client.GetContainerGroup(context.Background(), resourceGroup, containerGroup)
+	cg, err := client.GetContainerGroup(context.Background(), resourceGroup, containerGroup)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroup {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroup)
+	if *cg.Name != containerGroup {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroup)
 	}
 }
 
@@ -331,9 +334,9 @@ func TestListContainerGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, cg := range list.Value {
-		if cg.Name != containerGroup {
-			t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroup)
+	for _, cg := range *list.Value {
+		if *cg.Name != containerGroup {
+			t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroup)
 		}
 	}
 }
@@ -341,35 +344,35 @@ func TestListContainerGroup(t *testing.T) {
 func TestCreateContainerGroupWithLivenessProbe(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
-						LivenessProbe: &ContainerProbe{
-							HTTPGet: &ContainerHTTPGetProbe{
-								Port: 80,
+						LivenessProbe: &containerinstance.ContainerProbe{
+							HTTPGet: &containerinstance.ContainerHTTPGet{
+								Port: to.Int32Ptr(80),
 							},
 						},
 					},
@@ -380,43 +383,43 @@ func TestCreateContainerGroupWithLivenessProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroupName {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroupName)
+	if *cg.Name != containerGroupName {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroupName)
 	}
 }
 
 func TestCreateContainerGroupFailsWithLivenessProbeMissingPort(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
-	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
-						LivenessProbe: &ContainerProbe{
-							HTTPGet: &ContainerHTTPGetProbe{
-								Path: "/",
+						LivenessProbe: &containerinstance.ContainerProbe{
+							HTTPGet: &containerinstance.ContainerHTTPGet{
+								Path: to.StringPtr("/"),
 							},
 						},
 					},
@@ -432,41 +435,41 @@ func TestCreateContainerGroupFailsWithLivenessProbeMissingPort(t *testing.T) {
 func TestCreateContainerGroupWithReadinessProbe(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
-						ReadinessProbe: &ContainerProbe{
-							HTTPGet: &ContainerHTTPGetProbe{
-								Port: 80,
-								Path: "/",
+						ReadinessProbe: &containerinstance.ContainerProbe{
+							HTTPGet: &containerinstance.ContainerHTTPGet{
+								Port: to.Int32Ptr(80),
+								Path: to.StringPtr("/"),
 							},
-							InitialDelaySeconds: 5,
-							SuccessThreshold:    3,
-							FailureThreshold:    5,
-							TimeoutSeconds:      120,
+							InitialDelaySeconds: to.Int32Ptr(5),
+							SuccessThreshold:    to.Int32Ptr(3),
+							FailureThreshold:    to.Int32Ptr(5),
+							TimeoutSeconds:      to.Int32Ptr(120),
 						},
 					},
 				},
@@ -476,8 +479,8 @@ func TestCreateContainerGroupWithReadinessProbe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroupName {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroupName)
+	if *cg.Name != containerGroupName {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroupName)
 	}
 }
 
@@ -487,30 +490,30 @@ func TestCreateContainerGroupWithLogAnalytics(t *testing.T) {
 		t.Fatal(err)
 	}
 	cgname := "cgla"
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, cgname, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, cgname, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
 					},
@@ -522,8 +525,8 @@ func TestCreateContainerGroupWithLogAnalytics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != cgname {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, cgname)
+	if *cg.Name != cgname {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, cgname)
 	}
 	if err := client.DeleteContainerGroup(context.Background(), resourceGroup, cgname); err != nil {
 		t.Fatalf("Delete Container Group failed: %s", err.Error())
@@ -531,37 +534,37 @@ func TestCreateContainerGroupWithLogAnalytics(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithInvalidLogAnalytics(t *testing.T) {
-	law := &LogAnalyticsWorkspace{}
-	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	law := &containerinstance.LogAnalytics{}
+	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
 					},
 				},
 			},
-			Diagnostics: &ContainerGroupDiagnostics{
+			Diagnostics: &containerinstance.ContainerGroupDiagnostics{
 				LogAnalytics: law,
 			},
 		},
@@ -574,65 +577,66 @@ func TestCreateContainerGroupWithInvalidLogAnalytics(t *testing.T) {
 func TestCreateContainerGroupWithVNet(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
-	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
+	//fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
 	networkProfileID := "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/networkProfiles/aci-network-profile-virtual-kubelet-tests-vnet-aci-connector"
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	diagnostics.LogAnalytics.LogType = LogAnlyticsLogTypeContainerInsights
+	diagnostics.LogAnalytics.LogType = containerinstance.ContainerInsights
 
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
-		Location: location,
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, containerinstance.ContainerGroup{
+		Location: &location,
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
 							},
 						},
 					},
 				},
 			},
-			NetworkProfile: &NetworkProfileDefinition{
-				ID: networkProfileID,
+			NetworkProfile: &containerinstance.ContainerGroupNetworkProfile{
+				ID: &networkProfileID,
 			},
-			Extensions: []*Extension{
-				&Extension{
-					Name: "kube-proxy",
-					Properties: &ExtensionProperties{
-						Type:    ExtensionTypeKubeProxy,
-						Version: ExtensionVersion1_0,
-						Settings: map[string]string{
-							KubeProxyExtensionSettingClusterCIDR: "10.240.0.0/16",
-							KubeProxyExtensionSettingKubeVersion: KubeProxyExtensionKubeVersion,
-						},
-						ProtectedSettings: map[string]string{
-							KubeProxyExtensionSettingKubeConfig: fakeKubeConfig,
-						},
-					},
-				},
-			},
-			DNSConfig: &DNSConfig{
-				NameServers: []string{"1.1.1.1"},
+			// TODO(gossion): what is this extension?
+			// Extensions: []*Extension{
+			// 	&Extension{
+			// 		Name: "kube-proxy",
+			// 		Properties: &ExtensionProperties{
+			// 			Type:    ExtensionTypeKubeProxy,
+			// 			Version: ExtensionVersion1_0,
+			// 			Settings: map[string]string{
+			// 				KubeProxyExtensionSettingClusterCIDR: "10.240.0.0/16",
+			// 				KubeProxyExtensionSettingKubeVersion: KubeProxyExtensionKubeVersion,
+			// 			},
+			// 			ProtectedSettings: map[string]string{
+			// 				KubeProxyExtensionSettingKubeConfig: fakeKubeConfig,
+			// 			},
+			// 		},
+			// 	},
+			// },
+			DNSConfig: &containerinstance.DNSConfiguration{
+				NameServers: &[]string{"1.1.1.1"},
 			},
 			Diagnostics: diagnostics,
 		},
@@ -641,8 +645,8 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroupName {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroupName)
+	if *cg.Name != containerGroupName {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroupName)
 	}
 	if err := client.DeleteContainerGroup(context.Background(), resourceGroup, containerGroupName); err != nil {
 		t.Fatalf("Delete Container Group failed: %s", err.Error())
@@ -653,37 +657,37 @@ func TestCreateContainerGroupWithGPU(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 
-	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
-		Location: "eastus",
-		ContainerGroupProperties: ContainerGroupProperties{
-			OsType: Linux,
-			Containers: []Container{
+	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, containerinstance.ContainerGroup{
+		Location: to.StringPtr("eastus"),
+		ContainerGroupProperties: &containerinstance.ContainerGroupProperties{
+			OsType: containerinstance.Linux,
+			Containers: &[]containerinstance.Container{
 				{
-					Name: "nginx",
-					ContainerProperties: ContainerProperties{
-						Image:   "nginx",
-						Command: []string{"nginx", "-g", "daemon off;"},
-						Ports: []ContainerPort{
+					Name: to.StringPtr("nginx"),
+					ContainerProperties: &containerinstance.ContainerProperties{
+						Image:   to.StringPtr("nginx"),
+						Command: &[]string{"nginx", "-g", "daemon off;"},
+						Ports: &[]containerinstance.ContainerPort{
 							{
-								Protocol: ContainerNetworkProtocolTCP,
-								Port:     80,
+								Protocol: containerinstance.ContainerNetworkProtocolTCP,
+								Port:     to.Int32Ptr(80),
 							},
 						},
-						Resources: ResourceRequirements{
-							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
-								GPU: &GPUResource{
-									Count: 1,
-									SKU:   GPUSKU("K80"),
+						Resources: &containerinstance.ResourceRequirements{
+							Requests: &containerinstance.ResourceRequests{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
+								Gpu: &containerinstance.GpuResource{
+									Count: to.Int32Ptr(1),
+									Sku:   containerinstance.K80,
 								},
 							},
-							Limits: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
-								GPU: &GPUResource{
-									Count: 1,
-									SKU:   GPUSKU("K80"),
+							Limits: &containerinstance.ResourceLimits{
+								CPU:        to.Float64Ptr(1),
+								MemoryInGB: to.Float64Ptr(1),
+								Gpu: &containerinstance.GpuResource{
+									Count: to.Int32Ptr(1),
+									Sku:   containerinstance.K80,
 								},
 							},
 						},
@@ -699,8 +703,8 @@ func TestCreateContainerGroupWithGPU(t *testing.T) {
 		}
 		t.Fatal(err)
 	}
-	if cg.Name != containerGroupName {
-		t.Fatalf("resource group name is %s, expected %s", cg.Name, containerGroupName)
+	if *cg.Name != containerGroupName {
+		t.Fatalf("resource group name is %s, expected %s", *cg.Name, containerGroupName)
 	}
 	if err := client.DeleteContainerGroup(context.Background(), resourceGroup, containerGroupName); err != nil {
 		t.Fatalf("Delete Container Group failed: %s", err.Error())

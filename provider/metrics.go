@@ -230,7 +230,7 @@ func collectMetrics(pod *v1.Pod, system, net insights.Response) stats.PodStats {
 			stat.Network = &stats.NetworkStats{}
 		}
 		// network stats are for the whole container group, so there should only be one entry here.
-		if len(*m.Timeseries) == 0 {
+		if m.Timeseries == nil || len(*m.Timeseries) == 0 {
 			continue
 		}
 		entry := (*m.Timeseries)[0]

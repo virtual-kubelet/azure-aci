@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/Azure/go-autorest/autorest/to"
 )
 
 func TestLogAnalyticsFileParsingSuccess(t *testing.T) {
@@ -16,7 +18,7 @@ func TestLogAnalyticsFileParsingSuccess(t *testing.T) {
 		t.Fatalf("Unexpected nil diagnostics. Log Analytics file not parsed correctly")
 	}
 
-	if diagnostics.LogAnalytics.WorkspaceID == "" || diagnostics.LogAnalytics.WorkspaceKey == "" {
+	if to.String(diagnostics.LogAnalytics.WorkspaceID) == "" || to.String(diagnostics.LogAnalytics.WorkspaceKey) == "" {
 		t.Fatalf("Unexpected empty analytics authentication credentials. Log Analytics file not parsed correctly")
 	}
 }

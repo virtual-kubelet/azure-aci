@@ -3,7 +3,6 @@ package resourcegroups
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/services/resources/mgmt/2020-06-01/resources"
 	"github.com/Azure/go-autorest/autorest"
@@ -46,8 +45,11 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 		return nil, fmt.Errorf("Creating Azure client failed: %v", err)
 	}
 
-	cloudEnv, err := azure.EnvironmentFromName(auth.AzureCloud)
 	var authorizer autorest.Authorizer
+	cloudEnv, err := azure.EnvironmentFromName(auth.AzureCloud)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get cloudEnv: %s", err)
+	}
 	if auth.UseUserIdentity {
 		glog.Infof("using MSI")
 		msiEP, err := adal.GetMSIVMEndpoint()
@@ -58,7 +60,7 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
 			msiEP, cloudEnv.ResourceManagerEndpoint, auth.UserIdentityClientId)
 		if err != nil {
-			glog.Fatalf("unable to create MSI authorizer: %s", err)
+			return nil, fmt.Errorf("unable to create MSI authorizer: %s", err)
 		}
 
 		authorizer = autorest.NewBearerAuthorizer(spt)
@@ -76,9 +78,13 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 
 	groupsClient := resources.NewGroupsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	groupsClient.Authorizer = authorizer
-	groupsClient.AddToUserAgent(strings.Join(userAgent, " "))
+	if err := groupsClient.AddToUserAgent(extraUserAgent); err != nil {
+		return nil, fmt.Errorf("unable to add user agent: %s", err)
+	}
 
-	return &Client{hc: client.HTTPClient,
+	return &Client{
+		hc:           client.HTTPClient,
 		auth:         auth,
-		groupsClient: groupsClient}, nil
+		groupsClient: groupsClient,
+	}, nil
 }

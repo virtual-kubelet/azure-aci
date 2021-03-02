@@ -3,7 +3,6 @@ package aci
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/plugin/ochttp/propagation/b3"
@@ -15,19 +14,11 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
-	azureclient "github.com/virtual-kubelet/azure-aci/client"
+	azureaciclient "github.com/virtual-kubelet/azure-aci/client"
 )
 
 const (
 	defaultUserAgent = "virtual-kubelet/azure-arm-aci/2018-10-01"
-	apiVersion       = "2018-10-01"
-
-	containerGroupURLPath                    = "subscriptions/{{.subscriptionId}}/resourceGroups/{{.resourceGroup}}/providers/Microsoft.ContainerInstance/containerGroups/{{.containerGroupName}}"
-	containerGroupListURLPath                = "subscriptions/{{.subscriptionId}}/providers/Microsoft.ContainerInstance/containerGroups"
-	containerGroupListByResourceGroupURLPath = "subscriptions/{{.subscriptionId}}/resourceGroups/{{.resourceGroup}}/providers/Microsoft.ContainerInstance/containerGroups"
-	containerLogsURLPath                     = containerGroupURLPath + "/containers/{{.containerName}}/logs"
-	containerExecURLPath                     = containerGroupURLPath + "/containers/{{.containerName}}/exec"
-	containerGroupMetricsURLPath             = containerGroupURLPath + "/providers/microsoft.Insights/metrics"
 )
 
 // Client is a client for interacting with Azure Container Instances.
@@ -36,14 +27,14 @@ const (
 // The methods of Client are safe for concurrent use by multiple goroutines.
 type Client struct {
 	hc                    *http.Client
-	auth                  *azureclient.Authentication
+	auth                  *azureaciclient.Authentication
 	containerGroupsClient containerinstance.ContainerGroupsClient
 	containersClient      containerinstance.ContainersClient
 	metricsClient         insights.MetricsClient
 }
 
 // NewClient creates a new Azure Container Instances client with extra user agent.
-func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client, error) {
+func NewClient(auth *azureaciclient.Authentication, extraUserAgent string) (*Client, error) {
 	if auth == nil {
 		return nil, fmt.Errorf("Authentication is not supplied for the Azure client")
 	}
@@ -53,7 +44,7 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 		userAgent = append(userAgent, extraUserAgent)
 	}
 
-	client, err := azureclient.NewClient(auth, userAgent)
+	client, err := azureaciclient.NewClient(auth, userAgent)
 	if err != nil {
 		return nil, fmt.Errorf("Creating Azure client failed: %v", err)
 	}
@@ -64,8 +55,11 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 		NewClientTrace: ochttp.NewSpanAnnotatingClientTrace,
 	}
 
-	cloudEnv, err := azure.EnvironmentFromName(auth.AzureCloud)
 	var authorizer autorest.Authorizer
+	cloudEnv, err := azure.EnvironmentFromName(auth.AzureCloud)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get cloudEnv: %s", err)
+	}
 	if auth.UseUserIdentity {
 		glog.Infof("using MSI")
 		msiEP, err := adal.GetMSIVMEndpoint()
@@ -76,7 +70,7 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
 			msiEP, cloudEnv.ResourceManagerEndpoint, auth.UserIdentityClientId)
 		if err != nil {
-			glog.Fatalf("unable to create MSI authorizer: %s", err)
+			return nil, fmt.Errorf("unable to create MSI authorizer: %s", err)
 		}
 
 		authorizer = autorest.NewBearerAuthorizer(spt)
@@ -94,19 +88,27 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 
 	containerGroupsClient := containerinstance.NewContainerGroupsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	containerGroupsClient.Authorizer = authorizer
-	containerGroupsClient.AddToUserAgent(strings.Join(userAgent, " "))
+	if err := containerGroupsClient.AddToUserAgent(extraUserAgent); err != nil {
+		return nil, fmt.Errorf("unable to add user agent: %s", err)
+	}
 
 	containersClient := containerinstance.NewContainersClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	containersClient.Authorizer = authorizer
-	containersClient.AddToUserAgent(strings.Join(userAgent, " "))
+	if err := containersClient.AddToUserAgent(extraUserAgent); err != nil {
+		return nil, fmt.Errorf("unable to add user agent: %s", err)
+	}
 
 	metricsClient := insights.NewMetricsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	metricsClient.Authorizer = authorizer
-	metricsClient.AddToUserAgent(strings.Join(userAgent, " "))
+	if err := metricsClient.AddToUserAgent(extraUserAgent); err != nil {
+		return nil, fmt.Errorf("unable to add user agent: %s", err)
+	}
 
-	return &Client{hc: client.HTTPClient,
+	return &Client{
+		hc:                    client.HTTPClient,
 		auth:                  auth,
 		containerGroupsClient: containerGroupsClient,
 		containersClient:      containersClient,
-		metricsClient:         metricsClient}, nil
+		metricsClient:         metricsClient,
+	}, nil
 }

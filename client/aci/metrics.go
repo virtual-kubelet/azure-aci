@@ -13,7 +13,6 @@ import (
 
 // GetContainerGroupMetrics gets metrics for the provided container group
 func (c *Client) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options MetricsRequest) (insights.Response, error) {
-	//result, err := c.metricsClient.List(ctx, )
 
 	if len(options.Types) == 0 {
 		return insights.Response{}, errors.New("must provide metrics types to fetch")

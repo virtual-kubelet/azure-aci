@@ -242,7 +242,7 @@ type GPUSKU string
 
 const (
 	// K80 specifies the K80 GPU SKU
-	K80  GPUSKU = "K80"
+	K80 GPUSKU = "K80"
 	// P100 specifies the P100 GPU SKU
 	P100 GPUSKU = "P100"
 	// V100 specifies the V100 GPU SKU
