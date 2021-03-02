@@ -14,6 +14,7 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/dimchansky/utfbom v1.1.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/golang/mock v1.3.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.0

@@ -73,7 +73,7 @@ const (
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
-	aciClient          *aci.Client
+	aciClient          aci.Interface
 	resourceManager    *manager.ResourceManager
 	resourceGroup      string
 	region             string
@@ -1114,9 +1114,12 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	if err != nil {
 		return nil, err
 	}
-	res1B, _ := json.Marshal(&cgs)
-	log.G(ctx).WithField("rg", p.resourceGroup).Infof("[DEBUG] ListContainerGroups: %s", string(res1B))
-	pods := make([]*v1.Pod, 0, len(*cgs.Value)) //TODO: if cgs.Value nil?
+
+	if cgs.Value == nil {
+		return []*v1.Pod{}, nil
+	}
+
+	pods := make([]*v1.Pod, 0, len(*cgs.Value))
 
 	for _, cg := range *cgs.Value {
 		c := cg
