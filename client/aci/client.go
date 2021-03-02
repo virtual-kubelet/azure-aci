@@ -88,20 +88,23 @@ func NewClient(auth *azureaciclient.Authentication, extraUserAgent string) (*Cli
 
 	containerGroupsClient := containerinstance.NewContainerGroupsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	containerGroupsClient.Authorizer = authorizer
-	if err := containerGroupsClient.AddToUserAgent(extraUserAgent); err != nil {
-		return nil, fmt.Errorf("unable to add user agent: %s", err)
-	}
 
 	containersClient := containerinstance.NewContainersClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	containersClient.Authorizer = authorizer
-	if err := containersClient.AddToUserAgent(extraUserAgent); err != nil {
-		return nil, fmt.Errorf("unable to add user agent: %s", err)
-	}
 
 	metricsClient := insights.NewMetricsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	metricsClient.Authorizer = authorizer
-	if err := metricsClient.AddToUserAgent(extraUserAgent); err != nil {
-		return nil, fmt.Errorf("unable to add user agent: %s", err)
+
+	if extraUserAgent != "" {
+		if err := containerGroupsClient.AddToUserAgent(extraUserAgent); err != nil {
+			return nil, fmt.Errorf("unable to add user agent: %s", err)
+		}
+		if err := containersClient.AddToUserAgent(extraUserAgent); err != nil {
+			return nil, fmt.Errorf("unable to add user agent: %s", err)
+		}
+		if err := metricsClient.AddToUserAgent(extraUserAgent); err != nil {
+			return nil, fmt.Errorf("unable to add user agent: %s", err)
+		}
 	}
 
 	return &Client{

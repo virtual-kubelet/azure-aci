@@ -78,8 +78,10 @@ func NewClient(auth *azureclient.Authentication, extraUserAgent string) (*Client
 
 	groupsClient := resources.NewGroupsClientWithBaseURI(auth.ResourceManagerEndpoint, auth.SubscriptionID)
 	groupsClient.Authorizer = authorizer
-	if err := groupsClient.AddToUserAgent(extraUserAgent); err != nil {
-		return nil, fmt.Errorf("unable to add user agent: %s", err)
+	if extraUserAgent != "" {
+		if err := groupsClient.AddToUserAgent(extraUserAgent); err != nil {
+			return nil, fmt.Errorf("unable to add user agent: %s", err)
+		}
 	}
 
 	return &Client{

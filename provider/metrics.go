@@ -233,6 +233,7 @@ func collectMetrics(pod *v1.Pod, system, net insights.Response) stats.PodStats {
 		if m.Timeseries == nil || len(*m.Timeseries) == 0 {
 			continue
 		}
+
 		entry := (*m.Timeseries)[0]
 		if entry.Data == nil || len(*entry.Data) == 0 {
 			continue
@@ -241,6 +242,7 @@ func collectMetrics(pod *v1.Pod, system, net insights.Response) stats.PodStats {
 		data := entryData[len(entryData)-1] // get only the last entry
 
 		bytes := uint64(to.Float64(data.Average))
+
 		switch to.String(m.Name.Value) {
 		case string(aci.MetricTyperNetworkBytesRecievedPerSecond):
 			stat.Network.RxBytes = &bytes

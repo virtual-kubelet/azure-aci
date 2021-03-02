@@ -2,7 +2,6 @@ package provider
 
 import (
 	"path"
-	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -10,7 +9,10 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/preview/monitor/mgmt/2019-06-01/insights"
 	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/Azure/go-autorest/autorest/to"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
+	"gopkg.in/yaml.v2"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -61,9 +63,7 @@ func TestCollectMetrics(t *testing.T) {
 				found := false
 				for _, expectedContainer := range expected.Containers {
 					if expectedContainer.Name == actualContainer.Name {
-						if !reflect.DeepEqual(expectedContainer, actualContainer) {
-							t.Fatalf("got unexpected container\nexpected:\n%+v\nactual:\n%+v", expectedContainer, actualContainer)
-						}
+						assert.YAMLEq(t, toYAML(t, expectedContainer), toYAML(t, actualContainer))
 						found = true
 						break
 					}
@@ -77,9 +77,7 @@ func TestCollectMetrics(t *testing.T) {
 			expected.Containers = nil
 			actual.Containers = nil
 
-			if !reflect.DeepEqual(expected, actual) {
-				t.Fatalf("got unexpected results\nexpected:\n%+v\nactual:\n%+v", expected, actual)
-			}
+			assert.YAMLEq(t, toYAML(t, expected), toYAML(t, actual))
 		})
 	}
 }
@@ -138,6 +136,7 @@ func fakeACIMetrics(pod *v1.Pod, testCase metricTestCase) (insights.Response, in
 	txV := newMetricValue(aci.MetricTyperNetworkBytesTransmittedPerSecond)
 	rxVTimeseries = append(rxVTimeseries, newNetMetric(testCase.collected, testCase.rx))
 	txVTimeseries = append(txVTimeseries, newNetMetric(testCase.collected, testCase.tx))
+	rxV.Timeseries = &rxVTimeseries
 	txV.Timeseries = &txVTimeseries
 	net := insights.Response{
 		Value: &[]insights.Metric{rxV, txV},
@@ -211,4 +210,10 @@ func podStatFromTestCase(t *testing.T, pod *v1.Pod, test metricTestCase) stats.P
 		expected.Memory = &stats.MemoryStats{UsageBytes: &nodeMem, WorkingSetBytes: &nodeMem, Time: metav1.NewTime(test.collected.ToTime())}
 	}
 	return expected
+}
+
+func toYAML(t testing.TB, obj interface{}) string {
+	raw, err := yaml.Marshal(obj)
+	require.NoError(t, err, "converting to yaml")
+	return string(raw)
 }
