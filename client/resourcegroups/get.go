@@ -10,8 +10,6 @@ import (
 	"github.com/virtual-kubelet/azure-aci/client/api"
 )
 
-//TODO: DELETE!!
-
 // GetResourceGroup gets an Azure resource group.
 // From: https://docs.microsoft.com/en-us/rest/api/resources/ResourceGroups/Get
 func (c *Client) GetResourceGroup(resourceGroup string) (*Group, error) {

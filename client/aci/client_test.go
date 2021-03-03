@@ -44,8 +44,6 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
 
-	ctx := context.Background()
-
 	subscriptionID = auth.SubscriptionID
 
 	// Check if the resource group exists and create it if not.
@@ -62,7 +60,7 @@ func TestMain(m *testing.M) {
 
 	if !exists {
 		// Create the resource group.
-		_, err := rgCli.CreateResourceGroup(ctx, resourceGroup, resourcegroups.Group{
+		_, err := rgCli.CreateResourceGroup(resourceGroup, resourcegroups.Group{
 			Location: location,
 		})
 		if err != nil {

@@ -1,7 +1,6 @@
 package resourcegroups
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -46,7 +45,7 @@ func TestResourceGroupDoesNotExist(t *testing.T) {
 }
 
 func TestCreateResourceGroup(t *testing.T) {
-	g, err := client.CreateResourceGroup(context.Background(), resourceGroup, Group{
+	g, err := client.CreateResourceGroup(resourceGroup, Group{
 		Location: location,
 	})
 	if err != nil {

@@ -2,7 +2,6 @@ package resourcegroups
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,9 +14,7 @@ import (
 // CreateResourceGroup creates a new Azure resource group with the
 // provided properties.
 // From: https://docs.microsoft.com/en-us/rest/api/resources/resourcegroups/createorupdate
-func (c *Client) CreateResourceGroup(ctx context.Context, resourceGroup string, properties Group) (*Group, error) {
-	//return c.groupsClient.CreateOrUpdate(ctx, resourceGroup, properties)
-
+func (c *Client) CreateResourceGroup(resourceGroup string, properties Group) (*Group, error) {
 	urlParams := url.Values{
 		"api-version": []string{apiVersion},
 	}

@@ -1,7 +1,6 @@
 package network
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"sync"
@@ -32,7 +31,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		os.Exit(1)
 	}
-	_, err = c.CreateResourceGroup(context.Background(), resourceGroup, resourcegroups.Group{
+	_, err = c.CreateResourceGroup(resourceGroup, resourcegroups.Group{
 		Name:     resourceGroup,
 		Location: location,
 	})
