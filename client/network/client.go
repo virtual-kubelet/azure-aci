@@ -18,9 +18,8 @@ const (
 
 // Client is a client for interacting with Azure networking
 type Client struct {
-	sc            network.SubnetsClient
-	profileClient network.ProfilesClient
-	hc            *http.Client
+	sc network.SubnetsClient
+	hc *http.Client
 
 	auth *azure.Authentication
 }
@@ -56,14 +55,10 @@ func NewClient(azAuth *azure.Authentication, extraUserAgent string) (*Client, er
 	sc := network.NewSubnetsClientWithBaseURI(azAuth.ResourceManagerEndpoint, azAuth.SubscriptionID)
 	sc.Authorizer = networkAuth
 
-	profileClient := network.NewProfilesClientWithBaseURI(azAuth.ResourceManagerEndpoint, azAuth.SubscriptionID)
-	sc.Authorizer = networkAuth
-
 	return &Client{
-		sc:            sc,
-		hc:            client.HTTPClient,
-		profileClient: profileClient,
-		auth:          azAuth,
+		sc:   sc,
+		hc:   client.HTTPClient,
+		auth: azAuth,
 	}, nil
 }
 

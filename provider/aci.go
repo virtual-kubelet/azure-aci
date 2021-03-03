@@ -421,7 +421,7 @@ func (p *ACIProvider) setupNetworkProfile(ctx context.Context, auth *client.Auth
 	}
 
 	createSubnet := true
-	subnet, err := c.GetSubnet(ctx, p.vnetResourceGroup, p.vnetName, p.subnetName)
+	subnet, err := c.GetSubnet(p.vnetResourceGroup, p.vnetName, p.subnetName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
@@ -461,7 +461,7 @@ func (p *ACIProvider) setupNetworkProfile(ctx context.Context, auth *client.Auth
 
 	if createSubnet {
 		subnet = network.NewSubnetWithContainerInstanceDelegation(p.subnetName, p.subnetCIDR)
-		subnet, err = c.CreateOrUpdateSubnet(ctx, p.vnetResourceGroup, p.vnetName, subnet)
+		subnet, err = c.CreateOrUpdateSubnet(p.vnetResourceGroup, p.vnetName, subnet)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
@@ -470,7 +470,7 @@ func (p *ACIProvider) setupNetworkProfile(ctx context.Context, auth *client.Auth
 		p.networkProfileName = getNetworkProfileName(*subnet.ID)
 	}
 
-	profile, err := c.GetProfile(ctx, p.resourceGroup, p.networkProfileName)
+	profile, err := c.GetProfile(p.resourceGroup, p.networkProfileName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up network profile: %v", err)
 	}
@@ -487,7 +487,7 @@ func (p *ACIProvider) setupNetworkProfile(ctx context.Context, auth *client.Auth
 
 	// at this point, profile should be nil
 	profile = network.NewNetworkProfile(p.networkProfileName, p.region, *subnet.ID)
-	profile, err = c.CreateOrUpdateProfile(ctx, p.resourceGroup, profile)
+	profile, err = c.CreateOrUpdateProfile(p.resourceGroup, profile)
 	if err != nil {
 		return err
 	}
