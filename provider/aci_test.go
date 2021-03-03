@@ -1037,11 +1037,10 @@ func TestGetPodWithContainerID(t *testing.T) {
 	}
 
 	assert.Check(t, pod != nil, "Response pod should not be nil")
-	//TODO: Adddddddddddd!
-	// assert.Check(t, is.Equal(1, len(pod.Status.ContainerStatuses)), "1 container status is expected")
-	// assert.Check(t, is.Equal(containerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
-	// assert.Check(t, is.Equal(containerImage, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
-	// assert.Check(t, is.Equal(getContainerID(cgID, containerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
+	assert.Check(t, is.Equal(1, len(pod.Status.ContainerStatuses)), "1 container status is expected")
+	assert.Check(t, is.Equal(containerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
+	assert.Check(t, is.Equal(containerImage, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
+	assert.Check(t, is.Equal(getContainerID(cgID, containerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
 }
 
 func TestPodToACISecretEnvVar(t *testing.T) {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/golang/glog"
 	"go.opencensus.io/plugin/ochttp/propagation/b3"
 
 	"go.opencensus.io/plugin/ochttp"
@@ -13,7 +12,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/preview/monitor/mgmt/2019-06-01/insights"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
-	"github.com/Azure/go-autorest/autorest/azure"
 	azureaciclient "github.com/virtual-kubelet/azure-aci/client"
 )
 
@@ -56,33 +54,32 @@ func NewClient(auth *azureaciclient.Authentication, extraUserAgent string) (*Cli
 	}
 
 	var authorizer autorest.Authorizer
-	cloudEnv, err := azure.EnvironmentFromName(auth.AzureCloud)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get cloudEnv: %s", err)
-	}
-	if auth.UseUserIdentity {
-		glog.Infof("using MSI")
-		msiEP, err := adal.GetMSIVMEndpoint()
+	if !auth.UseUserIdentity {
+		config, err := adal.NewOAuthConfig(auth.ActiveDirectoryEndpoint, auth.TenantID)
 		if err != nil {
-			return nil, fmt.Errorf("unable to get MSI endpoint: %s", err)
+			return nil, fmt.Errorf("Creating new OAuth config for active directory failed: %v", err)
 		}
 
-		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
-			msiEP, cloudEnv.ResourceManagerEndpoint, auth.UserIdentityClientId)
+		spt, err := adal.NewServicePrincipalToken(*config, auth.ClientID, auth.ClientSecret, auth.ResourceManagerEndpoint)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create MSI authorizer: %s", err)
+			return nil, fmt.Errorf("Creating new service principal token failed: %v", err)
 		}
 
 		authorizer = autorest.NewBearerAuthorizer(spt)
 	} else {
-		oauthConfig, err := adal.NewOAuthConfig(cloudEnv.ActiveDirectoryEndpoint, auth.TenantID)
+		endpoint, err := adal.GetMSIVMEndpoint()
 		if err != nil {
-			return nil, fmt.Errorf("unable to create oauth config: %s", err)
+			return nil, fmt.Errorf("Unable to retrieve managed identity endpoint: %v", err)
 		}
-		spt, err := adal.NewServicePrincipalToken(*oauthConfig, auth.ClientID, auth.ClientSecret, cloudEnv.ResourceManagerEndpoint)
+
+		spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(
+			endpoint,
+			auth.ManagementEndpoint,
+			auth.UserIdentityClientId)
 		if err != nil {
-			return nil, fmt.Errorf("unable to create service principal token: %s", err)
+			return nil, fmt.Errorf("Unable to create token provider with managed identity: %v", err)
 		}
+
 		authorizer = autorest.NewBearerAuthorizer(spt)
 	}
 

@@ -1834,7 +1834,6 @@ func podStatusFromContainerGroup(cg *containerinstance.ContainerGroup) *v1.PodSt
 	containerStatuses := make([]v1.ContainerStatus, 0, len(*cg.Containers))
 
 	firstContainer := (*cg.Containers)[0]
-	//TODO: refine!!
 	allReady := true
 	var firstContainerStartTime, lastUpdateTime metav1.Time
 	if firstContainer.ContainerProperties.InstanceView != nil {
@@ -1842,42 +1841,48 @@ func podStatusFromContainerGroup(cg *containerinstance.ContainerGroup) *v1.PodSt
 			firstContainer.ContainerProperties.InstanceView.CurrentState.StartTime != nil {
 			firstContainerStartTime = metav1.NewTime(firstContainer.ContainerProperties.InstanceView.CurrentState.StartTime.ToTime())
 		}
-		lastUpdateTime := firstContainerStartTime
-		for _, c := range *cg.Containers {
-			var containerStartTime metav1.Time
-			var previousState, currentState containerinstance.ContainerState
-			if c.ContainerProperties.InstanceView != nil &&
-				c.ContainerProperties.InstanceView.CurrentState != nil &&
-				c.ContainerProperties.InstanceView.CurrentState.StartTime != nil {
-				currentState = *c.ContainerProperties.InstanceView.CurrentState
-				containerStartTime = metav1.NewTime(c.ContainerProperties.InstanceView.CurrentState.StartTime.ToTime())
-			}
-			if c.ContainerProperties.InstanceView != nil &&
-				c.ContainerProperties.InstanceView.PreviousState != nil {
-				previousState = *c.ContainerProperties.InstanceView.PreviousState
-			}
-			containerStatus := v1.ContainerStatus{
-				Name:                 to.String(c.Name),
-				State:                aciContainerStateToContainerState(currentState),
-				LastTerminationState: aciContainerStateToContainerState(previousState),
-				Ready:                aciStateToPodPhase(to.String(currentState.State)) == v1.PodRunning,
-				RestartCount:         to.Int32(c.InstanceView.RestartCount),
-				Image:                to.String(c.Image),
-				ImageID:              "",
-				ContainerID:          getContainerID(to.String(cg.ID), to.String(c.Name)),
-			}
+		lastUpdateTime = firstContainerStartTime
+	}
+	for _, c := range *cg.Containers {
+		var containerStartTime metav1.Time
+		var previousState, currentState containerinstance.ContainerState
+		var restartCount int32
 
-			if aciStateToPodPhase(to.String(currentState.State)) != v1.PodRunning &&
-				aciStateToPodPhase(to.String(currentState.State)) != v1.PodSucceeded {
-				allReady = false
-			}
-			if containerStartTime.Time.After(lastUpdateTime.Time) {
-				lastUpdateTime = containerStartTime
-			}
-
-			// Add to containerStatuses
-			containerStatuses = append(containerStatuses, containerStatus)
+		if c.ContainerProperties.InstanceView != nil &&
+			c.ContainerProperties.InstanceView.CurrentState != nil &&
+			c.ContainerProperties.InstanceView.CurrentState.StartTime != nil {
+			currentState = *c.ContainerProperties.InstanceView.CurrentState
+			containerStartTime = metav1.NewTime(c.ContainerProperties.InstanceView.CurrentState.StartTime.ToTime())
 		}
+		if c.ContainerProperties.InstanceView != nil &&
+			c.ContainerProperties.InstanceView.PreviousState != nil {
+			previousState = *c.ContainerProperties.InstanceView.PreviousState
+		}
+		if c.ContainerProperties.InstanceView != nil &&
+			c.ContainerProperties.InstanceView.RestartCount != nil {
+			restartCount = *c.ContainerProperties.InstanceView.RestartCount
+		}
+		containerStatus := v1.ContainerStatus{
+			Name:                 to.String(c.Name),
+			State:                aciContainerStateToContainerState(currentState),
+			LastTerminationState: aciContainerStateToContainerState(previousState),
+			Ready:                aciStateToPodPhase(to.String(currentState.State)) == v1.PodRunning,
+			RestartCount:         restartCount,
+			Image:                to.String(c.Image),
+			ImageID:              "",
+			ContainerID:          getContainerID(to.String(cg.ID), to.String(c.Name)),
+		}
+
+		if aciStateToPodPhase(to.String(currentState.State)) != v1.PodRunning &&
+			aciStateToPodPhase(to.String(currentState.State)) != v1.PodSucceeded {
+			allReady = false
+		}
+		if containerStartTime.Time.After(lastUpdateTime.Time) {
+			lastUpdateTime = containerStartTime
+		}
+
+		// Add to containerStatuses
+		containerStatuses = append(containerStatuses, containerStatus)
 	}
 
 	ip := ""
