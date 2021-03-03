@@ -19,5 +19,5 @@ func (c *Client) GetContainerLogs(ctx context.Context, resourceGroup, containerG
 		return nil, err
 	}
 
-	return &result, nil //TODO: no &
+	return &result, nil
 }
