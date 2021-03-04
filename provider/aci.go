@@ -121,6 +121,7 @@ var validAciRegions = []string{
 	"centralindia",
 	"centralus",
 	"centraluseuap",
+	"chinaeast2",
 	"eastasia",
 	"eastus",
 	"eastus2",
@@ -546,7 +547,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 		APIVersion: "v1",
 		Kind:       "Config",
 		Clusters: []clientcmdapiv1.NamedCluster{
-			clientcmdapiv1.NamedCluster{
+			{
 				Name: name,
 				Cluster: clientcmdapiv1.Cluster{
 					Server:                   masterURI,
@@ -555,7 +556,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 			},
 		},
 		AuthInfos: []clientcmdapiv1.NamedAuthInfo{
-			clientcmdapiv1.NamedAuthInfo{
+			{
 				Name: name,
 				AuthInfo: clientcmdapiv1.AuthInfo{
 					ClientCertificate:     authInfo.ClientCertificate,
@@ -569,7 +570,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 			},
 		},
 		Contexts: []clientcmdapiv1.NamedContext{
-			clientcmdapiv1.NamedContext{
+			{
 				Name: name,
 				Context: clientcmdapiv1.Context{
 					Cluster:  name,
@@ -1900,15 +1901,15 @@ func aciStateToPodConditions(state string, creationTime, lastUpdateTime metav1.T
 		}
 
 		return []v1.PodCondition{
-			v1.PodCondition{
+			{
 				Type:               v1.PodReady,
 				Status:             readyConditionStatus,
 				LastTransitionTime: readyConditionTime,
-			}, v1.PodCondition{
+			}, {
 				Type:               v1.PodInitialized,
 				Status:             v1.ConditionTrue,
 				LastTransitionTime: creationTime,
-			}, v1.PodCondition{
+			}, {
 				Type:               v1.PodScheduled,
 				Status:             v1.ConditionTrue,
 				LastTransitionTime: creationTime,
