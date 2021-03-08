@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -94,6 +95,7 @@ type ACIProvider struct {
 	kubeProxyExtension *aci.Extension
 	kubeDNSIP          string
 	extraUserAgent     string
+	retryConfig        client.HTTPRetryConfig
 
 	metricsSync     sync.Mutex
 	metricsSyncTime time.Time
@@ -256,7 +258,40 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 
 	p.extraUserAgent = os.Getenv("ACI_EXTRA_USER_AGENT")
 
-	p.aciClient, err = aci.NewClient(azAuth, p.extraUserAgent)
+	retryWaitMin := client.DefaultRetryIntervalMin
+	if value := os.Getenv("RETRY_MINIMUM_INTERVAL_IN_SECOND"); value != "" {
+		ret, err := strconv.Atoi(value)
+		if err == nil {
+			return nil, fmt.Errorf("env RETRY_MINIMUM_INTERVAL_IN_SECOND is not able to convert to int, err: %s", err)
+		}
+		retryWaitMin = time.Duration(ret) * time.Second
+	}
+
+	retryWaitMax := client.DefaultRetryIntervalMax
+	if value := os.Getenv("RETRY_MAXIMUM_INTERVAL_IN_SECOND"); value != "" {
+		ret, err := strconv.Atoi(value)
+		if err == nil {
+			return nil, fmt.Errorf("env RETRY_MAXIMUM_INTERVAL_IN_SECOND is not able to convert to int, err: %s", err)
+		}
+		retryWaitMax = time.Duration(ret) * time.Second
+	}
+
+	retryMax := client.DefaultRetryMax
+	if value := os.Getenv("RETRY_MAXIMUM_COUNT"); value != "" {
+		ret, err := strconv.Atoi(value)
+		if err == nil {
+			return nil, fmt.Errorf("env RETRY_MAXIMUM_COUNT is not able to convert to int, err: %s", err)
+		}
+		retryMax = ret
+	}
+
+	p.retryConfig = client.HTTPRetryConfig{
+		RetryWaitMin: retryWaitMin,
+		RetryWaitMax: retryWaitMax,
+		RetryMax:     retryMax,
+	}
+
+	p.aciClient, err = aci.NewClient(azAuth, p.extraUserAgent, p.retryConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -413,7 +448,7 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 }
 
 func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
-	c, err := network.NewClient(auth, p.extraUserAgent)
+	c, err := network.NewClient(auth, p.extraUserAgent, p.retryConfig)
 	if err != nil {
 		return fmt.Errorf("error creating azure networking client: %v", err)
 	}
