@@ -14,6 +14,12 @@ var (
 	resourceGroup = "virtual-kubelet-tests"
 )
 
+var defaultRetryConfig = azure.HTTPRetryConfig{
+	RetryWaitMin: azure.DefaultRetryIntervalMin,
+	RetryWaitMax: azure.DefaultRetryIntervalMax,
+	RetryMax:     azure.DefaultRetryMax,
+}
+
 func init() {
 	// Create a resource group name with uuid.
 	uid := uuid.New()
@@ -26,7 +32,7 @@ func TestNewClient(t *testing.T) {
 		t.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
 
-	c, err := NewClient(auth, "unit-test")
+	c, err := NewClient(auth, "unit-test", defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
