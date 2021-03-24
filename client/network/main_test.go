@@ -18,6 +18,12 @@ var (
 	testAuth      *azure.Authentication
 )
 
+var defaultRetryConfig = azure.HTTPRetryConfig{
+	RetryWaitMin: azure.DefaultRetryIntervalMin,
+	RetryWaitMax: azure.DefaultRetryIntervalMax,
+	RetryMax:     azure.DefaultRetryMax,
+}
+
 func TestMain(m *testing.M) {
 	uid := uuid.New()
 	resourceGroup += "-" + uid.String()[0:6]
@@ -27,7 +33,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	c, err := resourcegroups.NewClient(testAuth, "unit-test")
+	c, err := resourcegroups.NewClient(testAuth, "unit-test", defaultRetryConfig)
 	if err != nil {
 		os.Exit(1)
 	}
@@ -68,7 +74,7 @@ func newTestClient(t *testing.T) *Client {
 	if err := setupAuth(); err != nil {
 		t.Fatal(err)
 	}
-	c, err := NewClient(testAuth, "unit-test")
+	c, err := NewClient(testAuth, "unit-test", defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
