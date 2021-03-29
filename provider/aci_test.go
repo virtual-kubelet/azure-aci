@@ -834,7 +834,7 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*AC
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
 
-	rm, err := manager.NewResourceManager(nil, nil, nil, nil)
+	rm, err := manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
 
 	if err != nil {
 		return nil, err
