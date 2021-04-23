@@ -21,9 +21,9 @@ safebuild:
 build: bin/virtual-kubelet
 
 .PHONY: clean
-clean: files := bin/virtual-kubelet
+clean: files := bin/virtual-kubelet bin/virtual-kubelet.tgz
 clean:
-	@rm $(files) &>/dev/null || exit 0
+	@rm -f $(files) &>/dev/null || exit 0
 
 .PHONY: test
 test:
@@ -71,4 +71,8 @@ bin/%:
 helm: bin/virtual-kubelet.tgz
 
 bin/virtual-kubelet.tgz:
-	rm -rf /tmp/virtual-kubelet && mkdir /tmp/virtual-kubelet && cp -r helm/* /tmp/virtual-kubelet/ &&  tar -zcvf bin/virtual-kubelet.tgz -C /tmp virtual-kubelet
+	rm -rf /tmp/virtual-kubelet
+	mkdir /tmp/virtual-kubelet
+	cp -r helm/* /tmp/virtual-kubelet/
+	mkdir -p bin
+	tar -zcvf bin/virtual-kubelet.tgz -C /tmp virtual-kubelet

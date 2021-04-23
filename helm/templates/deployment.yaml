@@ -91,14 +91,14 @@ spec:
         - name: ACI_SUBNET_CIDR
           value: {{ .vnet.subnetCidr }}
         - name: MASTER_URI
-          value: {{ required "masterUri is required" .masterUri }}
+          value: {{ required "masterUri is required" .masterUri | quote }}
         - name: CLUSTER_CIDR
           value: {{ .vnet.clusterCidr }}
         - name: KUBE_DNS_IP
           value: {{ .vnet.kubeDnsIp }}
 {{- else }}
         - name: MASTER_URI
-          value: {{ .masterUri }}
+          value: {{ .masterUri | quote }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -122,9 +122,9 @@ spec:
           "--provider", "{{ required "You must specify a Virtual Kubelet provider" .Values.provider }}",
           "--namespace", "{{ .Values.monitoredNamespace }}",
           "--nodename", "{{ required "nodeName is required" .Values.nodeName }}",
-          {{- if .Values.logLevel }}
+{{- if .Values.logLevel }}
           "--log-level", "{{.Values.logLevel}}",
-          {{- end }}
+{{- end }}
 {{- if ne .Values.trace.exporter "" }}
           "--trace-exporter", "{{ .Values.trace.exporter }}",
 {{- if gt .Values.trace.sampleRate 0.0 }}
