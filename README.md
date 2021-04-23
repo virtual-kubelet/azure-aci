@@ -194,8 +194,7 @@ export VK_RELEASE=virtual-kubelet-latest
 Grab the public master URI for your Kubernetes cluster and save the value.
 
 ```bash
-kubectl cluster-info
-export MASTER_URI=<Kubernetes Master>
+export MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 ```
 
 If your cluster is an AKS cluster:
