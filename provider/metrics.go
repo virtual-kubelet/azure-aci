@@ -8,11 +8,12 @@ import (
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // GetStatsSummary returns the stats summary for pods running on ACI
@@ -52,7 +53,11 @@ func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summa
 		p.metricsSyncTime = time.Now()
 	}()
 
-	pods := p.resourceManager.GetPods()
+	pods, err := p.podsL.List(labels.Everything())
+	if err != nil {
+		log.G(ctx).WithError(err).Error("Error fetching pods")
+		pods = make([]*v1.Pod, 0)
+	}
 
 	var errGroup errgroup.Group
 	chResult := make(chan stats.PodStats, len(pods))

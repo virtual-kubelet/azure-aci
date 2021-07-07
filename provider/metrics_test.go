@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/virtual-kubelet/azure-aci/client/aci"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 )
 
 func TestCollectMetrics(t *testing.T) {

@@ -20,14 +20,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cpuguy83/dockercfg"
 	"github.com/gorilla/websocket"
 	client "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/azure-aci/client/network"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
+	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -35,11 +37,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
-	credconfig "k8s.io/kubernetes/pkg/credentialprovider"
-	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 )
 
 const (
@@ -71,8 +72,12 @@ const (
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
-	aciClient          *aci.Client
-	resourceManager    *manager.ResourceManager
+	aciClient *aci.Client
+
+	secretL corev1listers.SecretLister
+	configL corev1listers.ConfigMapLister
+	podsL   corev1listers.PodLister
+
 	resourceGroup      string
 	region             string
 	nodeName           string
@@ -162,11 +167,14 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
+func NewACIProvider(config string, pCfg nodeutil.ProviderConfig, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
 	var p ACIProvider
 	var err error
 
-	p.resourceManager = rm
+	p.configL = pCfg.ConfigMaps
+	p.secretL = pCfg.Secrets
+	p.podsL = pCfg.Pods
+
 	p.clusterDomain = clusterDomain
 
 	if config != "" {
@@ -323,7 +331,7 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 			p.diagnostics.LogAnalytics.LogType = aci.LogAnlyticsLogTypeContainerInsights
 			p.diagnostics.LogAnalytics.Metadata = map[string]string{
 				aci.LogAnalyticsMetadataKeyClusterResourceID: clusterResourceID,
-				aci.LogAnalyticsMetadataKeyNodeName:          nodeName,
+				aci.LogAnalyticsMetadataKeyNodeName:          pCfg.Node.Name,
 			}
 		}
 	}
@@ -352,8 +360,8 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		return nil, err
 	}
 
-	p.operatingSystem = operatingSystem
-	p.nodeName = nodeName
+	p.operatingSystem = strings.Title(pCfg.Node.Status.NodeInfo.OperatingSystem)
+	p.nodeName = pCfg.Node.Name
 	p.internalIP = internalIP
 	p.daemonEndpointPort = daemonEndpointPort
 
@@ -1174,7 +1182,7 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 	// Capture the notifier to be used for communicating updates to VK
 	p.tracker = &PodsTracker{
-		rm:       p.resourceManager,
+		pods:     p.podsL,
 		updateCb: notifierCb,
 		handler:  p,
 	}
@@ -1322,7 +1330,7 @@ func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCredential, error) {
 	ips := make([]aci.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	for _, ref := range pod.Spec.ImagePullSecrets {
-		secret, err := p.resourceManager.GetSecret(ref.Name, pod.Namespace)
+		secret, err := p.secretL.Secrets(pod.Namespace).Get(ref.Name)
 		if err != nil {
 			return ips, err
 		}
@@ -1378,15 +1386,25 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageReg
 	return &cred, nil
 }
 
-func makeRegistryCredentialFromDockerConfig(server string, configEntry credconfig.DockerConfigEntry) (*aci.ImageRegistryCredential, error) {
+func makeRegistryCredentialFromDockerConfig(server string, configEntry dockercfg.AuthConfig) (*aci.ImageRegistryCredential, error) {
 	if configEntry.Username == "" {
 		return nil, fmt.Errorf("no username present in auth config for server: %s", server)
 	}
 
+	u := configEntry.Username
+	p := configEntry.Password
+	if configEntry.Auth != "" {
+		var err error
+		u, p, err = dockercfg.DecodeBase64Auth(configEntry)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding docker auth: %w", err)
+		}
+	}
+
 	cred := aci.ImageRegistryCredential{
 		Server:   server,
-		Username: configEntry.Username,
-		Password: configEntry.Password,
+		Username: u,
+		Password: p,
 	}
 
 	return &cred, nil
@@ -1427,15 +1445,15 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	}
 
 	// Will use K8s config models to handle marshaling (including auth field handling).
-	var cfgJson credconfig.DockerConfigJson
+	var cfgJson dockercfg.Config
 
 	err = json.Unmarshal(repoData, &cfgJson)
 	if err != nil {
 		return ips, err
 	}
 
-	auths := cfgJson.Auths
-	if len(cfgJson.Auths) == 0 {
+	auths := cfgJson.AuthConfigs
+	if len(auths) == 0 {
 		return ips, fmt.Errorf("malformed dockerconfigjson in secret")
 	}
 
@@ -1654,7 +1672,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 	for _, v := range pod.Spec.Volumes {
 		// Handle the case for the AzureFile volume.
 		if v.AzureFile != nil {
-			secret, err := p.resourceManager.GetSecret(v.AzureFile.SecretName, pod.Namespace)
+			secret, err := p.secretL.Secrets(pod.Namespace).Get(v.AzureFile.SecretName)
 			if err != nil {
 				return volumes, err
 			}
@@ -1700,7 +1718,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 		// Handle the case for Secret volume.
 		if v.Secret != nil {
 			paths := make(map[string]string)
-			secret, err := p.resourceManager.GetSecret(v.Secret.SecretName, pod.Namespace)
+			secret, err := p.secretL.Secrets(pod.Namespace).Get(v.Secret.SecretName)
 			if v.Secret.Optional != nil && !*v.Secret.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("Secret %s is required by Pod %s and does not exist", v.Secret.SecretName, pod.Name)
 			}
@@ -1724,7 +1742,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 		// Handle the case for ConfigMap volume.
 		if v.ConfigMap != nil {
 			paths := make(map[string]string)
-			configMap, err := p.resourceManager.GetConfigMap(v.ConfigMap.Name, pod.Namespace)
+			configMap, err := p.configL.ConfigMaps(pod.Namespace).Get(v.ConfigMap.Name)
 			if v.ConfigMap.Optional != nil && !*v.ConfigMap.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", v.ConfigMap.Name, pod.Name)
 			}

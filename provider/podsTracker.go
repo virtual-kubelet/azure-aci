@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/virtual-kubelet/node-cli/manager"
 	errdef "github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 )
 
 const (
@@ -34,9 +35,9 @@ type PodsTrackerHandler interface {
 }
 
 type PodsTracker struct {
-	rm       *manager.ResourceManager
 	updateCb func(*v1.Pod)
 	handler  PodsTrackerHandler
+	pods     corev1listers.PodLister
 }
 
 // StartTracking starts the background tracking for created pods.
@@ -66,9 +67,18 @@ func (pt *PodsTracker) StartTracking(ctx context.Context) {
 	}
 }
 
+func (pt *PodsTracker) getPods() []*v1.Pod {
+	ls, err := pt.pods.List(labels.Everything())
+	if err == nil {
+		return ls
+	}
+	log.G(context.TODO()).WithError(err).Error("Failed to fetch pods from lister")
+	return make([]*v1.Pod, 0)
+}
+
 // UpdatePodStatus updates the status of a pod, by posting to update callback.
 func (pt *PodsTracker) UpdatePodStatus(ns, name string, updateHandler func(*v1.PodStatus), forceUpdate bool) error {
-	k8sPods := pt.rm.GetPods()
+	k8sPods := pt.getPods()
 	pod := getPodFromList(k8sPods, ns, name)
 
 	if pod == nil {
@@ -89,7 +99,7 @@ func (pt *PodsTracker) updatePodsLoop(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.updatePods")
 	defer span.End()
 
-	k8sPods := pt.rm.GetPods()
+	k8sPods := pt.getPods()
 	for _, pod := range k8sPods {
 		updatedPod := pod.DeepCopy()
 		ok := pt.processPodUpdates(ctx, updatedPod)
@@ -103,7 +113,7 @@ func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.cleanupDanglingPods")
 	defer span.End()
 
-	k8sPods := pt.rm.GetPods()
+	k8sPods := pt.getPods()
 	activePods, err := pt.handler.ListActivePods(ctx)
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("failed to retrive active container groups list")
