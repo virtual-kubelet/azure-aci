@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/virtual-kubelet/node-cli/provider"
 )
 
 type providerConfig struct {
@@ -20,6 +18,11 @@ type providerConfig struct {
 	SubnetName         string
 	SubnetCIDR         string
 	NetworkProfileName string
+}
+
+var validOS = map[string]bool{
+	"Linux":   true,
+	"Windows": true,
 }
 
 func (p *ACIProvider) loadConfig(r io.Reader) error {
@@ -48,12 +51,12 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 
 	// Default to Linux if the operating system was not defined in the config.
 	if config.OperatingSystem == "" {
-		config.OperatingSystem = provider.OperatingSystemLinux
+		config.OperatingSystem = "Linux"
 	} else {
 		// Validate operating system from config.
-		ok := provider.ValidOperatingSystems[config.OperatingSystem]
+		ok := validOS[config.OperatingSystem]
 		if !ok {
-			return fmt.Errorf("%q is not a valid operating system, try one of the following instead: %s", config.OperatingSystem, strings.Join(provider.ValidOperatingSystems.Names(), " | "))
+			return fmt.Errorf("%q is not a valid operating system", config.OperatingSystem)
 		}
 	}
 

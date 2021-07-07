@@ -19,7 +19,7 @@ import (
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
-	"github.com/virtual-kubelet/node-cli/manager"
+	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
@@ -834,13 +834,12 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*AC
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
 
-	rm, err := manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
+	cfg := nodeutil.ProviderConfig{}
+	cfg.Node = &v1.Node{}
+	cfg.Node.Name = fakeNodeName
+	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
 
-	if err != nil {
-		return nil, err
-	}
-
-	provider, err := NewACIProvider("example.toml", rm, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider("example.toml", cfg, "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}
