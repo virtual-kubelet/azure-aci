@@ -1,6 +1,6 @@
 module github.com/virtual-kubelet/azure-aci
 
-go 1.13
+go 1.16
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.4.12
@@ -13,7 +13,7 @@ require (
 	github.com/dimchansky/utfbom v1.1.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
-	github.com/gorilla/websocket v1.4.0
+	github.com/gorilla/websocket v1.4.1
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/virtual-kubelet/node-cli v0.6.0
