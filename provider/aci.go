@@ -87,6 +87,7 @@ type ACIProvider struct {
 	subnetName         string
 	subnetCIDR         string
 	networkProfileName string
+	vnetSubscriptionID string
 	vnetName           string
 	vnetResourceGroup  string
 	networkProfile     string
@@ -216,13 +217,6 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		}
 	}
 
-	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
-		p.vnetName = vnetName
-	}
-	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
-		p.vnetResourceGroup = vnetResourceGroup
-	}
-
 	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
 		azAuth.ClientID = clientID
 	}
@@ -315,6 +309,18 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 	p.internalIP = internalIP
 	p.daemonEndpointPort = daemonEndpointPort
 
+	// the VNET subscription ID defaultly is authentication subscription ID.
+	// We need to override when using cross subscription virtual network resource
+	p.vnetSubscriptionID = azAuth.SubscriptionID
+	if vnetSubscriptionID := os.Getenv("ACI_VNET_SUBSCRIPTION_ID"); vnetSubscriptionID != "" {
+		p.vnetSubscriptionID = vnetSubscriptionID
+	}
+	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
+		p.vnetName = vnetName
+	}
+	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
+		p.vnetResourceGroup = vnetResourceGroup
+	}
 	if subnetName := os.Getenv("ACI_SUBNET_NAME"); p.vnetName != "" && subnetName != "" {
 		p.subnetName = subnetName
 	}
@@ -415,12 +421,12 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 	}
 
 	createSubnet := true
-	subnet, err := c.GetSubnet(p.vnetResourceGroup, p.vnetName, p.subnetName)
+	subnet, err := c.GetSubnet(p.vnetSubscriptionID, p.vnetResourceGroup, p.vnetName, p.subnetName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
 	if network.IsNotFound(err) && p.subnetCIDR == "" {
-		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subnet CIDR is not specified", p.subnetName, p.vnetName, p.vnetResourceGroup)
+		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", p.subnetName, p.vnetName, p.vnetResourceGroup, p.vnetSubscriptionID)
 	}
 	if err == nil {
 		if p.subnetCIDR == "" {
@@ -455,7 +461,7 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 
 	if createSubnet {
 		subnet = network.NewSubnetWithContainerInstanceDelegation(p.subnetName, p.subnetCIDR)
-		subnet, err = c.CreateOrUpdateSubnet(p.vnetResourceGroup, p.vnetName, subnet)
+		subnet, err = c.CreateOrUpdateSubnet(p.vnetSubscriptionID, p.vnetResourceGroup, p.vnetName, subnet)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}

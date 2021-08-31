@@ -43,7 +43,7 @@ func NewSubnetWithContainerInstanceDelegation(name, addressPrefix string) *netwo
 }
 
 // GetSubnet gets the subnet from the specified resourcegroup/vnet
-func (c *Client) GetSubnet(resourceGroup, vnet, name string) (*network.Subnet, error) {
+func (c *Client) GetSubnet(subscriptionID, resourceGroup, vnet, name string) (*network.Subnet, error) {
 	urlParams := url.Values{
 		"api-version": []string{apiVersion},
 	}
@@ -58,7 +58,7 @@ func (c *Client) GetSubnet(resourceGroup, vnet, name string) (*network.Subnet, e
 	}
 
 	if err := api.ExpandURL(req.URL, map[string]string{
-		"subscriptionId":    c.auth.SubscriptionID,
+		"subscriptionId":    subscriptionID,
 		"resourceGroupName": resourceGroup,
 		"subnetName":        name,
 		"vnetName":          vnet,
@@ -86,7 +86,7 @@ func (c *Client) GetSubnet(resourceGroup, vnet, name string) (*network.Subnet, e
 }
 
 // CreateOrUpdateSubnet creates a new or updates an existing subnet in the defined resourcegroup/vnet
-func (c *Client) CreateOrUpdateSubnet(resourceGroup, vnet string, s *network.Subnet) (*network.Subnet, error) {
+func (c *Client) CreateOrUpdateSubnet(subscriptionID, resourceGroup, vnet string, s *network.Subnet) (*network.Subnet, error) {
 	urlParams := url.Values{
 		"api-version": []string{apiVersion},
 	}
@@ -108,7 +108,7 @@ func (c *Client) CreateOrUpdateSubnet(resourceGroup, vnet string, s *network.Sub
 
 	// Add the parameters to the url.
 	if err := api.ExpandURL(req.URL, map[string]string{
-		"subscriptionId":    c.auth.SubscriptionID,
+		"subscriptionId":    subscriptionID,
 		"resourceGroupName": resourceGroup,
 		"subnetName":        *s.Name,
 		"vnetName":          vnet,

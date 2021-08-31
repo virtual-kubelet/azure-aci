@@ -27,7 +27,7 @@ func TestCreateGetProfile(t *testing.T) {
 
 	subnet := NewSubnetWithContainerInstanceDelegation(t.Name(), "10.0.0.0/24")
 
-	subnet, err := c.CreateOrUpdateSubnet(resourceGroup, t.Name(), subnet)
+	subnet, err := c.CreateOrUpdateSubnet(c.auth.SubscriptionID, resourceGroup, t.Name(), subnet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestCreateGetProfile(t *testing.T) {
 		t.Fatal("got unexpected subnet")
 	}
 
-	subnet, err = c.GetSubnet(resourceGroup, t.Name(), t.Name())
+	subnet, err = c.GetSubnet(c.auth.SubscriptionID, resourceGroup, t.Name(), t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
