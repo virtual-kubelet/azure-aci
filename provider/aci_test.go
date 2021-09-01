@@ -26,6 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+
+	"github.com/golang/mock/gomock"
+	. "github.com/onsi/ginkgo"
 )
 
 const (
@@ -225,7 +228,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 		return http.StatusOK, manifest
 	}
 
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil)
 	if err != nil {
 		t.Fatalf("failed to create the test provider. %s", err.Error())
 		return
@@ -303,7 +306,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		return http.StatusOK, manifest
 	}
 
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil)
 	if err != nil {
 		t.Fatalf("failed to create the test provider. %s", err.Error())
 		return
@@ -796,7 +799,7 @@ func prepareMocks() (*AADMock, *ACIMock, *ACIProvider, error) {
 		return http.StatusOK, manifest
 	}
 
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create the test provider %s", err.Error())
 	}
@@ -804,7 +807,7 @@ func prepareMocks() (*AADMock, *ACIMock, *ACIProvider, error) {
 	return aadServerMocker, aciServerMocker, provider, nil
 }
 
-func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*ACIProvider, error) {
+func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock, resourceManager *manager.ResourceManager) (*ACIProvider, error) {
 	auth := azure.NewAuthentication(
 		azure.PublicCloud.Name,
 		fakeClientID,
@@ -834,13 +837,15 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*AC
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
 
-	rm, err := manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
+	if resourceManager == nil {
+		resourceManager, err = manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
 
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	provider, err := NewACIProvider("example.toml", rm, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider("example.toml", resourceManager, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}
@@ -1052,6 +1057,129 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 						TimeoutSeconds:      60,
 						SuccessThreshold:    3,
 						FailureThreshold:    5,
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
+	}
+}
+
+func TestCreatePodWithProjectedVolume(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aadServerMocker := NewAADMock()
+	aciServerMocker := NewACIMock()
+
+	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
+		manifest := &aci.ResourceProviderManifest{
+			Metadata: &aci.ResourceProviderMetadata{
+				GPURegionalSKUs: []*aci.GPURegionalSKU{
+					&aci.GPURegionalSKU{
+						Location: fakeRegion,
+						SKUs:     []aci.GPUSKU{aci.K80, aci.P100, aci.V100},
+					},
+				},
+			},
+		}
+
+		return http.StatusOK, manifest
+	}
+
+	mockCtrl := gomock.NewController(GinkgoT())
+	podLister := NewMockPodLister(mockCtrl)
+	secretLister := NewMockSecretLister(mockCtrl)
+	configMapLister := NewMockConfigMapLister(mockCtrl)
+	serviceLister := NewMockServiceLister(mockCtrl)
+	pvcLister := NewMockPersistentVolumeClaimLister(mockCtrl)
+	pvLister := NewMockPersistentVolumeLister(mockCtrl)
+
+	resourceManager, err := manager.NewResourceManager(podLister, secretLister, configMapLister, serviceLister, pvcLister, pvLister)
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks for resourceManager", err)
+	}
+
+	configMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+	configMapLister.EXPECT().ConfigMaps(podNamespace).Return(configMapNamespaceLister)
+	configMapNamespaceLister.EXPECT().Get("kube-root-ca.crt").Return(&v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kube-root-ca.crt",
+		},
+		Data: map[string]string{
+			"ca.crt": "fake-ca-data",
+			"foo":    "bar",
+		},
+	}, nil)
+
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, resourceManager)
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal("projectedvolume", cg.Volumes[0].Name), "volume name doesn't match")
+		assert.Check(t, is.Equal(base64.StdEncoding.EncodeToString([]byte("fake-ca-data")), cg.Volumes[0].Secret["ca.crt"]), "configmap data doesn't match")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+					ReadinessProbe: &v1.Probe{
+						Handler: v1.Handler{
+							HTTPGet: &v1.HTTPGetAction{
+								Port: intstr.FromInt(8080),
+								Path: "/",
+							},
+						},
+						InitialDelaySeconds: 10,
+						PeriodSeconds:       5,
+						TimeoutSeconds:      60,
+						SuccessThreshold:    3,
+						FailureThreshold:    5,
+					},
+				},
+			},
+			Volumes: []v1.Volume{
+				{
+					Name: "projectedvolume",
+					VolumeSource: v1.VolumeSource{
+						Projected: &v1.ProjectedVolumeSource{
+							Sources: []v1.VolumeProjection{
+								{
+									ConfigMap: &v1.ConfigMapProjection{
+										LocalObjectReference: v1.LocalObjectReference{
+											Name: "kube-root-ca.crt",
+										},
+										Items: []v1.KeyToPath{
+											{
+												Key:  "ca.crt",
+												Path: "ca.crt",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},

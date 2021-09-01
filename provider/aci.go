@@ -1748,6 +1748,103 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 			continue
 		}
 
+		if v.Projected != nil {
+			log.G(context.TODO()).Info("Found projected volume")
+			paths := make(map[string]string)
+
+			for _, source := range v.Projected.Sources {
+				switch {
+				case source.ServiceAccountToken != nil:
+					// This is still stored in a secret, hence the dance to figure out what secret.
+					secrets, err := p.resourceManager.GetSecrets(pod.Namespace)
+					if err != nil {
+						return nil, err
+					}
+				Secrets:
+					for _, secret := range secrets {
+						if secret.Type != v1.SecretTypeServiceAccountToken {
+							continue
+						}
+						// annotation now needs to match the pod.ServiceAccountName
+						for k, a := range secret.ObjectMeta.Annotations {
+							if k == "kubernetes.io/service-account.name" && a == pod.Spec.ServiceAccountName {
+								for k, v := range secret.StringData {
+									data, err := base64.StdEncoding.DecodeString(v)
+									if err != nil {
+										return nil, err
+									}
+									paths[k] = string(data)
+								}
+
+								for k, v := range secret.Data {
+									paths[k] = base64.StdEncoding.EncodeToString(v)
+								}
+
+								break Secrets
+							}
+						}
+					}
+
+				case source.Secret != nil:
+					secret, err := p.resourceManager.GetSecret(source.Secret.Name, pod.Namespace)
+					if source.Secret.Optional != nil && !*source.Secret.Optional && k8serr.IsNotFound(err) {
+						return nil, fmt.Errorf("projected secret %s is required by pod %s and does not exist", source.Secret.Name, pod.Name)
+					}
+					if secret == nil {
+						continue
+					}
+
+					for _, keyToPath := range source.Secret.Items {
+						for k, v := range secret.StringData {
+							if keyToPath.Key == k {
+								data, err := base64.StdEncoding.DecodeString(v)
+								if err != nil {
+									return nil, err
+								}
+								paths[k] = string(data)
+							}
+						}
+
+						for k, v := range secret.Data {
+							if keyToPath.Key == k {
+								paths[k] = base64.StdEncoding.EncodeToString(v)
+							}
+						}
+					}
+
+				case source.ConfigMap != nil:
+					configMap, err := p.resourceManager.GetConfigMap(source.ConfigMap.Name, pod.Namespace)
+					if source.ConfigMap.Optional != nil && !*source.ConfigMap.Optional && k8serr.IsNotFound(err) {
+						return nil, fmt.Errorf("projected configMap %s is required by pod %s and does not exist", source.ConfigMap.Name, pod.Name)
+					}
+					if configMap == nil {
+						continue
+					}
+
+					for _, keyToPath := range source.ConfigMap.Items {
+						for k, v := range configMap.Data {
+							if keyToPath.Key == k {
+								paths[k] = base64.StdEncoding.EncodeToString([]byte(v))
+							}
+						}
+						for k, v := range configMap.BinaryData {
+							if keyToPath.Key == k {
+								paths[k] = base64.StdEncoding.EncodeToString(v)
+							}
+						}
+					}
+				}
+			}
+			if len(paths) != 0 {
+				volumes = append(volumes, aci.Volume{
+					Name:   v.Name,
+					Secret: paths,
+				})
+			}
+
+			continue
+		}
+
 		// If we've made it this far we have found a volume type that isn't supported
 		return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", pod.Name, v.Name)
 	}
