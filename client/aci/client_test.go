@@ -22,7 +22,7 @@ import (
 
 var (
 	client                   *Client
-	location                 = "westus"
+	location                 = "centraluseuap"
 	resourceGroup            = "virtual-kubelet-tests"
 	containerGroup           = "virtual-kubelet-test-container-group"
 	subscriptionID           string
@@ -267,6 +267,7 @@ func TestCreateContainerGroup(t *testing.T) {
 	}
 }
 
+/*
 func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
@@ -315,6 +316,7 @@ func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 		t.Fatalf("expected NetworkProfileNotFound to be in the error message but got: %v", err)
 	}
 }
+*/
 
 func TestGetContainerGroup(t *testing.T) {
 	cg, _, err := client.GetContainerGroup(context.Background(), resourceGroup, containerGroup)
@@ -575,7 +577,6 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
-	networkProfileID := "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/networkProfiles/aci-network-profile-virtual-kubelet-tests-vnet-aci-connector"
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
@@ -612,8 +613,10 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 					},
 				},
 			},
-			NetworkProfile: &NetworkProfileDefinition{
-				ID: networkProfileID,
+			SubnetIds: []*SubnetIdDefinition{
+				&SubnetIdDefinition{
+					ID: "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/virtualNetworks/virtual-kubelet-tests-vnet/subnets/aci-connector",
+				},
 			},
 			Extensions: []*Extension{
 				&Extension{
