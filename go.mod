@@ -11,15 +11,18 @@ require (
 	github.com/Azure/go-autorest/autorest/mocks v0.4.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/dimchansky/utfbom v1.1.0
+	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.16.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
-	github.com/virtual-kubelet/node-cli v0.6.0
+	github.com/virtual-kubelet/node-cli v0.6.1
 	github.com/virtual-kubelet/virtual-kubelet v1.5.0
 	go.opencensus.io v0.21.0
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.18.6
 	k8s.io/apimachinery v0.18.6
