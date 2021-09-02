@@ -22,7 +22,7 @@ import (
 
 var (
 	client                   *Client
-	location                 = "centraluseuap"
+	location                 = "westus"
 	resourceGroup            = "virtual-kubelet-tests"
 	containerGroup           = "virtual-kubelet-test-container-group"
 	subscriptionID           string
@@ -267,7 +267,6 @@ func TestCreateContainerGroup(t *testing.T) {
 	}
 }
 
-/*
 func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
@@ -298,25 +297,26 @@ func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 					},
 				},
 			},
-			NetworkProfile: &NetworkProfileDefinition{
-				ID: fmt.Sprintf(
-					"/subscriptions/%s/resourceGroups/%s/providers"+
-						"/Microsoft.Network/networkProfiles/%s",
-					subscriptionID,
-					resourceGroup,
-					"badNetworkProfile",
-				),
+			SubnetIds: []*SubnetIdDefinition{
+				&SubnetIdDefinition{
+					ID: fmt.Sprintf(
+						"/subscriptions/%s/resourceGroups/%s/providers"+
+							"/Microsoft.Network/virtualNetworks/%s/subnets/default",
+						subscriptionID,
+						resourceGroup,
+						"badVirtualNetwork",
+					),
+				},
 			},
 		},
 	})
 	if err == nil {
 		t.Fatal("expected create container group to fail with  NetworkProfileNotFound, but returned nil")
 	}
-	if !strings.Contains(err.Error(), "NetworkProfileNotFound") {
+	if !strings.Contains(err.Error(), "VirtualNetworkNotFound") {
 		t.Fatalf("expected NetworkProfileNotFound to be in the error message but got: %v", err)
 	}
 }
-*/
 
 func TestGetContainerGroup(t *testing.T) {
 	cg, _, err := client.GetContainerGroup(context.Background(), resourceGroup, containerGroup)
