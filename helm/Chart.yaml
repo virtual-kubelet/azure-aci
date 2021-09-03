@@ -7,4 +7,4 @@ maintainers:
 name: virtual-kubelet-aci-for-aks
 sources:
 - https://github.com/virtual-kubelet/azure-aci
-version: 1.3.5
+version: 1.3.6
