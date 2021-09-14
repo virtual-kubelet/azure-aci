@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 )
 
 // GetStatsSummary returns the stats summary for pods running on ACI
