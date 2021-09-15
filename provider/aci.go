@@ -28,6 +28,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -38,8 +39,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
-	credconfig "k8s.io/kubernetes/pkg/credentialprovider"
-	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 )
 
 const (
@@ -1378,7 +1377,7 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageReg
 	return &cred, nil
 }
 
-func makeRegistryCredentialFromDockerConfig(server string, configEntry credconfig.DockerConfigEntry) (*aci.ImageRegistryCredential, error) {
+func makeRegistryCredentialFromDockerConfig(server string, configEntry DockerConfigEntry) (*aci.ImageRegistryCredential, error) {
 	if configEntry.Username == "" {
 		return nil, fmt.Errorf("no username present in auth config for server: %s", server)
 	}
@@ -1427,7 +1426,7 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	}
 
 	// Will use K8s config models to handle marshaling (including auth field handling).
-	var cfgJson credconfig.DockerConfigJson
+	var cfgJson DockerConfigJSON
 
 	err = json.Unmarshal(repoData, &cfgJson)
 	if err != nil {
