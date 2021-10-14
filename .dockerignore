@@ -1,0 +1,9 @@
+.dockerignore
+Dockerfile
+bin/
+helm/
+hack/
+charts/
+.circleci/
+README.md
+.gitignore
