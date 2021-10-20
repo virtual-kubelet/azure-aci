@@ -3,7 +3,7 @@
 # To test a latest version of the code, you need to build+push the image somewhere.
 # Then you can set `IMG_URL`, `IMG_REPO`, and `IMG_TAG` accordingly
 
-set -e -u
+set -e -u -x
 
 if ! type helm > /dev/null; then
   exit 1
@@ -17,8 +17,8 @@ fi
 : "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
-: "${CHART_NAME:=vk-aci-test}"
-: "${TEST_NODE_NAME:=vk-aci-test}"
+: "${CHART_NAME:=vk-aci-test-aks}"
+: "${TEST_NODE_NAME:=vk-aci-test-aks}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
 
@@ -28,10 +28,6 @@ fi
 : "${VNET_NAME=myAKSVNet}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
-
-: "${AZURE_CLIENT_ID:=}"
-: "${AZURE_CLIENT_SECRET:=}"
-: "${AZURE_TENANT_ID:=}"
 
 error() {
     echo "$@" >&2
@@ -43,16 +39,10 @@ if [ ! -v IMG_TAG ] || [ -z "$IMG_TAG" ]; then
     IMG_TAG="${IMG_TAG#v}"
 fi
 
-if [ -n "$AZURE_CLIENT_ID" ]; then
-    [ -n "$AZURE_CLIENT_SECRET" ] || error "AZURE_CLIENT_SECRET is required when AZURE_CLIENT_ID is set"
-    [ -n "$AZURE_TENANT_ID" ] || error "AZURE_TENANT_ID is required when AZURE_CLIENT_ID is set"
-fi
-
 TMPDIR=""
 
 cleanup() {
     az group delete --name "$RESOURCE_GROUP" --yes --no-wait
-    az ad sp delete --id "$AZURE_CLIENT_ID" || true
     if [ -n "$TMPDIR" ]; then
         rm -rf "$TMPDIR"
     fi
@@ -96,12 +86,11 @@ vnet_id="$(az network vnet show --resource-group $RESOURCE_GROUP --name $VNET_NA
 aks_subnet_id="$(az network vnet subnet show --resource-group $RESOURCE_GROUP --vnet-name $VNET_NAME --name $CLUSTER_SUBNET_NAME --query id -o tsv)"
 
 TMPDIR="$(mktemp -d)"
-sp="$(az ad sp create-for-rbac --name $RESOURCE_GROUP --skip-assignment -o json)"
+cluster_identity="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query principalId -o tsv)"
+node_identity="$(az identity create --name "${RESOURCE_GROUP}-node-identity" --resource-group "${RESOURCE_GROUP}" --query principalId -o tsv)"
 
-AZURE_CLIENT_ID="$(jq -sr '.[0].appId' <<<$sp)"
-AZURE_CLIENT_SECRET="$(jq -sr '.[0].password' <<<$sp)"
-AZURE_TENANT_ID="$(jq -rs '.[0].tenant' <<<$sp)"
-
+node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
+cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
@@ -110,21 +99,32 @@ az aks create \
     --network-plugin azure \
     --vnet-subnet-id "$aks_subnet_id" \
     --dns-service-ip "$KUBE_DNS_IP" \
-    --service-principal $AZURE_CLIENT_ID \
-    --client-secret $AZURE_CLIENT_SECRET
+    --assign-kubelet-identity "$node_identity_id" \
+    --assign-identity "$cluster_identity_id"
 
 az role assignment create \
     --role "Network Contributor" \
-    --assignee "$AZURE_CLIENT_ID" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
     --scope "$vnet_id"
 az role assignment create \
     --role "Network Contributor" \
-    --assignee "$AZURE_CLIENT_ID" \
+    --assignee-object-id "$cluster_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "$vnet_id"
+az role assignment create \
+    --role "Network Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
     --scope "$aci_subnet_id"
 
+# Make sure ACI can create containers in the AKS RG.
+# Note, this is not wonderful since it gives a lot of permissions to the identity which is also shared with the kubelet (which it doesn't need).
+# Unfortunately there is no way to scope this down (AFIACT) currently.
 az role assignment create \
     --role "Contributor" \
-    --assignee "$AZURE_CLIENT_ID" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
     --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
 
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "${TMPDIR}/kubeconfig"
@@ -139,11 +139,8 @@ helm install \
     --set "image.tag=${IMG_TAG}" \
     --set "nodeName=${TEST_NODE_NAME}" \
     --set providers.azure.vnet.enabled=true \
-    --set "providers.azure.clientId=${AZURE_CLIENT_ID}" \
-    --set "providers.azure.clientKey=${AZURE_CLIENT_SECRET}" \
-    --set "providers.azure.tenantId=${AZURE_TENANT_ID}" \
     --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
-    --set "providers.azure.vent.subnetCidr=$ACI_SUBNET_RANGE" \
+    --set "providers.azure.vnet.subnetCidr=$ACI_SUBNET_RANGE" \
     --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE" \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
@@ -160,6 +157,5 @@ done
 kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
-export _RUN_TESTS=1
 
 $@
