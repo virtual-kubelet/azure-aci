@@ -100,7 +100,8 @@ az aks create \
     --vnet-subnet-id "$aks_subnet_id" \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
-    --assign-identity "$cluster_identity_id"
+    --assign-identity "$cluster_identity_id" \
+    --generate-ssh-keys
 
 az role assignment create \
     --role "Network Contributor" \
