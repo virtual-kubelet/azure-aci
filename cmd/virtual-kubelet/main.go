@@ -34,7 +34,7 @@ import (
 var (
 	buildVersion    = "N/A"
 	buildTime       = "N/A"
-	k8sVersion      = "v1.18.4" // This should follow the version of k8s.io/kubernetes we are importing
+	k8sVersion      = "v1.19.10" // This should follow the version of k8s.io/client-go we are importing
 	numberOfWorkers = 50
 )
 

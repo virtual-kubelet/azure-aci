@@ -33,7 +33,7 @@ type Client struct {
 }
 
 // NewClient creates a new Azure Container Instances client with extra user agent.
-func NewClient(auth *azure.Authentication, extraUserAgent string) (*Client, error) {
+func NewClient(auth *azure.Authentication, extraUserAgent string, retryConfig azure.HTTPRetryConfig) (*Client, error) {
 	if auth == nil {
 		return nil, fmt.Errorf("Authentication is not supplied for the Azure client")
 	}
@@ -43,7 +43,7 @@ func NewClient(auth *azure.Authentication, extraUserAgent string) (*Client, erro
 		userAgent = append(userAgent, extraUserAgent)
 	}
 
-	client, err := azure.NewClient(auth, userAgent)
+	client, err := azure.NewClient(auth, userAgent, retryConfig)
 	if err != nil {
 		return nil, fmt.Errorf("Creating Azure client failed: %v", err)
 	}

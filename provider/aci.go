@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -37,8 +39,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
-	credconfig "k8s.io/kubernetes/pkg/credentialprovider"
-	stats "k8s.io/kubernetes/pkg/kubelet/apis/stats/v1alpha1"
 )
 
 const (
@@ -93,6 +93,7 @@ type ACIProvider struct {
 	kubeProxyExtension *aci.Extension
 	kubeDNSIP          string
 	extraUserAgent     string
+	retryConfig        client.HTTPRetryConfig
 
 	metricsSync     sync.Mutex
 	metricsSyncTime time.Time
@@ -116,14 +117,16 @@ var validAciRegions = []string{
 	"australiaeast",
 	"brazilsouth",
 	"canadacentral",
-	"canadaeast",
 	"centralindia",
 	"centralus",
 	"centraluseuap",
+	"chinaeast2",
 	"eastasia",
 	"eastus",
 	"eastus2",
 	"eastus2euap",
+	"francecentral",
+	"germanywestcentral",
 	"japaneast",
 	"koreacentral",
 	"northcentralus",
@@ -131,11 +134,13 @@ var validAciRegions = []string{
 	"southcentralus",
 	"southeastasia",
 	"southindia",
+	"switzerlandnorth",
 	"uksouth",
+	"uaenorth",
 	"westcentralus",
+	"westeurope",
 	"westus",
 	"westus2",
-	"westeurope",
 	"usgovvirginia",
 	"usgovarizona",
 }
@@ -202,7 +207,8 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 				clientId,
 				acsCredential.ClientSecret,
 				acsCredential.SubscriptionID,
-				acsCredential.TenantID)
+				acsCredential.TenantID,
+				acsCredential.UserAssignedIdentityID)
 
 			p.resourceGroup = acsCredential.ResourceGroup
 			p.region = acsCredential.Region
@@ -223,7 +229,9 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		azAuth.ClientSecret = clientSecret
 	}
 
-	azAuth.UserIdentityClientId = os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID")
+	if userIdentityClientId := os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID"); userIdentityClientId != "" {
+		azAuth.UserIdentityClientId = userIdentityClientId
+	}
 	azAuth.UseUserIdentity = (len(azAuth.ClientID) == 0)
 
 	if azAuth.UseUserIdentity {
@@ -244,7 +252,40 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 
 	p.extraUserAgent = os.Getenv("ACI_EXTRA_USER_AGENT")
 
-	p.aciClient, err = aci.NewClient(azAuth, p.extraUserAgent)
+	retryWaitMin := client.DefaultRetryIntervalMin
+	if value := os.Getenv("RETRY_MINIMUM_INTERVAL_IN_SECOND"); value != "" {
+		ret, err := strconv.Atoi(value)
+		if err == nil {
+			return nil, fmt.Errorf("env RETRY_MINIMUM_INTERVAL_IN_SECOND is not able to convert to int, err: %s", err)
+		}
+		retryWaitMin = time.Duration(ret) * time.Second
+	}
+
+	retryWaitMax := client.DefaultRetryIntervalMax
+	if value := os.Getenv("RETRY_MAXIMUM_INTERVAL_IN_SECOND"); value != "" {
+		ret, err := strconv.Atoi(value)
+		if err == nil {
+			return nil, fmt.Errorf("env RETRY_MAXIMUM_INTERVAL_IN_SECOND is not able to convert to int, err: %s", err)
+		}
+		retryWaitMax = time.Duration(ret) * time.Second
+	}
+
+	retryMax := client.DefaultRetryMax
+	if value := os.Getenv("RETRY_MAXIMUM_COUNT"); value != "" {
+		ret, err := strconv.Atoi(value)
+		if err == nil {
+			return nil, fmt.Errorf("env RETRY_MAXIMUM_COUNT is not able to convert to int, err: %s", err)
+		}
+		retryMax = ret
+	}
+
+	p.retryConfig = client.HTTPRetryConfig{
+		RetryWaitMin: retryWaitMin,
+		RetryWaitMax: retryWaitMax,
+		RetryMax:     retryMax,
+	}
+
+	p.aciClient, err = aci.NewClient(azAuth, p.extraUserAgent, p.retryConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +451,7 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 }
 
 func (p *ACIProvider) setupNetwork(auth *client.Authentication) error {
-	c, err := network.NewClient(auth, p.extraUserAgent)
+	c, err := network.NewClient(auth, p.extraUserAgent, p.retryConfig)
 	if err != nil {
 		return fmt.Errorf("error creating azure networking client: %v", err)
 	}
@@ -509,7 +550,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 		APIVersion: "v1",
 		Kind:       "Config",
 		Clusters: []clientcmdapiv1.NamedCluster{
-			clientcmdapiv1.NamedCluster{
+			{
 				Name: name,
 				Cluster: clientcmdapiv1.Cluster{
 					Server:                   masterURI,
@@ -518,7 +559,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 			},
 		},
 		AuthInfos: []clientcmdapiv1.NamedAuthInfo{
-			clientcmdapiv1.NamedAuthInfo{
+			{
 				Name: name,
 				AuthInfo: clientcmdapiv1.AuthInfo{
 					ClientCertificate:     authInfo.ClientCertificate,
@@ -532,7 +573,7 @@ func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Exte
 			},
 		},
 		Contexts: []clientcmdapiv1.NamedContext{
-			clientcmdapiv1.NamedContext{
+			{
 				Name: name,
 				Context: clientcmdapiv1.Context{
 					Cluster:  name,
@@ -960,7 +1001,7 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	ts := aci.TerminalSizeRequest{Height: int(size.Height), Width: int(size.Width)}
-	xcrsp, err := p.aciClient.LaunchExec(p.resourceGroup, cg.Name, container, cmd[0], ts)
+	xcrsp, err := p.aciClient.LaunchExec(p.resourceGroup, cg.Name, container, strings.Join(cmd, " "), ts)
 	if err != nil {
 		return err
 	}
@@ -1033,6 +1074,10 @@ func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
 	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
 	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
 	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
+	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
+
+	// Virtual node would be skipped for cloud provider operations (e.g. CP should not add route).
+	node.ObjectMeta.Labels["kubernetes.azure.com/managed"] = "false"
 }
 
 // GetPodStatus returns the status of a pod by name that is running inside ACI
@@ -1297,7 +1342,7 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageReg
 	return &cred, nil
 }
 
-func makeRegistryCredentialFromDockerConfig(server string, configEntry credconfig.DockerConfigEntry) (*aci.ImageRegistryCredential, error) {
+func makeRegistryCredentialFromDockerConfig(server string, configEntry DockerConfigEntry) (*aci.ImageRegistryCredential, error) {
 	if configEntry.Username == "" {
 		return nil, fmt.Errorf("no username present in auth config for server: %s", server)
 	}
@@ -1346,7 +1391,7 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	}
 
 	// Will use K8s config models to handle marshaling (including auth field handling).
-	var cfgJson credconfig.DockerConfigJson
+	var cfgJson DockerConfigJSON
 
 	err = json.Unmarshal(repoData, &cfgJson)
 	if err != nil {
@@ -1667,6 +1712,103 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 			continue
 		}
 
+		if v.Projected != nil {
+			log.G(context.TODO()).Info("Found projected volume")
+			paths := make(map[string]string)
+
+			for _, source := range v.Projected.Sources {
+				switch {
+				case source.ServiceAccountToken != nil:
+					// This is still stored in a secret, hence the dance to figure out what secret.
+					secrets, err := p.resourceManager.GetSecrets(pod.Namespace)
+					if err != nil {
+						return nil, err
+					}
+				Secrets:
+					for _, secret := range secrets {
+						if secret.Type != v1.SecretTypeServiceAccountToken {
+							continue
+						}
+						// annotation now needs to match the pod.ServiceAccountName
+						for k, a := range secret.ObjectMeta.Annotations {
+							if k == "kubernetes.io/service-account.name" && a == pod.Spec.ServiceAccountName {
+								for k, v := range secret.StringData {
+									data, err := base64.StdEncoding.DecodeString(v)
+									if err != nil {
+										return nil, err
+									}
+									paths[k] = string(data)
+								}
+
+								for k, v := range secret.Data {
+									paths[k] = base64.StdEncoding.EncodeToString(v)
+								}
+
+								break Secrets
+							}
+						}
+					}
+
+				case source.Secret != nil:
+					secret, err := p.resourceManager.GetSecret(source.Secret.Name, pod.Namespace)
+					if source.Secret.Optional != nil && !*source.Secret.Optional && k8serr.IsNotFound(err) {
+						return nil, fmt.Errorf("projected secret %s is required by pod %s and does not exist", source.Secret.Name, pod.Name)
+					}
+					if secret == nil {
+						continue
+					}
+
+					for _, keyToPath := range source.Secret.Items {
+						for k, v := range secret.StringData {
+							if keyToPath.Key == k {
+								data, err := base64.StdEncoding.DecodeString(v)
+								if err != nil {
+									return nil, err
+								}
+								paths[k] = string(data)
+							}
+						}
+
+						for k, v := range secret.Data {
+							if keyToPath.Key == k {
+								paths[k] = base64.StdEncoding.EncodeToString(v)
+							}
+						}
+					}
+
+				case source.ConfigMap != nil:
+					configMap, err := p.resourceManager.GetConfigMap(source.ConfigMap.Name, pod.Namespace)
+					if source.ConfigMap.Optional != nil && !*source.ConfigMap.Optional && k8serr.IsNotFound(err) {
+						return nil, fmt.Errorf("projected configMap %s is required by pod %s and does not exist", source.ConfigMap.Name, pod.Name)
+					}
+					if configMap == nil {
+						continue
+					}
+
+					for _, keyToPath := range source.ConfigMap.Items {
+						for k, v := range configMap.Data {
+							if keyToPath.Key == k {
+								paths[k] = base64.StdEncoding.EncodeToString([]byte(v))
+							}
+						}
+						for k, v := range configMap.BinaryData {
+							if keyToPath.Key == k {
+								paths[k] = base64.StdEncoding.EncodeToString(v)
+							}
+						}
+					}
+				}
+			}
+			if len(paths) != 0 {
+				volumes = append(volumes, aci.Volume{
+					Name:   v.Name,
+					Secret: paths,
+				})
+			}
+
+			continue
+		}
+
 		// If we've made it this far we have found a volume type that isn't supported
 		return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", pod.Name, v.Name)
 	}
@@ -1858,15 +2000,15 @@ func aciStateToPodConditions(state string, creationTime, lastUpdateTime metav1.T
 		}
 
 		return []v1.PodCondition{
-			v1.PodCondition{
+			{
 				Type:               v1.PodReady,
 				Status:             readyConditionStatus,
 				LastTransitionTime: readyConditionTime,
-			}, v1.PodCondition{
+			}, {
 				Type:               v1.PodInitialized,
 				Status:             v1.ConditionTrue,
 				LastTransitionTime: creationTime,
-			}, v1.PodCondition{
+			}, {
 				Type:               v1.PodScheduled,
 				Status:             v1.ConditionTrue,
 				LastTransitionTime: creationTime,

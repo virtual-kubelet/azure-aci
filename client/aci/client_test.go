@@ -29,6 +29,12 @@ var (
 	testUserIdentityClientId = "97c70c2a-fa56-4b70-95b5-1c67ca26f383"
 )
 
+var defaultRetryConfig = azure.HTTPRetryConfig{
+	RetryWaitMin: azure.DefaultRetryIntervalMin,
+	RetryWaitMax: azure.DefaultRetryIntervalMax,
+	RetryMax:     azure.DefaultRetryMax,
+}
+
 func init() {
 	//Create a resource group name with uuid.
 	uid := uuid.New()
@@ -46,7 +52,7 @@ func TestMain(m *testing.M) {
 	subscriptionID = auth.SubscriptionID
 
 	// Check if the resource group exists and create it if not.
-	rgCli, err := resourcegroups.NewClient(auth, "unit-test")
+	rgCli, err := resourcegroups.NewClient(auth, "unit-test", defaultRetryConfig)
 	if err != nil {
 		log.Fatalf("creating new resourcegroups client failed: %v", err)
 	}
@@ -68,7 +74,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// initialize client in Main
-	c, err := NewClient(auth, "unit-test")
+	c, err := NewClient(auth, "unit-test", defaultRetryConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,7 +102,7 @@ func TestNewClient(t *testing.T) {
 		log.Fatalf("Failed to load Azure authentication file: %v", err)
 	}
 
-	c, err := NewClient(auth, "unit-test")
+	c, err := NewClient(auth, "unit-test", defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +119,7 @@ func TestNewMsiClient(t *testing.T) {
 	auth.UserIdentityClientId = testUserIdentityClientId
 	auth.UseUserIdentity = true
 
-	c, err := azure.NewClient(auth, []string{"test-client"})
+	c, err := azure.NewClient(auth, []string{"test-client"}, defaultRetryConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

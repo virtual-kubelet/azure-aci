@@ -72,16 +72,19 @@ Download and run the [Azure CLI Installer (MSI)](https://aka.ms/InstallAzureCliW
 1. Add the azure-cli repo to your sources:
 
 ```bash
-    echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ wheezy main" | \
-         sudo tee /etc/apt/sources.list.d/azure-cli.list
+AZ_REPO=$(lsb_release -cs)
+echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" |
+    sudo tee /etc/apt/sources.list.d/azure-cli.list
 ```
 
 2. Run the following commands to install the Azure CLI and its dependencies:
 
 ```bash
-    sudo apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893
-    sudo apt-get install apt-transport-https
-    sudo apt-get update && sudo apt-get install azure-cli
+sudo apt-get install apt-transport-https
+curl -sL https://packages.microsoft.com/keys/microsoft.asc |
+    gpg --dearmor |
+    sudo tee /etc/apt/trusted.gpg.d/microsoft.gpg > /dev/null
+sudo apt-get update && sudo apt-get install azure-cli
 ```
 
 ### Install the Kubernetes CLI
@@ -191,8 +194,7 @@ export VK_RELEASE=virtual-kubelet-latest
 Grab the public master URI for your Kubernetes cluster and save the value.
 
 ```bash
-kubectl cluster-info
-export MASTER_URI=<Kubernetes Master>
+export MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 ```
 
 If your cluster is an AKS cluster:
@@ -203,11 +205,20 @@ export VK_RELEASE=virtual-kubelet-latest
 export NODE_NAME=virtual-kubelet
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
+# Linux Virtual Node
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set providers.azure.targetAKS=true \
   --set providers.azure.masterUri=$MASTER_URI \
   --set nodeName=$NODE_NAME
+
+# Windows Virtual Node
+helm install "$RELEASE_NAME" "$CHART_URL" \
+  --set provider=azure \
+  --set "nodeOsType=Windows" \
+  --set providers.azure.targetAKS=true \
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName="${NODE_NAME}-win"
 ```
 
 For any other type of Kubernetes cluster:
@@ -217,6 +228,7 @@ RELEASE_NAME=virtual-kubelet
 NODE_NAME=virtual-kubelet
 CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/master/charts/$VK_RELEASE.tgz
 
+# Linux Virtual Node
 helm install "$RELEASE_NAME" "$CHART_URL" \
   --set provider=azure \
   --set rbac.install=true \
@@ -229,6 +241,21 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
   --set providers.azure.masterUri=$MASTER_URI \
   --set nodeName=$NODE_NAME
+
+# Windows Virtual Node
+helm install "$RELEASE_NAME" "$CHART_URL" \
+  --set provider=azure \
+  --set rbac.install=true \
+  --set "nodeOsType=Windows" \
+  --set providers.azure.targetAKS=false \
+  --set providers.azure.aciResourceGroup=$AZURE_RG \
+  --set providers.azure.aciRegion=$ACI_REGION \
+  --set providers.azure.tenantId=$AZURE_TENANT_ID \
+  --set providers.azure.subscriptionId=$AZURE_SUBSCRIPTION_ID \
+  --set providers.azure.clientId=$AZURE_CLIENT_ID \
+  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
+  --set providers.azure.masterUri=$MASTER_URI \
+  --set nodeName="${NODE_NAME}-win"
 ```
 
 If your cluster has RBAC disabled set ```rbac.install=false```
@@ -727,9 +754,10 @@ helm uninstall virtual-kubelet
 
 If you used Virtual Nodes, can follow the steps [here](https://docs.microsoft.com/azure/aks/virtual-nodes-cli#remove-virtual-nodes) to remove the add-on
 
+
 <!-- LINKS -->
 [kubectl-create]: https://kubernetes.io/docs/user-guide/kubectl/v1.6/#create
 [kubectl-get]: https://kubernetes.io/docs/user-guide/kubectl/v1.8/#get
 [az-container-list]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_list
 [az-container-show]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_show
->>>>>>> azure_provider
+

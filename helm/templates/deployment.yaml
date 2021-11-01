@@ -47,6 +47,10 @@ spec:
         - name: CLUSTER_RESOURCE_ID
           value:  {{ .loganalytics.clusterResourceId }}
 {{- end }}
+{{- if .managedIdentityID }}
+        - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
+          value: {{ .managedIdentityID }}
+{{- end }}
 {{- if .targetAKS }}
         - name: ACS_CREDENTIAL_LOCATION
           value: /etc/acs/azure.json
@@ -89,20 +93,23 @@ spec:
         - name: ACI_SUBNET_CIDR
           value: {{ .vnet.subnetCidr }}
         - name: MASTER_URI
-          value: {{ required "masterUri is required" .masterUri }}
+          value: {{ required "masterUri is required" .masterUri | quote }}
         - name: CLUSTER_CIDR
           value: {{ .vnet.clusterCidr }}
         - name: KUBE_DNS_IP
           value: {{ .vnet.kubeDnsIp }}
 {{- else }}
         - name: MASTER_URI
-          value: {{ .masterUri }}
-{{- end }}          
+          value: {{ .masterUri | quote }}
+{{- end }}
 {{- end }}
 {{- end }}
         volumeMounts:
         - name: credentials
           mountPath: "/etc/virtual-kubelet"
+        - name: certificates
+          mountPath: /etc/kubernetes/certs
+          readOnly: true
 {{- if eq (required "You must specify a Virtual Kubelet provider" .Values.provider) "azure" }}
 {{- if .Values.providers.azure.targetAKS }}
         - name: acs-credential
@@ -117,9 +124,9 @@ spec:
           "--provider", "{{ required "You must specify a Virtual Kubelet provider" .Values.provider }}",
           "--namespace", "{{ .Values.monitoredNamespace }}",
           "--nodename", "{{ required "nodeName is required" .Values.nodeName }}",
-          {{- if .Values.logLevel }}
+{{- if .Values.logLevel }}
           "--log-level", "{{.Values.logLevel}}",
-          {{- end }}
+{{- end }}
 {{- if ne .Values.trace.exporter "" }}
           "--trace-exporter", "{{ .Values.trace.exporter }}",
 {{- if gt .Values.trace.sampleRate 0.0 }}
@@ -130,12 +137,20 @@ spec:
           "--trace-service-name", "{{ $serviceName }}",
 {{- end}}
 {{- end}}
+{{- if  .Values.enableAuthenticationTokenWebhook }}
+          "--authentication-token-webhook=true",
+          "--client-verify-ca", "/etc/kubernetes/certs/ca.crt",
+{{- end }}
+          "--no-verify-clients={{ .Values.disableVerifyClients }}",
           "--os", "{{ .Values.nodeOsType }}"
         ]
       volumes:
       - name: credentials
         secret:
           secretName: {{ template "vk.fullname" . }}
+      - name: certificates
+        hostPath:
+          path: /etc/kubernetes/certs
 {{- if eq (required "You must specify a Virtual Kubelet provider" .Values.provider) "azure" }}
 {{- if .Values.providers.azure.targetAKS }}
       - name: acs-credential

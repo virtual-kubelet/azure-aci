@@ -2,17 +2,17 @@ image:
   secretName: virtual-kubelet-aci-acr
   repository: mcr.microsoft.com
   name: oss/virtual-kubelet/virtual-kubelet
-  repositoryReadOnlyPrincipalId: 98961725-8311-48ef-8f11-2cc3911ee807
-  repositoryReadOnlyPrincipalSecret: MH]/FD2.9RwhDmQZQAxu.p0z4fBuR=DG
-  tag: 1.3.0
+  tag: 1.4.0
   pullPolicy: Always
 
 nodeName: "virtual-node-aci-linux-helm"
 nodeOsType: "Linux"
 monitoredNamespace: ""
-apiserverCert: 
-apiserverKey: 
-logLevel: 
+apiserverCert:
+apiserverKey:
+logLevel:
+disableVerifyClients: false
+enableAuthenticationTokenWebhook: true
 
 taint:
   enabled: true
@@ -30,23 +30,24 @@ providers:
   azure:
     ## Set to true if deploying to Azure Kubernetes Service (AKS), otherwise false
     targetAKS: true
-    clientId: 
-    clientKey: 
-    tenantId: 
-    subscriptionId: 
+    clientId:
+    clientKey:
+    tenantId:
+    subscriptionId:
+    managedIdentityID:
     ## `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments
-    aciResourceGroup: 
-    aciRegion: 
-    masterUri: 
+    aciResourceGroup:
+    aciRegion:
+    masterUri:
     loganalytics:
       enabled: false
-      workspaceId: 
-      workspaceKey: 
-      clusterResourceId: 
+      workspaceId:
+      workspaceKey:
+      clusterResourceId:
     vnet:
-      enabled: false 
+      enabled: false
       vnetResourceGroup:
-      vnetName: 
+      vnetName:
       subnetName: virtual-node-aci
       ## If subnet already created on vnet, don't pass subnetCidr if it doesn't match the existing one.
       ## If cluster subnet has a different range, please specify its value in clusterCidr

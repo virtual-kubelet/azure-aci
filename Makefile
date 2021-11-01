@@ -8,8 +8,11 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
-DOCKER_IMAGE := virtual-kubelet
+IMG_REPO ?= virtual-kubelet
+OUTPUT_TYPE ?= docker
+BUILDPLATFORM ?= linux/amd64
 VERSION      := $(shell git describe --tags --always --dirty="-dev")
+IMG_TAG ?= $(VERSION)
 
 .PHONY: safebuild
 # docker build
@@ -17,18 +20,26 @@ safebuild:
 	@echo "Building image..."
 	docker build -t $(DOCKER_IMAGE):$(VERSION) .
 
+.PHONY: image
+image:
+	docker buildx build \
+		--platform="$(BUILDPLATFORM)" \
+		--tag $(IMG_REPO):$(IMG_TAG) \
+		--output=type=$(OUTPUT_TYPE) \
+		.
+
 .PHONY: build
 build: bin/virtual-kubelet
 
 .PHONY: clean
-clean: files := bin/virtual-kubelet
+clean: files := bin/virtual-kubelet bin/virtual-kubelet.tgz
 clean:
-	@rm $(files) &>/dev/null || exit 0
+	@rm -f $(files) &>/dev/null || exit 0
 
 .PHONY: test
 test:
 	@echo running tests
-	@AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v ./...
+	@AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e)
 
 .PHONY: vet
 vet:
@@ -71,4 +82,8 @@ bin/%:
 helm: bin/virtual-kubelet.tgz
 
 bin/virtual-kubelet.tgz:
-	rm -rf /tmp/virtual-kubelet && mkdir /tmp/virtual-kubelet && cp -r helm/* /tmp/virtual-kubelet/ &&  tar -zcvf bin/virtual-kubelet.tgz -C /tmp virtual-kubelet
+	rm -rf /tmp/virtual-kubelet
+	mkdir /tmp/virtual-kubelet
+	cp -r helm/* /tmp/virtual-kubelet/
+	mkdir -p bin
+	tar -zcvf bin/virtual-kubelet.tgz -C /tmp virtual-kubelet
