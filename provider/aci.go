@@ -497,7 +497,7 @@ func (p *ACIProvider) setupNetwork(auth *client.Authentication) error {
 
 	if createSubnet {
 		subnet = network.NewSubnetWithContainerInstanceDelegation(p.subnetName, p.subnetCIDR)
-		subnet, err = c.CreateOrUpdateSubnet(p.vnetSubscriptionID, p.vnetResourceGroup, p.vnetName, subnet)
+		_, err = c.CreateOrUpdateSubnet(p.vnetSubscriptionID, p.vnetResourceGroup, p.vnetName, subnet)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
