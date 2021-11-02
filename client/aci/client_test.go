@@ -303,21 +303,23 @@ func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 					},
 				},
 			},
-			NetworkProfile: &NetworkProfileDefinition{
-				ID: fmt.Sprintf(
-					"/subscriptions/%s/resourceGroups/%s/providers"+
-						"/Microsoft.Network/networkProfiles/%s",
-					subscriptionID,
-					resourceGroup,
-					"badNetworkProfile",
-				),
+			SubnetIds: []*SubnetIdDefinition{
+				&SubnetIdDefinition{
+					ID: fmt.Sprintf(
+						"/subscriptions/%s/resourceGroups/%s/providers"+
+							"/Microsoft.Network/virtualNetworks/%s/subnets/default",
+						subscriptionID,
+						resourceGroup,
+						"badVirtualNetwork",
+					),
+				},
 			},
 		},
 	})
 	if err == nil {
 		t.Fatal("expected create container group to fail with  NetworkProfileNotFound, but returned nil")
 	}
-	if !strings.Contains(err.Error(), "NetworkProfileNotFound") {
+	if !strings.Contains(err.Error(), "VirtualNetworkNotFound") {
 		t.Fatalf("expected NetworkProfileNotFound to be in the error message but got: %v", err)
 	}
 }
@@ -581,7 +583,6 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
-	networkProfileID := "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/networkProfiles/aci-network-profile-virtual-kubelet-tests-vnet-aci-connector"
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
@@ -618,8 +619,10 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 					},
 				},
 			},
-			NetworkProfile: &NetworkProfileDefinition{
-				ID: networkProfileID,
+			SubnetIds: []*SubnetIdDefinition{
+				&SubnetIdDefinition{
+					ID: "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/virtualNetworks/virtual-kubelet-tests-vnet/subnets/aci-connector",
+				},
 			},
 			Extensions: []*Extension{
 				&Extension{

@@ -86,10 +86,9 @@ type ACIProvider struct {
 	diagnostics        *aci.ContainerGroupDiagnostics
 	subnetName         string
 	subnetCIDR         string
-	networkProfileName string
+	vnetSubscriptionID string
 	vnetName           string
 	vnetResourceGroup  string
-	networkProfile     string
 	clusterDomain      string
 	kubeProxyExtension *aci.Extension
 	kubeDNSIP          string
@@ -222,13 +221,6 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		}
 	}
 
-	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
-		p.vnetName = vnetName
-	}
-	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
-		p.vnetResourceGroup = vnetResourceGroup
-	}
-
 	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
 		azAuth.ClientID = clientID
 	}
@@ -356,11 +348,20 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 	p.internalIP = internalIP
 	p.daemonEndpointPort = daemonEndpointPort
 
+	// the VNET subscription ID defaultly is authentication subscription ID.
+	// We need to override when using cross subscription virtual network resource
+	p.vnetSubscriptionID = azAuth.SubscriptionID
+	if vnetSubscriptionID := os.Getenv("ACI_VNET_SUBSCRIPTION_ID"); vnetSubscriptionID != "" {
+		p.vnetSubscriptionID = vnetSubscriptionID
+	}
+	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
+		p.vnetName = vnetName
+	}
+	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
+		p.vnetResourceGroup = vnetResourceGroup
+	}
 	if subnetName := os.Getenv("ACI_SUBNET_NAME"); p.vnetName != "" && subnetName != "" {
 		p.subnetName = subnetName
-	}
-	if networkProfileName := os.Getenv("ACI_NETWORK_PROFILE_NAME"); networkProfileName != "" {
-		p.networkProfileName = networkProfileName
 	}
 	if subnetCIDR := os.Getenv("ACI_SUBNET_CIDR"); subnetCIDR != "" {
 		if p.subnetName == "" {
@@ -373,8 +374,8 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 	}
 
 	if p.subnetName != "" {
-		if err := p.setupNetworkProfile(azAuth); err != nil {
-			return nil, fmt.Errorf("error setting up network profile: %v", err)
+		if err := p.setupNetwork(azAuth); err != nil {
+			return nil, fmt.Errorf("error setting up network: %v", err)
 		}
 
 		masterURI := os.Getenv("MASTER_URI")
@@ -449,19 +450,19 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 	return nil
 }
 
-func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
+func (p *ACIProvider) setupNetwork(auth *client.Authentication) error {
 	c, err := network.NewClient(auth, p.extraUserAgent, p.retryConfig)
 	if err != nil {
 		return fmt.Errorf("error creating azure networking client: %v", err)
 	}
 
 	createSubnet := true
-	subnet, err := c.GetSubnet(p.vnetResourceGroup, p.vnetName, p.subnetName)
+	subnet, err := c.GetSubnet(p.vnetSubscriptionID, p.vnetResourceGroup, p.vnetName, p.subnetName)
 	if err != nil && !network.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
 	if network.IsNotFound(err) && p.subnetCIDR == "" {
-		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subnet CIDR is not specified", p.subnetName, p.vnetName, p.vnetResourceGroup)
+		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", p.subnetName, p.vnetName, p.vnetResourceGroup, p.vnetSubscriptionID)
 	}
 	if err == nil {
 		if p.subnetCIDR == "" {
@@ -496,49 +497,14 @@ func (p *ACIProvider) setupNetworkProfile(auth *client.Authentication) error {
 
 	if createSubnet {
 		subnet = network.NewSubnetWithContainerInstanceDelegation(p.subnetName, p.subnetCIDR)
-		subnet, err = c.CreateOrUpdateSubnet(p.vnetResourceGroup, p.vnetName, subnet)
+		subnet, err = c.CreateOrUpdateSubnet(p.vnetSubscriptionID, p.vnetResourceGroup, p.vnetName, subnet)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
 	}
-	if p.networkProfileName == "" {
-		p.networkProfileName = getNetworkProfileName(*subnet.ID)
-	}
-
-	profile, err := c.GetProfile(p.resourceGroup, p.networkProfileName)
-	if err != nil && !network.IsNotFound(err) {
-		return fmt.Errorf("error while looking up network profile: %v", err)
-	}
-	if err == nil {
-		for _, config := range *profile.ProfilePropertiesFormat.ContainerNetworkInterfaceConfigurations {
-			for _, ipConfig := range *config.ContainerNetworkInterfaceConfigurationPropertiesFormat.IPConfigurations {
-				if *ipConfig.IPConfigurationProfilePropertiesFormat.Subnet.ID == *subnet.ID {
-					p.networkProfile = *profile.ID
-					return nil
-				}
-			}
-		}
-	}
-
-	// at this point, profile should be nil
-	profile = network.NewNetworkProfile(p.networkProfileName, p.region, *subnet.ID)
-	profile, err = c.CreateOrUpdateProfile(p.resourceGroup, profile)
-	if err != nil {
-		return err
-	}
-
-	p.networkProfile = *profile.ID
 	return nil
 }
 
-func getNetworkProfileName(subnetID string) string {
-	h := sha256.New()
-	if _, err := h.Write([]byte(strings.ToUpper(subnetID))); err != nil {
-		panic(err)
-	}
-	hashBytes := h.Sum(nil)
-	return fmt.Sprintf("vk-%s", hex.EncodeToString(hashBytes))
-}
 
 func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Extension, error) {
 	name := "virtual-kubelet"
@@ -764,13 +730,12 @@ func (p *ACIProvider) createContainerGroup(ctx context.Context, podNS, podName s
 }
 
 func (p *ACIProvider) amendVnetResources(containerGroup *aci.ContainerGroup, pod *v1.Pod) {
-	if p.networkProfile == "" {
+	if p.subnetName == "" {
 		return
 	}
 
-	containerGroup.NetworkProfile = &aci.NetworkProfileDefinition{ID: p.networkProfile}
+	containerGroup.ContainerGroupProperties.SubnetIds = []*aci.SubnetIdDefinition{&aci.SubnetIdDefinition{ID: "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName} }
 	containerGroup.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
-
 	containerGroup.ContainerGroupProperties.Extensions = []*aci.Extension{p.kubeProxyExtension}
 }
 

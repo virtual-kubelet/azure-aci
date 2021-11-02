@@ -94,7 +94,7 @@ type ContainerGroupProperties struct {
 	Volumes                  []Volume                             `json:"volumes,omitempty"`
 	InstanceView             ContainerGroupPropertiesInstanceView `json:"instanceView,omitempty"`
 	Diagnostics              *ContainerGroupDiagnostics           `json:"diagnostics,omitempty"`
-	NetworkProfile           *NetworkProfileDefinition            `json:"networkProfile,omitempty"`
+	SubnetIds           	 []*SubnetIdDefinition            `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
 }
@@ -105,9 +105,9 @@ type ContainerGroupPropertiesInstanceView struct {
 	State  string  `json:"state,omitempty"`
 }
 
-// NetworkProfileDefinition is the network profile definition. ID should be of the form
-// /subscriptions/{subscriptionId} or /providers/{resourceProviderNamespace}/
-type NetworkProfileDefinition struct {
+// SubnetIdDefinition is the subnet ID, the format should be 
+// /subscriptions/{subscriptionID}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/{VNET}/subnets/{Subnet}
+type SubnetIdDefinition struct {
 	ID string `json:"id,omitempty"`
 }
 

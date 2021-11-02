@@ -19,7 +19,6 @@ type providerConfig struct {
 	Pods               string
 	SubnetName         string
 	SubnetCIDR         string
-	NetworkProfileName string
 }
 
 func (p *ACIProvider) loadConfig(r io.Reader) error {
@@ -70,9 +69,6 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 		}
 	}
 
-	if config.NetworkProfileName != "" {
-		p.networkProfileName = config.NetworkProfileName
-	}
 	p.operatingSystem = config.OperatingSystem
 	return nil
 }

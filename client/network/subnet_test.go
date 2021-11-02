@@ -13,7 +13,7 @@ func TestCreateGetSubnet(t *testing.T) {
 
 	ensureVnet(t, t.Name())
 
-	s1, err := c.CreateOrUpdateSubnet(resourceGroup, t.Name(), subnet)
+	s1, err := c.CreateOrUpdateSubnet(c.auth.SubscriptionID, resourceGroup, t.Name(), subnet)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,7 +25,7 @@ func TestCreateGetSubnet(t *testing.T) {
 	}
 
 	var s2 *network.Subnet
-	s2, err = c.GetSubnet(resourceGroup, t.Name(), *subnet.Name)
+	s2, err = c.GetSubnet(c.auth.SubscriptionID, resourceGroup, t.Name(), *subnet.Name)
 	if err != nil {
 		t.Fatal(err)
 	}
