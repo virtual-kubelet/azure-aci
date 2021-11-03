@@ -41,6 +41,7 @@ import (
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 )
 
+
 const (
 	// The service account secret mount path.
 	serviceAccountSecretMountPath = "/var/run/secrets/kubernetes.io/serviceaccount"
@@ -505,6 +506,20 @@ func (p *ACIProvider) setupNetwork(auth *client.Authentication) error {
 	return nil
 }
 
+func getRealtimeMetricsExtension() (*aci.Extension, error) {
+	extension := aci.Extension{
+		Name: "vk-realtime-metrics",
+		Properties: &aci.ExtensionProperties{
+			Type:    aci.ExtensionTypeRealtimeMetrics,
+			Version: aci.ExtensionVersion1_0,
+			Settings: map[string]string{
+			},
+			ProtectedSettings: map[string]string{
+			},
+		},
+	}
+	return &extension, nil
+}
 
 func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Extension, error) {
 	name := "virtual-kubelet"

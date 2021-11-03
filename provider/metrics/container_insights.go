@@ -1,142 +1,68 @@
-package provider
+package metrics 
 
 import (
 	"context"
-	"strings"
+	"fmt"
 	"time"
-
+	"strings"
+	
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/azure-aci/client/aci"
-	"github.com/virtual-kubelet/azure-aci/provider/metrics"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
-	"github.com/virtual-kubelet/virtual-kubelet/trace"
-	"golang.org/x/sync/errgroup"
+	"github.com/virtual-kubelet/azure-aci/client/aci"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 )
 
-// GetStatsSummary returns the stats summary for pods running on ACI
-func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {
-	ctx, span := trace.StartSpan(ctx, "GetSummaryStats")
-	defer span.End()
-	ctx = addAzureAttributes(ctx, span, p)
+type ContainerInsightsMetricsProvider struct {
+	aciClient *aci.Client
+	resourceGroup string
+}
 
-	p.metricsSync.Lock()
-	defer p.metricsSync.Unlock()
-
-	log.G(ctx).Debug("acquired metrics mutex")
-
-	if time.Since(p.metricsSyncTime) < time.Minute {
-		span.WithFields(ctx, log.Fields{
-			"preCachedResult":        true,
-			"cachedResultSampleTime": p.metricsSyncTime.String(),
-		})
-		return p.lastMetric, nil
+func NewContainerInsightsMetricsProvider(aciClient *aci.Client, resourceGroup string) *ContainerInsightsMetricsProvider {
+	return &ContainerInsightsMetricsProvider{
+		aciClient: aciClient,
+		resourceGroup: resourceGroup,	
 	}
-	ctx = span.WithFields(ctx, log.Fields{
-		"preCachedResult":        false,
-		"cachedResultSampleTime": p.metricsSyncTime.String(),
-	})
+}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	defer func() {
-		if err != nil {
-			return
-		}
-		p.lastMetric = summary
-		p.metricsSyncTime = time.Now()
-	}()
-
-	pods := p.resourceManager.GetPods()
-
-	var errGroup errgroup.Group
-	chResult := make(chan stats.PodStats, len(pods))
-
+func (self *ContainerInsightsMetricsProvider) getPodMetrics(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error){
 	end := time.Now()
 	start := end.Add(-1 * time.Minute)
+	logger := log.G(ctx).WithFields(log.Fields{
+		"UID":       string(pod.UID),
+		"Name":      pod.Name,
+		"Namespace": pod.Namespace,
+	})
+	logger.Debug("Acquired semaphore")
 
-	sema := make(chan struct{}, 10)
-	for _, pod := range pods {
-		if pod.Status.Phase != v1.PodRunning {
-			continue
-		}
-		pod := pod
-		errGroup.Go(func() error {
-			ctx, span := trace.StartSpan(ctx, "getPodMetrics")
-			defer span.End()
-			logger := log.G(ctx).WithFields(log.Fields{
-				"UID":       string(pod.UID),
-				"Name":      pod.Name,
-				"Namespace": pod.Namespace,
-			})
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case sema <- struct{}{}:
-			}
-			defer func() {
-				<-sema
-			}()
-
-			logger.Debug("Acquired semaphore")
-
-			cgName := containerGroupName(pod.Namespace, pod.Name)
-			// cpu/mem and net stats are split because net stats do not support container level detail
-			systemStats, err := p.aciClient.GetContainerGroupMetrics(ctx, p.resourceGroup, cgName, aci.MetricsRequest{
-				Dimension:    "containerName eq '*'",
-				Start:        start,
-				End:          end,
-				Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
-				Types:        []aci.MetricType{aci.MetricTypeCPUUsage, aci.MetricTypeMemoryUsage},
-			})
-			if err != nil {
-				span.SetStatus(err)
-				return errors.Wrapf(err, "error fetching cpu/mem stats for container group %s", cgName)
-			}
-			logger.Debug("Got system stats")
-
-			netStats, err := p.aciClient.GetContainerGroupMetrics(ctx, p.resourceGroup, cgName, aci.MetricsRequest{
-				Start:        start,
-				End:          end,
-				Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
-				Types:        []aci.MetricType{aci.MetricTyperNetworkBytesRecievedPerSecond, aci.MetricTyperNetworkBytesTransmittedPerSecond},
-			})
-			if err != nil {
-				span.SetStatus(err)
-				return errors.Wrapf(err, "error fetching network stats for container group %s", cgName)
-			}
-			logger.Debug("Got network stats")
-
-			chResult <- collectMetrics(pod, systemStats, netStats)
-			return nil
-		})
+	cgName := containerGroupName(pod.Namespace, pod.Name)
+	// cpu/mem and net stats are split because net stats do not support container level detail
+	systemStats, err := self.aciClient.GetContainerGroupMetrics(ctx, self.resourceGroup, cgName, aci.MetricsRequest{
+		Dimension:    "containerName eq '*'",
+		Start:        start,
+		End:          end,
+		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
+		Types:        []aci.MetricType{aci.MetricTypeCPUUsage, aci.MetricTypeMemoryUsage},
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "error fetching cpu/mem stats for container group %s", cgName)
 	}
+	logger.Debug("Got system stats")
 
-	if err := errGroup.Wait(); err != nil {
-		span.SetStatus(err)
-		return nil, errors.Wrap(err, "error in request to fetch container group metrics")
+	netStats, err := self.aciClient.GetContainerGroupMetrics(ctx, self.resourceGroup, cgName, aci.MetricsRequest{
+		Start:        start,
+		End:          end,
+		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
+		Types:        []aci.MetricType{aci.MetricTyperNetworkBytesRecievedPerSecond, aci.MetricTyperNetworkBytesTransmittedPerSecond},
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "error fetching network stats for container group %s", cgName)
 	}
-	close(chResult)
-	log.G(ctx).Debugf("Collected status from azure for %d pods", len(pods))
+	logger.Debug("Got network stats")
 
-	var s stats.Summary
-	s.Node = stats.NodeStats{
-		NodeName: p.nodeName,
-	}
-	s.Pods = make([]stats.PodStats, 0, len(chResult))
-
-	for stat := range chResult {
-		s.Pods = append(s.Pods, stat)
-	}
-
-	return &s, nil
+	var podStats stats.PodStats = collectMetrics(pod, systemStats, netStats)
+	return &podStats, nil
 }
 
 func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) stats.PodStats {

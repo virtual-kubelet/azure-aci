@@ -461,6 +461,7 @@ type ExtensionType string
 // Supported extension types
 const (
 	ExtensionTypeKubeProxy ExtensionType = "kube-proxy"
+	ExtensionTypeRealtimeMetrics ExtensionType = "realtime-metrics"
 )
 
 // ExtensionVersion is an enum type for defining supported extension versions
