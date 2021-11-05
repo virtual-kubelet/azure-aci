@@ -9,12 +9,16 @@ import (
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/azure-aci/provider/metrics"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 )
+
+type PodLister interface {
+	GetPods() []*v1.Pod
+}
 
 // GetStatsSummary returns the stats summary for pods running on ACI
 func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {

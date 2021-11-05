@@ -14,10 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ContainerGroupMetricsGetter interface {
-	GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options aci.MetricsRequest) (*aci.ContainerGroupMetricsResult, error)
-}
-
 type ContainerInsightsMetricsProvider struct {
 	metricsGetter ContainerGroupMetricsGetter
 	resourceGroup string
@@ -30,7 +26,7 @@ func NewContainerInsightsMetricsProvider(metricsGetter ContainerGroupMetricsGett
 	}
 }
 
-func (metricsProvider *ContainerInsightsMetricsProvider) GetPodMetrics(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (metricsProvider *ContainerInsightsMetricsProvider) GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	end := time.Now()
 	start := end.Add(-1 * time.Minute)
 	logger := log.G(ctx).WithFields(log.Fields{
