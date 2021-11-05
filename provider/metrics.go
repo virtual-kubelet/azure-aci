@@ -18,6 +18,8 @@ import (
 
 // GetStatsSummary returns the stats summary for pods running on ACI
 func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {
+	metrics.NewContainerInsightsMetricsProvider(p.aciClient, p.resourceGroup)
+
 	ctx, span := trace.StartSpan(ctx, "GetSummaryStats")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -251,8 +253,4 @@ func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) s
 	}
 
 	return stat
-}
-
-func containerGroupName(podNS, podName string) string {
-	return fmt.Sprintf("%s-%s", podNS, podName)
 }

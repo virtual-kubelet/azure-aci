@@ -1,32 +1,36 @@
-package metrics 
+package metrics
 
 import (
 	"context"
 	"fmt"
-	"time"
 	"strings"
-	
+	"time"
+
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 )
 
+type ContainerGroupMetricsGetter interface {
+	GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options aci.MetricsRequest) (*aci.ContainerGroupMetricsResult, error)
+}
+
 type ContainerInsightsMetricsProvider struct {
-	aciClient *aci.Client
+	metricsGetter ContainerGroupMetricsGetter
 	resourceGroup string
 }
 
-func NewContainerInsightsMetricsProvider(aciClient *aci.Client, resourceGroup string) *ContainerInsightsMetricsProvider {
+func NewContainerInsightsMetricsProvider(metricsGetter ContainerGroupMetricsGetter, resourceGroup string) *ContainerInsightsMetricsProvider {
 	return &ContainerInsightsMetricsProvider{
-		aciClient: aciClient,
-		resourceGroup: resourceGroup,	
+		metricsGetter: metricsGetter,
+		resourceGroup: resourceGroup,
 	}
 }
 
-func (self *ContainerInsightsMetricsProvider) getPodMetrics(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error){
+func (metricsProvider *ContainerInsightsMetricsProvider) GetPodMetrics(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	end := time.Now()
 	start := end.Add(-1 * time.Minute)
 	logger := log.G(ctx).WithFields(log.Fields{
@@ -38,7 +42,7 @@ func (self *ContainerInsightsMetricsProvider) getPodMetrics(ctx context.Context,
 
 	cgName := containerGroupName(pod.Namespace, pod.Name)
 	// cpu/mem and net stats are split because net stats do not support container level detail
-	systemStats, err := self.aciClient.GetContainerGroupMetrics(ctx, self.resourceGroup, cgName, aci.MetricsRequest{
+	systemStats, err := metricsProvider.metricsGetter.GetContainerGroupMetrics(ctx, metricsProvider.resourceGroup, cgName, aci.MetricsRequest{
 		Dimension:    "containerName eq '*'",
 		Start:        start,
 		End:          end,
@@ -50,7 +54,7 @@ func (self *ContainerInsightsMetricsProvider) getPodMetrics(ctx context.Context,
 	}
 	logger.Debug("Got system stats")
 
-	netStats, err := self.aciClient.GetContainerGroupMetrics(ctx, self.resourceGroup, cgName, aci.MetricsRequest{
+	netStats, err := metricsProvider.metricsGetter.GetContainerGroupMetrics(ctx, metricsProvider.resourceGroup, cgName, aci.MetricsRequest{
 		Start:        start,
 		End:          end,
 		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},

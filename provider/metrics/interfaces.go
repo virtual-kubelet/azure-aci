@@ -7,6 +7,6 @@ import (
 )
 
 type PodMetricsProvider interface {
-	getPodMetrics(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error)
+	GetPodMetrics(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error)
 }
 
