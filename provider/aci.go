@@ -17,18 +17,17 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	client "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/azure-aci/client/network"
+	"github.com/virtual-kubelet/azure-aci/provider/metrics"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
-	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -40,7 +39,6 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 )
-
 
 const (
 	// The service account secret mount path.
@@ -95,11 +93,9 @@ type ACIProvider struct {
 	kubeDNSIP          string
 	extraUserAgent     string
 	retryConfig        client.HTTPRetryConfig
+	tracker            *PodsTracker
 
-	metricsSync     sync.Mutex
-	metricsSyncTime time.Time
-	lastMetric      *stats.Summary
-	tracker         *PodsTracker
+	metrics.ACIPodMetricsProvider
 }
 
 // AuthConfig is the secret returned from an ImageRegistryCredential
@@ -400,6 +396,7 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		}
 	}
 
+	p.ACIPodMetricsProvider = *metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.aciClient)
 	return &p, err
 }
 
@@ -510,12 +507,10 @@ func getRealtimeMetricsExtension() (*aci.Extension, error) {
 	extension := aci.Extension{
 		Name: "vk-realtime-metrics",
 		Properties: &aci.ExtensionProperties{
-			Type:    aci.ExtensionTypeRealtimeMetrics,
-			Version: aci.ExtensionVersion1_0,
-			Settings: map[string]string{
-			},
-			ProtectedSettings: map[string]string{
-			},
+			Type:              aci.ExtensionTypeRealtimeMetrics,
+			Version:           aci.ExtensionVersion1_0,
+			Settings:          map[string]string{},
+			ProtectedSettings: map[string]string{},
 		},
 	}
 	return &extension, nil
@@ -749,7 +744,7 @@ func (p *ACIProvider) amendVnetResources(containerGroup *aci.ContainerGroup, pod
 		return
 	}
 
-	containerGroup.ContainerGroupProperties.SubnetIds = []*aci.SubnetIdDefinition{&aci.SubnetIdDefinition{ID: "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName} }
+	containerGroup.ContainerGroupProperties.SubnetIds = []*aci.SubnetIdDefinition{&aci.SubnetIdDefinition{ID: "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName}}
 	containerGroup.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
 	containerGroup.ContainerGroupProperties.Extensions = []*aci.Extension{p.kubeProxyExtension}
 }

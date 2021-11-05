@@ -42,7 +42,7 @@ type ACIPodMetricsProvider struct {
 func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGetter, cgMetricsGetter ContainerGroupMetricsGetter) *ACIPodMetricsProvider {
 	provider := ACIPodMetricsProvider{
 		nodeName:        nodeName,
-		metricsSyncTime: time.UnixMicro(0), // long time ago, means never synced metrics
+		metricsSyncTime: time.Now().Add(time.Hour * 1000), // long time ago, means never synced metrics
 		podGetter:       podGetter,
 		cgMetricsGetter: cgMetricsGetter,
 	}
