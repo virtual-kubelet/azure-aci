@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -14,19 +13,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ContainerInsightsMetricsProvider struct {
+// container insights implementation of podStatsGetter interface
+type containerInsightsPodStatsGetter struct {
 	metricsGetter ContainerGroupMetricsGetter
 	resourceGroup string
 }
 
-func NewContainerInsightsMetricsProvider(metricsGetter ContainerGroupMetricsGetter, resourceGroup string) *ContainerInsightsMetricsProvider {
-	return &ContainerInsightsMetricsProvider{
+func NewContainerInsightsMetricsProvider(metricsGetter ContainerGroupMetricsGetter, resourceGroup string) *containerInsightsPodStatsGetter {
+	return &containerInsightsPodStatsGetter{
 		metricsGetter: metricsGetter,
 		resourceGroup: resourceGroup,
 	}
 }
 
-func (metricsProvider *ContainerInsightsMetricsProvider) GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (metricsProvider *containerInsightsPodStatsGetter) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	end := time.Now()
 	start := end.Add(-1 * time.Minute)
 	logger := log.G(ctx).WithFields(log.Fields{
@@ -177,8 +177,4 @@ func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) s
 	}
 
 	return stat
-}
-
-func containerGroupName(podNS, podName string) string {
-	return fmt.Sprintf("%s-%s", podNS, podName)
 }

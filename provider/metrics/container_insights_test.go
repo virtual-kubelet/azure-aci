@@ -231,7 +231,7 @@ func TestGetPodMetrics(t *testing.T) {
 			}
 			metricsProvider := NewContainerInsightsMetricsProvider(mockMetricsGetter, "rg")
 			pod := fakePods(test.pod)
-			actualyPodStatus, err := metricsProvider.GetPodStats(context.Background(), pod)
+			actualyPodStatus, err := metricsProvider.getPodStats(context.Background(), pod)
 			assert.NilError(t, err)
 			assert.Equal(t, *actualyPodStatus.CPU.UsageNanoCores, *test.expectedPodStats.CPU.UsageNanoCores)
 			assert.Equal(t, *actualyPodStatus.Memory.UsageBytes, *test.expectedPodStats.Memory.UsageBytes)

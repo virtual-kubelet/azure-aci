@@ -396,7 +396,7 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		}
 	}
 
-	p.ACIPodMetricsProvider = *metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.aciClient)
+	p.ACIPodMetricsProvider = *metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.aciClient, p.aciClient)
 	return &p, err
 }
 
