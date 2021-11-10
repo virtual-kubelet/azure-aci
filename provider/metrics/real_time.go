@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -15,37 +16,37 @@ import (
 )
 
 // ### Begin: real time metrics data types. this is map to JSON from from real time API
-type PodStats struct {
+type realtimeMetricsExtensionPodStats struct {
 	// Timestamp in nanoseconds at which the information were collected. Must be > 0.
 	Timestamp  uint64           `json:"timestamp,omitempty"`
-	Containers []ContainerStats `json:"containers" patchStrategy:"merge" patchMergeKey:"name"`
+	Containers []containerStats `json:"containers" patchStrategy:"merge" patchMergeKey:"name"`
 	// Stats pertaining to CPU resources consumed by pod cgroup (which includes all containers' resource usage and pod overhead).
-	CPU CPUStats `json:"cpu,omitempty"`
+	CPU cpuStats `json:"cpu,omitempty"`
 	// Stats pertaining to memory (RAM) resources consumed by pod cgroup (which includes all containers' resource usage and pod overhead).
-	Memory MemoryStats `json:"memory,omitempty"`
+	Memory memoryStats `json:"memory,omitempty"`
 	// Stats pertaining to network resources.
 	// +optional
-	Network NetworkStats `json:"network,omitempty"`
+	Network networkStats `json:"network,omitempty"`
 }
 
-type ContainerStats struct {
+type containerStats struct {
 	// Reference to the measured container.
 	Name string `json:"name"`
 	// Stats pertaining to CPU resources.
 	// +optional
-	CPU CPUStats `json:"cpu"`
+	CPU cpuStats `json:"cpu"`
 	// Stats pertaining to memory (RAM) resources.
 	// +optional
-	Memory MemoryStats `json:"memory"`
+	Memory memoryStats `json:"memory"`
 }
 
-type CPUStats struct {
+type cpuStats struct {
 	// Cumulative CPU usage (sum across all cores) since object creation.
 	UsageCoreNanoSeconds uint64 `json:"usageCoreNanoSeconds"`
 }
 
-// MemoryStats contains data about memory usage.
-type MemoryStats struct {
+// memoryStats contains data about memory usage.
+type memoryStats struct {
 	// Total memory in use. This includes all memory regardless of when it was accessed.
 	UsageBytes uint64 `json:"usageBytes"`
 	// The amount of working set memory. This includes recently accessed memory,
@@ -56,14 +57,14 @@ type MemoryStats struct {
 	RSSBytes uint64 `json:"rssBytes"`
 }
 
-// NetworkStats contains data about network resources.
-type NetworkStats struct {
+// networkStats contains data about network resources.
+type networkStats struct {
 	// Stats for the default interface, if found
-	InterfaceStats `json:",inline"`
-	Interfaces     []InterfaceStats `json:"interfaces"`
+	interfaceStats `json:",inline"`
+	Interfaces     []interfaceStats `json:"interfaces"`
 }
 
-type InterfaceStats struct {
+type interfaceStats struct {
 	// The name of the interface
 	Name string `json:"name"`
 	// Cumulative count of bytes received.
@@ -81,22 +82,32 @@ type InterfaceStats struct {
 }
 
 type realTimeMetrics struct {
+	// this cache is for calculating UsageNanoCores. Real Time Metrics Extension
+	// only return cumulative UsageCoreNanoSeconds. However UsageNanoCores is a
+	// average CPU usage per seconds in a time windows.
+	// So we need to cache the last value of UsageCoreNanoSeconds and calcuate the average during
+	// the last time windows
+	cpuStatsCache *cache.Cache
 }
 
 func NewRealTimeMetrics() *realTimeMetrics {
-	return &realTimeMetrics{}
+	return &realTimeMetrics{
+		cpuStatsCache: cache.New(time.Minute*10, time.Minute*10),
+	}
 }
 
-// real-time implementation of podStatsGetter interface
+// the implementation of podStatsGetter interface base on ACI's Real-Time Metrics Extension
 func (realTime *realTimeMetrics) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
-	realtimePodStats, err := getRealTimePodStats(ctx, pod)
+	realtimeExtensionPodStats, err := getRealTimeExtensionPodStats(ctx, pod)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error fetching pod '%s' statsistics from Real Time Extension", pod.Name)
 	}
-	return extensionPodStatsToKubeletPodStats(pod, realtimePodStats), nil
+	result := extensionPodStatsToKubeletPodStats(pod, realtimeExtensionPodStats)
+	realTime.populateUsageNanocores(pod, realtimeExtensionPodStats, result)
+	return result, nil
 }
 
-func getRealTimePodStats(ctx context.Context, pod *v1.Pod) (*PodStats, error) {
+func getRealTimeExtensionPodStats(ctx context.Context, pod *v1.Pod) (*realtimeMetricsExtensionPodStats, error) {
 	if pod.Status.Phase != v1.PodRunning {
 		return nil, errors.Errorf("invalid parameter in getRealTimePodStats, only Running pod allow to query realtime statistics")
 	}
@@ -112,7 +123,7 @@ func getRealTimePodStats(ctx context.Context, pod *v1.Pod) (*PodStats, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read data from Real Time Metrics Extension's response")
 	}
-	result := &PodStats{}
+	result := &realtimeMetricsExtensionPodStats{}
 	err = json.Unmarshal(body, result)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal Real Time Metrics Extension body")
@@ -121,26 +132,8 @@ func getRealTimePodStats(ctx context.Context, pod *v1.Pod) (*PodStats, error) {
 	return result, nil
 }
 
-func filterOutContainerNotInPod(podStats *PodStats, pod *v1.Pod) {
-	extractContainerNameFromPod := func() map[string]string {
-		r := make(map[string]string)
-		for _, container := range pod.Spec.Containers {
-			r[container.Name] = container.Name
-		}
-		return r
-	}
-	containerNameIndex := extractContainerNameFromPod()
-	containersStats := podStats.Containers
-	podStats.Containers = make([]ContainerStats, 0)
-	for _, c := range containersStats {
-		if _, found := containerNameIndex[c.Name]; found {
-			podStats.Containers = append(podStats.Containers, c)
-		}
-	}
-}
-
-func extensionPodStatsToKubeletPodStats(pod *v1.Pod, extensionPodStats *PodStats) *stats.PodStats {
-	statsTime := metav1.NewTime(time.Unix(0, int64(extensionPodStats.Timestamp)))
+func extensionPodStatsToKubeletPodStats(pod *v1.Pod, realtimePodStats *realtimeMetricsExtensionPodStats) *stats.PodStats {
+	statsTime := metav1.NewTime(time.Unix(0, int64(realtimePodStats.Timestamp)))
 	result := stats.PodStats{
 		PodRef: stats.PodReference{
 			Name:      pod.Name,
@@ -150,34 +143,34 @@ func extensionPodStatsToKubeletPodStats(pod *v1.Pod, extensionPodStats *PodStats
 		StartTime: pod.CreationTimestamp,
 		CPU: &stats.CPUStats{
 			Time:                 statsTime,
-			UsageNanoCores:       &extensionPodStats.CPU.UsageCoreNanoSeconds,
-			UsageCoreNanoSeconds: &extensionPodStats.CPU.UsageCoreNanoSeconds,
+			UsageNanoCores:       newUInt64Pointer(0),
+			UsageCoreNanoSeconds: &realtimePodStats.CPU.UsageCoreNanoSeconds,
 		},
 		Memory: &stats.MemoryStats{
 			Time:            statsTime,
-			UsageBytes:      &extensionPodStats.Memory.UsageBytes,
-			RSSBytes:        &extensionPodStats.Memory.RSSBytes,
-			WorkingSetBytes: &extensionPodStats.Memory.WorkingSetBytes,
+			UsageBytes:      &realtimePodStats.Memory.UsageBytes,
+			RSSBytes:        &realtimePodStats.Memory.RSSBytes,
+			WorkingSetBytes: &realtimePodStats.Memory.WorkingSetBytes,
 		},
 		Network: &stats.NetworkStats{
 			Time: statsTime,
 			InterfaceStats: stats.InterfaceStats{
-				Name:     extensionPodStats.Network.Name,
-				RxBytes:  &extensionPodStats.Network.RxBytes,
-				RxErrors: &extensionPodStats.Network.RxErrors,
-				TxBytes:  &extensionPodStats.Network.TxBytes,
-				TxErrors: &extensionPodStats.Network.TxErrors,
+				Name:     realtimePodStats.Network.Name,
+				RxBytes:  &realtimePodStats.Network.RxBytes,
+				RxErrors: &realtimePodStats.Network.RxErrors,
+				TxBytes:  &realtimePodStats.Network.TxBytes,
+				TxErrors: &realtimePodStats.Network.TxErrors,
 			},
 		},
 	}
-	for _, extensionContainer := range extensionPodStats.Containers {
-		result.Containers = make([]stats.ContainerStats, 0)
+	result.Containers = make([]stats.ContainerStats, 0)
+	for _, extensionContainer := range realtimePodStats.Containers {
 		result.Containers = append(result.Containers, stats.ContainerStats{
 			Name:      extensionContainer.Name,
 			StartTime: pod.CreationTimestamp,
 			CPU: &stats.CPUStats{
 				Time:                 statsTime,
-				UsageNanoCores:       &extensionContainer.CPU.UsageCoreNanoSeconds,
+				UsageNanoCores:       newUInt64Pointer(0),
 				UsageCoreNanoSeconds: &extensionContainer.CPU.UsageCoreNanoSeconds,
 			},
 			Memory: &stats.MemoryStats{
@@ -189,8 +182,9 @@ func extensionPodStatsToKubeletPodStats(pod *v1.Pod, extensionPodStats *PodStats
 		})
 	}
 
-	for _, extensionNetworkInterface := range extensionPodStats.Network.Interfaces {
-		result.Network.Interfaces = make([]stats.InterfaceStats, 0)
+	result.Network.Interfaces = make([]stats.InterfaceStats, 0)
+	for _, extensionNetworkInterface := range realtimePodStats.Network.Interfaces {
+		extensionNetworkInterface := extensionNetworkInterface
 		result.Network.Interfaces = append(result.Network.Interfaces, stats.InterfaceStats{
 			Name:     extensionNetworkInterface.Name,
 			RxBytes:  &extensionNetworkInterface.RxBytes,
@@ -200,4 +194,82 @@ func extensionPodStatsToKubeletPodStats(pod *v1.Pod, extensionPodStats *PodStats
 		})
 	}
 	return &result
+}
+
+func (realTime *realTimeMetrics) populateUsageNanocores(pod *v1.Pod, realTimePodStats *realtimeMetricsExtensionPodStats, podStats *stats.PodStats) {
+	defer realTime.cpuStatsCache.Set(string(pod.UID), realTimePodStats, cache.DefaultExpiration)
+	lastRealtimePodStatus, found := realTime.cpuStatsCache.Get(string(pod.UID))
+	if !found {
+		return
+	}
+	podStats.CPU.UsageNanoCores = calculateUsageNanoCores(nil, lastRealtimePodStatus.(*realtimeMetricsExtensionPodStats), realTimePodStats)
+	for _, containerStat := range podStats.Containers {
+		containerStat.CPU.UsageNanoCores = calculateUsageNanoCores(&containerStat.Name, lastRealtimePodStatus.(*realtimeMetricsExtensionPodStats), realTimePodStats)
+	}
+}
+
+func calculateUsageNanoCores(containerName *string, lastPodStatus *realtimeMetricsExtensionPodStats, newPodStatus *realtimeMetricsExtensionPodStats) *uint64 {
+	if lastPodStatus == nil {
+		return newUInt64Pointer(0)
+	}
+	if newPodStatus == nil {
+		return newUInt64Pointer(0)
+	}
+	timeWindowsNanoSeconds := newPodStatus.Timestamp - lastPodStatus.Timestamp
+	if timeWindowsNanoSeconds <= 0 {
+		return newUInt64Pointer(0)
+	}
+	var timeWindowsSeconds uint64 = timeWindowsNanoSeconds / 1000000000
+	if containerName == nil {
+		// calculate for Pod
+		v := (newPodStatus.CPU.UsageCoreNanoSeconds - lastPodStatus.CPU.UsageCoreNanoSeconds) / timeWindowsSeconds
+		return &v
+	} else {
+		// calcuate for specified container
+		var oldContainerUsageCoreNanoSeconds *uint64 = nil
+		for _, container := range lastPodStatus.Containers {
+			if container.Name == *containerName {
+				oldContainerUsageCoreNanoSeconds = &container.CPU.UsageCoreNanoSeconds
+			}
+		}
+		if oldContainerUsageCoreNanoSeconds == nil {
+			return newUInt64Pointer(0)
+		}
+		var newContainerUsageCoreNanoSeconds *uint64 = nil
+		for _, container := range newPodStatus.Containers {
+			if container.Name == *containerName {
+				newContainerUsageCoreNanoSeconds = &container.CPU.UsageCoreNanoSeconds
+			}
+		}
+		if newContainerUsageCoreNanoSeconds == nil {
+			return newUInt64Pointer(0)
+		}
+		v := (*newContainerUsageCoreNanoSeconds - *oldContainerUsageCoreNanoSeconds) / timeWindowsSeconds
+		return &v
+	}
+}
+
+// there are some containers in Real Time Metrics Extension but not in Pod
+// for example some infra sidecar container. We need to filter out those containers
+func filterOutContainerNotInPod(podStats *realtimeMetricsExtensionPodStats, pod *v1.Pod) {
+	extractContainerNameFromPod := func() map[string]string {
+		r := make(map[string]string)
+		for _, container := range pod.Spec.Containers {
+			r[container.Name] = container.Name
+		}
+		return r
+	}
+	containerNameIndex := extractContainerNameFromPod()
+	containersStats := podStats.Containers
+	podStats.Containers = make([]containerStats, 0)
+	for _, c := range containersStats {
+		if _, found := containerNameIndex[c.Name]; found {
+			podStats.Containers = append(podStats.Containers, c)
+		}
+	}
+}
+
+func newUInt64Pointer(value int) *uint64 {
+	var u = uint64(value)
+	return &u
 }

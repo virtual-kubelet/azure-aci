@@ -2,15 +2,25 @@ package metrics
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func Test_getRealTimePodStats(t *testing.T) {
+func Test_realTimeMetrics_getPodStats(t *testing.T) {
+	realTIme := NewRealTimeMetrics()
 	ctx := context.Background()
-	pod := v1.Pod{
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "pod-1",
+			Namespace:         "ns",
+			UID:               "pod-uid",
+			CreationTimestamp: metav1.NewTime(time.Now()),
+		},
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
@@ -23,13 +33,11 @@ func Test_getRealTimePodStats(t *testing.T) {
 			PodIP: "20.99.248.167",
 		},
 	}
-	stats, err := getRealTimePodStats(ctx, &pod)
-	if err != nil {
-		fmt.Println("effffffffffffff", err)
-	}
-	fmt.Printf("%+v\n", stats)
-
-	for _, containerStats := range stats.Containers {
-		fmt.Println(containerStats.Name)
-	}
+	stats, _ := realTIme.getPodStats(ctx, pod)
+	b1, _ := json.Marshal(stats)
+	fmt.Println(string(b1))
+	time.Sleep(time.Second * 3)
+	stats, _ = realTIme.getPodStats(ctx, pod)
+	b2, _ := json.Marshal(stats)
+	fmt.Println(string(b2))
 }
