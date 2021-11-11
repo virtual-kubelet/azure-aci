@@ -182,8 +182,6 @@ func (t userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error)
 		response, err := t.base.RoundTrip(&newReq)
 
 		shouldRetry, rerr := retryPolicy(response, err)
-		fmt.Println(shouldRetry, rerr)
-		fmt.Println(req.URL)
 		if !shouldRetry {
 			return response, err
 		}
