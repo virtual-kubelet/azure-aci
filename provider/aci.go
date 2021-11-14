@@ -69,31 +69,32 @@ const (
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
-	aciClient          *aci.Client
-	resourceManager    *manager.ResourceManager
-	resourceGroup      string
-	region             string
-	nodeName           string
-	operatingSystem    string
-	cpu                string
-	memory             string
-	pods               string
-	gpu                string
-	gpuSKUs            []aci.GPUSKU
-	internalIP         string
-	daemonEndpointPort int32
-	diagnostics        *aci.ContainerGroupDiagnostics
-	subnetName         string
-	subnetCIDR         string
-	vnetSubscriptionID string
-	vnetName           string
-	vnetResourceGroup  string
-	clusterDomain      string
-	kubeProxyExtension *aci.Extension
-	kubeDNSIP          string
-	extraUserAgent     string
-	retryConfig        client.HTTPRetryConfig
-	tracker            *PodsTracker
+	aciClient                *aci.Client
+	resourceManager          *manager.ResourceManager
+	resourceGroup            string
+	region                   string
+	nodeName                 string
+	operatingSystem          string
+	cpu                      string
+	memory                   string
+	pods                     string
+	gpu                      string
+	gpuSKUs                  []aci.GPUSKU
+	internalIP               string
+	daemonEndpointPort       int32
+	diagnostics              *aci.ContainerGroupDiagnostics
+	subnetName               string
+	subnetCIDR               string
+	vnetSubscriptionID       string
+	vnetName                 string
+	vnetResourceGroup        string
+	clusterDomain            string
+	kubeProxyExtension       *aci.Extension
+	realtimeMetricsExtension *aci.Extension
+	kubeDNSIP                string
+	extraUserAgent           string
+	retryConfig              client.HTTPRetryConfig
+	tracker                  *PodsTracker
 
 	metrics.ACIPodMetricsProvider
 }
@@ -388,6 +389,11 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		p.kubeProxyExtension, err = getKubeProxyExtension(serviceAccountSecretMountPath, masterURI, clusterCIDR)
 		if err != nil {
 			return nil, fmt.Errorf("error creating kube proxy extension: %v", err)
+		}
+
+		enableRealTimeMetricsExtension := os.Getenv("ENABLE_REAL_TIME_METRICS")
+		if enableRealTimeMetricsExtension == "true" {
+			p.realtimeMetricsExtension, err = getRealtimeMetricsExtension()
 		}
 
 		p.kubeDNSIP = "10.0.0.10"
@@ -713,6 +719,9 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
+	if p.realtimeMetricsExtension != nil {
+		containerGroup.ContainerGroupProperties.Extensions = append(containerGroup.ContainerGroupProperties.Extensions, p.realtimeMetricsExtension)
+	}
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.

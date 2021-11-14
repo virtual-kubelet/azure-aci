@@ -96,7 +96,7 @@ type TimeSeries struct {
 	dataPoints         []float64
 }
 
-func TestGetPodMetrics(t *testing.T) {
+func TestContainerInsightsMetrics_NonCumulativeValues(t *testing.T) {
 	newUInt64Pointer := func(value int) *uint64 {
 		var u = uint64(value)
 		return &u
@@ -152,8 +152,8 @@ func TestGetPodMetrics(t *testing.T) {
 				Network: &stats.NetworkStats{
 					InterfaceStats: stats.InterfaceStats{
 						Name:    "eth0",
-						RxBytes: newUInt64Pointer(2000),
-						TxBytes: newUInt64Pointer(3000),
+						RxBytes: newUInt64Pointer(2000 * 60),
+						TxBytes: newUInt64Pointer(3000 * 60),
 					},
 				},
 			},
@@ -163,7 +163,7 @@ func TestGetPodMetrics(t *testing.T) {
 			pod: PodInfo{
 				name:       "pod1",
 				namespace:  "ns",
-				containers: []string{"container1"},
+				containers: []string{"container1", "container2"},
 			},
 			containerInsightMetrics: ContainerInsightMetrics{
 				containersCPU: map[string]TimeSeries{
@@ -213,8 +213,8 @@ func TestGetPodMetrics(t *testing.T) {
 				Network: &stats.NetworkStats{
 					InterfaceStats: stats.InterfaceStats{
 						Name:    "eth0",
-						RxBytes: newUInt64Pointer(3000),
-						TxBytes: newUInt64Pointer(4000),
+						RxBytes: newUInt64Pointer(3000 * 60),
+						TxBytes: newUInt64Pointer(4000 * 60),
 					},
 				},
 			},
@@ -250,6 +250,133 @@ func TestGetPodMetrics(t *testing.T) {
 	}
 }
 
+func TestContainerInsightsMetrics_CumulativeValues(t *testing.T) {
+	t.Run("accumulate value if time series conjunctive", func(t *testing.T) {
+		pod := fakePods(PodInfo{
+			name:              "pod1",
+			namespace:         "ns",
+			containers:        []string{"container1"},
+			creationTimestamp: time.Now(),
+		})
+
+		// first metrics
+		time1 := time.Now().Truncate(time.Minute).Add(-1 * time.Minute)
+		metrics1 := ContainerInsightMetrics{
+			containersCPU: map[string]TimeSeries{
+				"container1": {time1, []float64{10}},
+			},
+			containersMemory: map[string]TimeSeries{
+				"container1": {time1, []float64{1000}},
+			},
+			podRx: TimeSeries{time1, []float64{2000}},
+			podTx: TimeSeries{time1, []float64{3000}},
+		}
+		mockMetricsGetter1 := &MyMockContainerGroupMetricsGetter{
+			containersCPU:    toTimeSeriesEntryMap(metrics1.containersCPU),
+			containersMemory: toTimeSeriesEntryMap(metrics1.containersMemory),
+			podRx:            toTimeSeriesEntry(metrics1.podRx),
+			podTx:            toTimeSeriesEntry(metrics1.podTx),
+		}
+
+		// second metrics
+		time2 := time.Now().Truncate(time.Minute)
+		metrics2 := ContainerInsightMetrics{
+			containersCPU: map[string]TimeSeries{
+				"container1": {time2, []float64{10}},
+			},
+			containersMemory: map[string]TimeSeries{
+				"container1": {time2, []float64{1000}},
+			},
+			podRx: TimeSeries{time2, []float64{2000}},
+			podTx: TimeSeries{time2, []float64{3000}},
+		}
+		mockMetricsGetter2 := &MyMockContainerGroupMetricsGetter{
+			containersCPU:    toTimeSeriesEntryMap(metrics2.containersCPU),
+			containersMemory: toTimeSeriesEntryMap(metrics2.containersMemory),
+			podRx:            toTimeSeriesEntry(metrics2.podRx),
+			podTx:            toTimeSeriesEntry(metrics2.podTx),
+		}
+
+		var actualyPodStatus *stats.PodStats
+		var err error
+		metricsProvider := NewContainerInsightsMetricsProvider(mockMetricsGetter1, "rg")
+		actualyPodStatus, err = metricsProvider.getPodStats(context.Background(), pod)
+		assert.Equal(t, *actualyPodStatus.Network.RxBytes, uint64(2000*60))
+		assert.Equal(t, *actualyPodStatus.Network.TxBytes, uint64(3000*60))
+		assert.Equal(t, *actualyPodStatus.CPU.UsageCoreNanoSeconds, uint64(10*1000000*60))
+		assert.NilError(t, err)
+		metricsProvider.metricsGetter = mockMetricsGetter2
+		actualyPodStatus, err = metricsProvider.getPodStats(context.Background(), pod)
+		assert.NilError(t, err)
+		assert.Equal(t, *actualyPodStatus.Network.RxBytes, uint64(2000*60*2))
+		assert.Equal(t, *actualyPodStatus.Network.TxBytes, uint64(3000*60*2))
+		assert.Equal(t, *actualyPodStatus.CPU.UsageCoreNanoSeconds, uint64(10*1000000*60)*2)
+	})
+	t.Run("accumulate value if time series not conjunctive", func(t *testing.T) {
+		pod := fakePods(PodInfo{
+			name:              "pod1",
+			namespace:         "ns",
+			containers:        []string{"container1"},
+			creationTimestamp: time.Now(),
+		})
+
+		// first metrics
+		// time is two minutes ago
+		time1 := time.Now().Truncate(time.Minute).Add(-2 * time.Minute)
+		metrics1 := ContainerInsightMetrics{
+			containersCPU: map[string]TimeSeries{
+				"container1": {time1, []float64{10}},
+			},
+			containersMemory: map[string]TimeSeries{
+				"container1": {time1, []float64{1000}},
+			},
+			podRx: TimeSeries{time1, []float64{2000}},
+			podTx: TimeSeries{time1, []float64{3000}},
+		}
+		mockMetricsGetter1 := &MyMockContainerGroupMetricsGetter{
+			containersCPU:    toTimeSeriesEntryMap(metrics1.containersCPU),
+			containersMemory: toTimeSeriesEntryMap(metrics1.containersMemory),
+			podRx:            toTimeSeriesEntry(metrics1.podRx),
+			podTx:            toTimeSeriesEntry(metrics1.podTx),
+		}
+
+		// second metrics
+		// time is now, NOT conjective with time 1
+		time2 := time.Now().Truncate(time.Minute)
+		metrics2 := ContainerInsightMetrics{
+			containersCPU: map[string]TimeSeries{
+				"container1": {time2, []float64{10}},
+			},
+			containersMemory: map[string]TimeSeries{
+				"container1": {time2, []float64{1000}},
+			},
+			podRx: TimeSeries{time2, []float64{2000}},
+			podTx: TimeSeries{time2, []float64{3000}},
+		}
+		mockMetricsGetter2 := &MyMockContainerGroupMetricsGetter{
+			containersCPU:    toTimeSeriesEntryMap(metrics2.containersCPU),
+			containersMemory: toTimeSeriesEntryMap(metrics2.containersMemory),
+			podRx:            toTimeSeriesEntry(metrics2.podRx),
+			podTx:            toTimeSeriesEntry(metrics2.podTx),
+		}
+
+		var actualyPodStatus *stats.PodStats
+		var err error
+		metricsProvider := NewContainerInsightsMetricsProvider(mockMetricsGetter1, "rg")
+		actualyPodStatus, err = metricsProvider.getPodStats(context.Background(), pod)
+		assert.Equal(t, *actualyPodStatus.Network.RxBytes, uint64(2000*60))
+		assert.Equal(t, *actualyPodStatus.Network.TxBytes, uint64(3000*60))
+		assert.Equal(t, *actualyPodStatus.CPU.UsageCoreNanoSeconds, uint64(10*1000000*60))
+		assert.NilError(t, err)
+		metricsProvider.metricsGetter = mockMetricsGetter2
+		actualyPodStatus, err = metricsProvider.getPodStats(context.Background(), pod)
+		assert.NilError(t, err)
+		assert.Equal(t, *actualyPodStatus.Network.RxBytes, uint64(2000*60))
+		assert.Equal(t, *actualyPodStatus.Network.TxBytes, uint64(3000*60))
+		assert.Equal(t, *actualyPodStatus.CPU.UsageCoreNanoSeconds, uint64(10*1000000*60))
+	})
+}
+
 func toTimeSeriesEntryMap(testTimeSeriesMap map[string]TimeSeries) map[string][]aci.TimeSeriesEntry {
 	result := make(map[string][]aci.TimeSeriesEntry, len(testTimeSeriesMap))
 	for k, v := range testTimeSeriesMap {
@@ -263,7 +390,7 @@ func toTimeSeriesEntry(testTimeSeries TimeSeries) []aci.TimeSeriesEntry {
 	result := make([]aci.TimeSeriesEntry, size)
 	for i, dataPoint := range testTimeSeries.dataPoints {
 		result[i].Average = dataPoint
-		result[i].Timestamp = testTimeSeries.lastPointTimestamp.Add(time.Minute * time.Duration(size-i-1))
+		result[i].Timestamp = testTimeSeries.lastPointTimestamp.Truncate(time.Minute).Add(time.Minute * time.Duration(size-i-1))
 	}
 	return result
 }

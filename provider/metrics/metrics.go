@@ -192,8 +192,14 @@ func NewPodStatsGetterDecider(containerInsightsGetter podStatsGetter, realTimeGe
 }
 
 func (decider *podStatsGetterDecider) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+	logger := log.G(ctx).WithFields(log.Fields{
+		"UID":       string(pod.UID),
+		"Name":      pod.Name,
+		"Namespace": pod.Namespace,
+	})
 	aciCG, err := decider.getContainerGroup(ctx, pod)
 	if err != nil {
+		logger.Errorf("faile to query Container Group %s", err)
 		return nil, errors.Wrapf(err, "failed to query Container Group")
 	}
 	useRealTime := false
@@ -203,8 +209,10 @@ func (decider *podStatsGetterDecider) getPodStats(ctx context.Context, pod *v1.P
 		}
 	}
 	if useRealTime {
+		logger.Infof("use Real-Time Metrics Extension for pod '%s'", pod.Name)
 		return decider.realTimeGetter.getPodStats(ctx, pod)
 	} else {
+		logger.Infof("use Container Insights metrics for pod '%s'", pod.Name)
 		return decider.containerInsightsGetter.getPodStats(ctx, pod)
 	}
 }
@@ -229,4 +237,9 @@ func (decider *podStatsGetterDecider) getContainerGroup(ctx context.Context, pod
 
 func containerGroupName(podNS, podName string) string {
 	return fmt.Sprintf("%s-%s", podNS, podName)
+}
+
+func newUInt64Pointer(value int) *uint64 {
+	var u = uint64(value)
+	return &u
 }

@@ -268,8 +268,3 @@ func filterOutContainerNotInPod(podStats *realtimeMetricsExtensionPodStats, pod 
 		}
 	}
 }
-
-func newUInt64Pointer(value int) *uint64 {
-	var u = uint64(value)
-	return &u
-}
