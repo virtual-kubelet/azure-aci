@@ -47,8 +47,6 @@ type podStatsGetter interface {
 type ACIPodMetricsProvider struct {
 	nodeName           string
 	metricsSync        sync.Mutex
-	metricsSyncTime    time.Time
-	lastMetric         *stats.Summary
 	podGetter          PodGetter
 	aciCGGetter        ContaienrGroupGetter
 	aciCGMetricsGetter ContainerGroupMetricsGetter
@@ -58,17 +56,16 @@ type ACIPodMetricsProvider struct {
 func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGetter, aciCGGetter ContaienrGroupGetter, aciCGMetricsGetter ContainerGroupMetricsGetter) *ACIPodMetricsProvider {
 	provider := ACIPodMetricsProvider{
 		nodeName:           nodeName,
-		metricsSyncTime:    time.Now().Add(time.Hour * -1000), // long time ago, means never synced metrics
 		podGetter:          podGetter,
 		aciCGGetter:        aciCGGetter,
 		aciCGMetricsGetter: aciCGMetricsGetter,
 	}
 
 	containerInsightGetter := WrapCachedPodStatsGetter(
-		60,
+		30,
 		NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
 	realTimeGetter := WrapCachedPodStatsGetter(
-		10,
+		5,
 		NewRealTimeMetrics())
 	provider.podStatsGetter = NewPodStatsGetterDecider(containerInsightGetter, realTimeGetter, aciResourcegroup, aciCGGetter)
 	return &provider
@@ -84,31 +81,11 @@ func (provider *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (sum
 
 	log.G(ctx).Debug("acquired metrics mutex")
 
-	if time.Since(provider.metricsSyncTime) < time.Minute {
-		span.WithFields(ctx, log.Fields{
-			"preCachedResult":        true,
-			"cachedResultSampleTime": provider.metricsSyncTime.String(),
-		})
-		return provider.lastMetric, nil
-	}
-	ctx = span.WithFields(ctx, log.Fields{
-		"preCachedResult":        false,
-		"cachedResultSampleTime": provider.metricsSyncTime.String(),
-	})
-
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
-
-	defer func() {
-		if err != nil {
-			return
-		}
-		provider.lastMetric = summary
-		provider.metricsSyncTime = time.Now()
-	}()
 
 	pods := provider.podGetter.GetPods()
 

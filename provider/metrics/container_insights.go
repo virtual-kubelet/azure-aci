@@ -52,9 +52,9 @@ func (containerInsights *containerInsightsPodStatsGetter) getPodStats(ctx contex
 		"Namespace": pod.Namespace,
 	})
 	logger.Debug("Acquired semaphore")
-	end := truncateToMinute(time.Now())
+	end := time.Now()
 	start := end.Add(-5 * time.Minute)
-
+	logger.Debugf("getPodStats, start=%s, end=%s", start, end)
 	cgName := containerGroupName(pod.Namespace, pod.Name)
 	// cpu/mem and net stats are split because net stats do not support container level detail
 	systemStats, err := containerInsights.metricsGetter.GetContainerGroupMetrics(ctx, containerInsights.resourceGroup, cgName, aci.MetricsRequest{
@@ -78,14 +78,16 @@ func (containerInsights *containerInsightsPodStatsGetter) getPodStats(ctx contex
 	if err != nil {
 		return nil, errors.Wrapf(err, "error fetching network stats for container group %s", cgName)
 	}
+	logger.Debug("getPodStats, system: %+v", systemStats)
+	logger.Debug("getPodStats, net: %+v", netStats)
 	logger.Debug("Got network stats")
 
-	var podStats stats.PodStats = collectMetrics(pod, systemStats, netStats)
+	var podStats stats.PodStats = collectMetrics(logger, pod, systemStats, netStats)
 	containerInsights.updateCumulativeValues(logger, pod, systemStats, netStats, &podStats)
 	return &podStats, nil
 }
 
-func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) stats.PodStats {
+func collectMetrics(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) stats.PodStats {
 	stat := stats.PodStats{
 		StartTime: pod.CreationTimestamp,
 		PodRef: stats.PodReference{
@@ -93,62 +95,73 @@ func collectMetrics(pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) s
 			Namespace: pod.Namespace,
 			UID:       string(pod.UID),
 		},
+		CPU: &stats.CPUStats{
+			UsageNanoCores:       newUInt64Pointer(0),
+			UsageCoreNanoSeconds: newUInt64Pointer(0),
+			Time:                 metav1.NewTime(time.Now()),
+		},
+		Memory: &stats.MemoryStats{
+			UsageBytes:      newUInt64Pointer(0),
+			WorkingSetBytes: newUInt64Pointer(0),
+			Time:            metav1.NewTime(time.Now()),
+		},
+		Network: &stats.NetworkStats{
+			Time: metav1.NewTime(time.Now()),
+			InterfaceStats: stats.InterfaceStats{
+				Name:     "eth0",
+				RxBytes:  newUInt64Pointer(0),
+				RxErrors: newUInt64Pointer(0),
+				TxBytes:  newUInt64Pointer(0),
+				TxErrors: newUInt64Pointer(0),
+			},
+		},
+		Containers: make([]stats.ContainerStats, 0),
 	}
 
 	for _, c := range pod.Status.ContainerStatuses {
 		containerName := c.Name
-		cs := stats.ContainerStats{Name: containerName, StartTime: stat.StartTime}
-		if cpuSeries, found := findTimeSeries(system, aci.MetricTypeCPUUsage, &containerName); found && len(cpuSeries) > 0 {
-			data := cpuSeries[len(cpuSeries)-1]
-			cs.CPU = &stats.CPUStats{
-				Time:                 metav1.NewTime(data.Timestamp),
+		logger.Debugf("star to populate stats for container '%s'", containerName)
+		cs := stats.ContainerStats{
+			Name:      containerName,
+			StartTime: stat.StartTime,
+			CPU: &stats.CPUStats{
+				Time:                 metav1.NewTime(time.Now()),
 				UsageNanoCores:       newUInt64Pointer(0),
 				UsageCoreNanoSeconds: newUInt64Pointer(0),
-			}
-			if stat.CPU == nil {
-				stat.CPU = &stats.CPUStats{
-					UsageNanoCores:       newUInt64Pointer(0),
-					UsageCoreNanoSeconds: newUInt64Pointer(0),
-					Time:                 metav1.NewTime(data.Timestamp)}
-			}
+			},
+			Memory: &stats.MemoryStats{
+				Time:            metav1.NewTime(time.Now()),
+				RSSBytes:        newUInt64Pointer(0),
+				WorkingSetBytes: newUInt64Pointer(0),
+			},
+		}
+		if cpuSeries, found := findTimeSeries(system, aci.MetricTypeCPUUsage, &containerName); found && len(cpuSeries) > 0 {
+			data := cpuSeries[len(cpuSeries)-1]
 			nanoCores := uint64(data.Average * 1000000)
 			cs.CPU.UsageNanoCores = &nanoCores
+			cs.CPU.Time = metav1.NewTime(data.Timestamp)
 
 			podCPUCore := *stat.CPU.UsageNanoCores
 			podCPUCore += nanoCores
 			stat.CPU.UsageNanoCores = &podCPUCore
+			stat.CPU.Time = metav1.NewTime(data.Timestamp)
 		}
 		if memorySeries, found := findTimeSeries(system, aci.MetricTypeMemoryUsage, &containerName); found && len(memorySeries) > 0 {
 			data := memorySeries[len(memorySeries)-1]
-			cs.Memory = &stats.MemoryStats{}
-			if stat.Memory == nil {
-				stat.Memory = &stats.MemoryStats{
-					UsageBytes:      newUInt64Pointer(0),
-					WorkingSetBytes: newUInt64Pointer(0),
-					Time:            metav1.NewTime(data.Timestamp)}
-			}
-			cs.Memory.Time = metav1.NewTime(data.Timestamp)
 			bytes := uint64(data.Average)
 			cs.Memory.UsageBytes = &bytes
 			cs.Memory.WorkingSetBytes = &bytes
+			cs.Memory.Time = metav1.NewTime(data.Timestamp)
 
 			podMem := *stat.Memory.UsageBytes
 			podMem += bytes
 			stat.Memory.UsageBytes = &podMem
 			stat.Memory.WorkingSetBytes = &podMem
+			stat.Memory.Time = metav1.NewTime(data.Timestamp)
 		}
 		stat.Containers = append(stat.Containers, cs)
 	}
 
-	stat.Network = &stats.NetworkStats{
-		InterfaceStats: stats.InterfaceStats{
-			Name:     "eth0",
-			RxBytes:  newUInt64Pointer(0),
-			RxErrors: newUInt64Pointer(0),
-			TxBytes:  newUInt64Pointer(0),
-			TxErrors: newUInt64Pointer(0),
-		},
-	}
 	return stat
 }
 
@@ -198,16 +211,14 @@ func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues
 	defer containerInsights.cumulativeUsageCache.Set(cacheKey, cachedCumulativeValue, cache.DefaultExpiration)
 
 	if rxSeries, found := findTimeSeries(net, aci.MetricTyperNetworkBytesRecievedPerSecond, nil); found && len(rxSeries) > 0 {
-		if stat.Network.RxBytes == nil {
-			stat.Network.RxBytes = newUInt64Pointer(0)
-		}
+		data := rxSeries[len(rxSeries)-1]
+		stat.Network.Time = metav1.NewTime(data.Timestamp)
 		updateCumulativeUsage(logger, rxSeries, &cachedCumulativeValue.networkRx, stat.Network.RxBytes, 1)
 	}
 
 	if txSeries, found := findTimeSeries(net, aci.MetricTyperNetworkBytesTransmittedPerSecond, nil); found && len(txSeries) > 0 {
-		if stat.Network.TxBytes == nil {
-			stat.Network.TxBytes = newUInt64Pointer(0)
-		}
+		data := txSeries[len(txSeries)-1]
+		stat.Network.Time = metav1.NewTime(data.Timestamp)
 		updateCumulativeUsage(logger, txSeries, &cachedCumulativeValue.networkTx, stat.Network.TxBytes, 1)
 	}
 
@@ -238,7 +249,7 @@ func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues
 func updateCumulativeUsage(logger log.Logger, series []aci.TimeSeriesEntry, cumulative *cumulativeUsage, statsValue *uint64, multiple int) {
 	// reset the cumulative value if there is gap between the metrics series and cached
 	if series[0].Timestamp.Sub(cumulative.lastUpdateTime) > time.Minute {
-		logger.Infof("there are soem time gap between cached cumulative values and new metrics series, discard the cache")
+		logger.Infof("there are some time gap between cached cumulative values and new metrics series, discard the cache")
 		cumulative.value = 0
 		cumulative.lastUpdateTime = time.Time{}
 	}
