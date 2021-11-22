@@ -24,7 +24,6 @@ type containerInsightsPodStatsGetter struct {
 // some of values in stats.PodStats are require cumulative data. But Container Insights be only able to
 // provide the average value in 1 minute period. So we have to calculate the cumulative value from the average.
 // we need to remember the last cumulative value and add new value of next time windows.
-
 type podCumulativeUsage struct {
 	podUID                         string
 	containersUsageCoreNanoSeconds map[string]cumulativeUsage
@@ -56,38 +55,18 @@ func (containerInsights *containerInsightsPodStatsGetter) getPodStats(ctx contex
 	start := end.Add(-5 * time.Minute)
 	logger.Debugf("getPodStats, start=%s, end=%s", start, end)
 	cgName := containerGroupName(pod.Namespace, pod.Name)
-	// cpu/mem and net stats are split because net stats do not support container level detail
-	systemStats, err := containerInsights.metricsGetter.GetContainerGroupMetrics(ctx, containerInsights.resourceGroup, cgName, aci.MetricsRequest{
-		Dimension:    "containerName eq '*'",
-		Start:        start,
-		End:          end,
-		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
-		Types:        []aci.MetricType{aci.MetricTypeCPUUsage, aci.MetricTypeMemoryUsage},
-	})
-	if err != nil {
-		return nil, errors.Wrapf(err, "error fetching cpu/mem stats for container group %s", cgName)
-	}
-	logger.Debug("Got system stats")
 
-	netStats, err := containerInsights.metricsGetter.GetContainerGroupMetrics(ctx, containerInsights.resourceGroup, cgName, aci.MetricsRequest{
-		Start:        start,
-		End:          end,
-		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
-		Types:        []aci.MetricType{aci.MetricTyperNetworkBytesRecievedPerSecond, aci.MetricTyperNetworkBytesTransmittedPerSecond},
-	})
+	metrics, err := queryContainerInsightsMetrics(ctx, containerInsights.metricsGetter, containerInsights.resourceGroup, cgName, start, end)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error fetching network stats for container group %s", cgName)
+		return nil, errors.Wrapf(err, "error fetching metrics from Container Insights for container group %s", cgName)
 	}
-	logger.Debug("getPodStats, system: %+v", systemStats)
-	logger.Debug("getPodStats, net: %+v", netStats)
-	logger.Debug("Got network stats")
 
-	var podStats stats.PodStats = collectMetrics(logger, pod, systemStats, netStats)
-	containerInsights.updateCumulativeValues(logger, pod, systemStats, netStats, &podStats)
+	var podStats stats.PodStats = collectMetrics(logger, pod, metrics)
+	containerInsights.updateCumulativeValues(logger, pod, metrics, &podStats)
 	return &podStats, nil
 }
 
-func collectMetrics(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult) stats.PodStats {
+func collectMetrics(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMetricsWrapper) stats.PodStats {
 	stat := stats.PodStats{
 		StartTime: pod.CreationTimestamp,
 		PodRef: stats.PodReference{
@@ -120,7 +99,6 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGr
 
 	for _, c := range pod.Status.ContainerStatuses {
 		containerName := c.Name
-		logger.Debugf("star to populate stats for container '%s'", containerName)
 		cs := stats.ContainerStats{
 			Name:      containerName,
 			StartTime: stat.StartTime,
@@ -135,7 +113,8 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGr
 				WorkingSetBytes: newUInt64Pointer(0),
 			},
 		}
-		if cpuSeries, found := findTimeSeries(system, aci.MetricTypeCPUUsage, &containerName); found && len(cpuSeries) > 0 {
+
+		if cpuSeries, found := metrics.getCPUMetricsSeries(containerName); found && len(cpuSeries) > 0 {
 			data := cpuSeries[len(cpuSeries)-1]
 			nanoCores := uint64(data.Average * 1000000)
 			cs.CPU.UsageNanoCores = &nanoCores
@@ -146,7 +125,7 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGr
 			stat.CPU.UsageNanoCores = &podCPUCore
 			stat.CPU.Time = metav1.NewTime(data.Timestamp)
 		}
-		if memorySeries, found := findTimeSeries(system, aci.MetricTypeMemoryUsage, &containerName); found && len(memorySeries) > 0 {
+		if memorySeries, found := metrics.getMemoryMetricsSeries(containerName); found && len(memorySeries) > 0 {
 			data := memorySeries[len(memorySeries)-1]
 			bytes := uint64(data.Average)
 			cs.Memory.UsageBytes = &bytes
@@ -165,29 +144,7 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGr
 	return stat
 }
 
-func findTimeSeries(metricsResult *aci.ContainerGroupMetricsResult, metricsType aci.MetricType, containerName *string) ([]aci.TimeSeriesEntry, bool) {
-	for _, metrics := range metricsResult.Value {
-		if metrics.Desc.Value == metricsType {
-			if containerName == nil {
-				if len(metrics.Timeseries) > 0 {
-					return metrics.Timeseries[0].Data, true
-				}
-			} else {
-				for _, timeSeries := range metrics.Timeseries {
-					foundContainer := funk.Contains(timeSeries.MetadataValues, func(meta aci.MetricMetadataValue) bool {
-						return meta.Name.Value == "containername" && meta.Value == *containerName
-					})
-					if foundContainer {
-						return timeSeries.Data, true
-					}
-				}
-			}
-		}
-	}
-	return nil, false
-}
-
-func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues(logger log.Logger, pod *v1.Pod, system, net *aci.ContainerGroupMetricsResult, stat *stats.PodStats) {
+func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMetricsWrapper, stat *stats.PodStats) {
 	cacheKey := string(pod.UID)
 	c, found := containerInsights.cumulativeUsageCache.Get(cacheKey)
 	var cachedCumulativeValue *podCumulativeUsage
@@ -210,20 +167,20 @@ func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues
 	}
 	defer containerInsights.cumulativeUsageCache.Set(cacheKey, cachedCumulativeValue, cache.DefaultExpiration)
 
-	if rxSeries, found := findTimeSeries(net, aci.MetricTyperNetworkBytesRecievedPerSecond, nil); found && len(rxSeries) > 0 {
+	if rxSeries := metrics.getNetworkRxMetricsSeries(); len(rxSeries) > 0 {
 		data := rxSeries[len(rxSeries)-1]
 		stat.Network.Time = metav1.NewTime(data.Timestamp)
 		updateCumulativeUsage(logger, rxSeries, &cachedCumulativeValue.networkRx, stat.Network.RxBytes, 1)
 	}
 
-	if txSeries, found := findTimeSeries(net, aci.MetricTyperNetworkBytesTransmittedPerSecond, nil); found && len(txSeries) > 0 {
+	if txSeries := metrics.getNetworkTxMetricsSeries(); len(txSeries) > 0 {
 		data := txSeries[len(txSeries)-1]
 		stat.Network.Time = metav1.NewTime(data.Timestamp)
 		updateCumulativeUsage(logger, txSeries, &cachedCumulativeValue.networkTx, stat.Network.TxBytes, 1)
 	}
 
 	for _, containerStats := range stat.Containers {
-		if cpuSeries, found := findTimeSeries(system, aci.MetricTypeCPUUsage, &containerStats.Name); found && len(cpuSeries) > 0 {
+		if cpuSeries, found := metrics.getCPUMetricsSeries(containerStats.Name); found && len(cpuSeries) > 0 {
 			if containerStats.CPU.UsageCoreNanoSeconds == nil {
 				containerStats.CPU.UsageCoreNanoSeconds = newUInt64Pointer(0)
 			}
@@ -263,6 +220,93 @@ func updateCumulativeUsage(logger log.Logger, series []aci.TimeSeriesEntry, cumu
 	}
 }
 
-func truncateToMinute(t time.Time) time.Time {
-	return t.Truncate(time.Minute)
+// encapsulate the logic of:
+// 1. interaction with Container Insights
+// 2. cache and index the result from Container Insights
+// 3. lookup the metrics by metrics type and container name
+type containerInsightsMetricsWrapper struct {
+	networkRxMetricSeries []aci.TimeSeriesEntry
+	networkTxMetricSeries []aci.TimeSeriesEntry
+	cpuMetricsSeries      map[string][]aci.TimeSeriesEntry
+	memoryMetricsSeries   map[string][]aci.TimeSeriesEntry
+}
+
+func queryContainerInsightsMetrics(ctx context.Context, metricsGetter ContainerGroupMetricsGetter, resourceGroup, containerGroup string, start, end time.Time) (*containerInsightsMetricsWrapper, error) {
+	wrapper := &containerInsightsMetricsWrapper{
+		cpuMetricsSeries:    make(map[string][]aci.TimeSeriesEntry),
+		memoryMetricsSeries: make(map[string][]aci.TimeSeriesEntry),
+	}
+	systemStats, err := metricsGetter.GetContainerGroupMetrics(ctx, resourceGroup, containerGroup, aci.MetricsRequest{
+		Dimension:    "containerName eq '*'",
+		Start:        start,
+		End:          end,
+		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
+		Types:        []aci.MetricType{aci.MetricTypeCPUUsage, aci.MetricTypeMemoryUsage},
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "error fetching cpu/mem stats for container group %s", containerGroup)
+	}
+
+	netStats, err := metricsGetter.GetContainerGroupMetrics(ctx, resourceGroup, containerGroup, aci.MetricsRequest{
+		Start:        start,
+		End:          end,
+		Aggregations: []aci.AggregationType{aci.AggregationTypeAverage},
+		Types:        []aci.MetricType{aci.MetricTyperNetworkBytesRecievedPerSecond, aci.MetricTyperNetworkBytesTransmittedPerSecond},
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "error fetching network stats for container group %s", containerGroup)
+	}
+
+	for _, metrics := range systemStats.Value {
+		if metrics.Desc.Value == aci.MetricTypeCPUUsage {
+			for _, timeSeries := range metrics.Timeseries {
+				containerNameMeta := funk.Find(timeSeries.MetadataValues, func(meta aci.MetricMetadataValue) bool {
+					return meta.Name.Value == "containername"
+				})
+				if containerNameMeta != nil {
+					containerName := containerNameMeta.(aci.MetricMetadataValue).Value
+					wrapper.cpuMetricsSeries[containerName] = timeSeries.Data
+				}
+			}
+		}
+		if metrics.Desc.Value == aci.MetricTypeMemoryUsage {
+			for _, timeSeries := range metrics.Timeseries {
+				containerNameMeta := funk.Find(timeSeries.MetadataValues, func(meta aci.MetricMetadataValue) bool {
+					return meta.Name.Value == "containername"
+				})
+				if containerNameMeta != nil {
+					containerName := containerNameMeta.(aci.MetricMetadataValue).Value
+					wrapper.memoryMetricsSeries[containerName] = timeSeries.Data
+				}
+			}
+		}
+	}
+
+	for _, metrics := range netStats.Value {
+		if metrics.Desc.Value == aci.MetricTyperNetworkBytesRecievedPerSecond && len(metrics.Timeseries) > 0 {
+			wrapper.networkRxMetricSeries = metrics.Timeseries[0].Data
+		}
+		if metrics.Desc.Value == aci.MetricTyperNetworkBytesTransmittedPerSecond && len(metrics.Timeseries) > 0 {
+			wrapper.networkTxMetricSeries = metrics.Timeseries[0].Data
+		}
+	}
+	return wrapper, nil
+}
+
+func (wrapper *containerInsightsMetricsWrapper) getCPUMetricsSeries(containerName string) ([]aci.TimeSeriesEntry, bool) {
+	val, found := wrapper.cpuMetricsSeries[containerName]
+	return val, found
+}
+
+func (wrapper *containerInsightsMetricsWrapper) getMemoryMetricsSeries(containerName string) ([]aci.TimeSeriesEntry, bool) {
+	val, found := wrapper.memoryMetricsSeries[containerName]
+	return val, found
+}
+
+func (wrapper *containerInsightsMetricsWrapper) getNetworkTxMetricsSeries() []aci.TimeSeriesEntry {
+	return wrapper.networkTxMetricSeries
+}
+
+func (wrapper *containerInsightsMetricsWrapper) getNetworkRxMetricsSeries() []aci.TimeSeriesEntry {
+	return wrapper.networkRxMetricSeries
 }
