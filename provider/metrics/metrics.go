@@ -61,9 +61,10 @@ func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGe
 		aciCGMetricsGetter: aciCGMetricsGetter,
 	}
 
-	containerInsightGetter := WrapCachedPodStatsGetter(
-		30,
-		NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
+	// containerInsightGetter := WrapCachedPodStatsGetter(
+	// 	30,
+	// 	NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
+	containerInsightGetter := NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup)
 	realTimeGetter := WrapCachedPodStatsGetter(
 		5,
 		NewRealTimeMetrics())

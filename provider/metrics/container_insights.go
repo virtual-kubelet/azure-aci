@@ -53,10 +53,9 @@ func (containerInsights *containerInsightsPodStatsGetter) getPodStats(ctx contex
 	logger.Debug("Acquired semaphore")
 	end := time.Now()
 	start := end.Add(-5 * time.Minute)
-	logger.Debugf("getPodStats, start=%s, end=%s", start, end)
 	cgName := containerGroupName(pod.Namespace, pod.Name)
 
-	metrics, err := queryContainerInsightsMetrics(ctx, containerInsights.metricsGetter, containerInsights.resourceGroup, cgName, start, end)
+	metrics, err := queryContainerInsightsMetrics(logger, ctx, containerInsights.metricsGetter, containerInsights.resourceGroup, cgName, start, end)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error fetching metrics from Container Insights for container group %s", cgName)
 	}
@@ -167,6 +166,7 @@ func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues
 	}
 	defer containerInsights.cumulativeUsageCache.Set(cacheKey, cachedCumulativeValue, cache.DefaultExpiration)
 
+	logger.Debugf("container_insights.updateCumulativeValues, cachedCumulativeValue=%v", cachedCumulativeValue)
 	if rxSeries := metrics.getNetworkRxMetricsSeries(); len(rxSeries) > 0 {
 		data := rxSeries[len(rxSeries)-1]
 		stat.Network.Time = metav1.NewTime(data.Timestamp)
@@ -206,7 +206,7 @@ func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues
 func updateCumulativeUsage(logger log.Logger, series []aci.TimeSeriesEntry, cumulative *cumulativeUsage, statsValue *uint64, multiple int) {
 	// reset the cumulative value if there is gap between the metrics series and cached
 	if series[0].Timestamp.Sub(cumulative.lastUpdateTime) > time.Minute {
-		logger.Infof("there are some time gap between cached cumulative values and new metrics series, discard the cache")
+		logger.Infof("container_insights.updateCumulativeUsage, there are some time gap between cached cumulative values and new metrics series, discard the cache")
 		cumulative.value = 0
 		cumulative.lastUpdateTime = time.Time{}
 	}
@@ -215,9 +215,9 @@ func updateCumulativeUsage(logger log.Logger, series []aci.TimeSeriesEntry, cumu
 		if r.Timestamp.After(cumulative.lastUpdateTime) {
 			cumulative.value += uint64(r.Average) * 60 * uint64(multiple)
 			cumulative.lastUpdateTime = r.Timestamp
-			*statsValue = cumulative.value
 		}
 	}
+	*statsValue = cumulative.value
 }
 
 // encapsulate the logic of:
@@ -231,7 +231,7 @@ type containerInsightsMetricsWrapper struct {
 	memoryMetricsSeries   map[string][]aci.TimeSeriesEntry
 }
 
-func queryContainerInsightsMetrics(ctx context.Context, metricsGetter ContainerGroupMetricsGetter, resourceGroup, containerGroup string, start, end time.Time) (*containerInsightsMetricsWrapper, error) {
+func queryContainerInsightsMetrics(logger log.Logger, ctx context.Context, metricsGetter ContainerGroupMetricsGetter, resourceGroup, containerGroup string, start, end time.Time) (*containerInsightsMetricsWrapper, error) {
 	wrapper := &containerInsightsMetricsWrapper{
 		cpuMetricsSeries:    make(map[string][]aci.TimeSeriesEntry),
 		memoryMetricsSeries: make(map[string][]aci.TimeSeriesEntry),
@@ -256,6 +256,9 @@ func queryContainerInsightsMetrics(ctx context.Context, metricsGetter ContainerG
 	if err != nil {
 		return nil, errors.Wrapf(err, "error fetching network stats for container group %s", containerGroup)
 	}
+
+	logger.Debug("container_insights.queryContainerInsightsMetrics, systemStats: %v", systemStats)
+	logger.Debug("container_insights.queryContainerInsightsMetrics, netStats: %v", netStats)
 
 	for _, metrics := range systemStats.Value {
 		if metrics.Desc.Value == aci.MetricTypeCPUUsage {
