@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: vk-e2e-hpa
+  namespace: vk
 spec:
   containers:
   - image: k8s.gcr.io/hpa-example
