@@ -15,8 +15,8 @@ import (
 )
 
 // container insights implementation of podStatsGetter interface
-type containerInsightsPodStatsGetter struct {
-	metricsGetter        ContainerGroupMetricsGetter
+type insightsGetter struct {
+	metricsGetter        MetricsGetter
 	resourceGroup        string
 	cumulativeUsageCache *cache.Cache
 }
@@ -36,15 +36,15 @@ type cumulativeUsage struct {
 	value          uint64
 }
 
-func NewContainerInsightsMetricsProvider(metricsGetter ContainerGroupMetricsGetter, resourceGroup string) *containerInsightsPodStatsGetter {
-	return &containerInsightsPodStatsGetter{
+func NewContainerInsightsMetricsProvider(metricsGetter MetricsGetter, resourceGroup string) *insightsGetter {
+	return &insightsGetter{
 		metricsGetter:        metricsGetter,
 		resourceGroup:        resourceGroup,
 		cumulativeUsageCache: cache.New(time.Minute*30, time.Minute*30),
 	}
 }
 
-func (containerInsights *containerInsightsPodStatsGetter) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (g *insightsGetter) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	logger := log.G(ctx).WithFields(log.Fields{
 		"UID":       string(pod.UID),
 		"Name":      pod.Name,
@@ -55,13 +55,13 @@ func (containerInsights *containerInsightsPodStatsGetter) getPodStats(ctx contex
 	start := end.Add(-5 * time.Minute)
 	cgName := containerGroupName(pod.Namespace, pod.Name)
 
-	metrics, err := queryContainerInsightsMetrics(logger, ctx, containerInsights.metricsGetter, containerInsights.resourceGroup, cgName, start, end)
+	metrics, err := queryContainerInsightsMetrics(logger, ctx, g.metricsGetter, g.resourceGroup, cgName, start, end)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error fetching metrics from Container Insights for container group %s", cgName)
 	}
 
 	var podStats stats.PodStats = collectMetrics(logger, pod, metrics)
-	containerInsights.updateCumulativeValues(logger, pod, metrics, &podStats)
+	g.updateCumulativeValues(logger, pod, metrics, &podStats)
 	return &podStats, nil
 }
 
@@ -113,7 +113,7 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMe
 			},
 		}
 
-		if cpuSeries, found := metrics.getCPUMetricsSeries(containerName); found && len(cpuSeries) > 0 {
+		if cpuSeries, found := metrics.getCPU(containerName); found && len(cpuSeries) > 0 {
 			data := cpuSeries[len(cpuSeries)-1]
 			nanoCores := uint64(data.Average * 1000000)
 			cs.CPU.UsageNanoCores = &nanoCores
@@ -124,7 +124,7 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMe
 			stat.CPU.UsageNanoCores = &podCPUCore
 			stat.CPU.Time = metav1.NewTime(data.Timestamp)
 		}
-		if memorySeries, found := metrics.getMemoryMetricsSeries(containerName); found && len(memorySeries) > 0 {
+		if memorySeries, found := metrics.getMemory(containerName); found && len(memorySeries) > 0 {
 			data := memorySeries[len(memorySeries)-1]
 			bytes := uint64(data.Average)
 			cs.Memory.UsageBytes = &bytes
@@ -143,9 +143,9 @@ func collectMetrics(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMe
 	return stat
 }
 
-func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMetricsWrapper, stat *stats.PodStats) {
+func (g *insightsGetter) updateCumulativeValues(logger log.Logger, pod *v1.Pod, metrics *containerInsightsMetricsWrapper, stat *stats.PodStats) {
 	cacheKey := string(pod.UID)
-	c, found := containerInsights.cumulativeUsageCache.Get(cacheKey)
+	c, found := g.cumulativeUsageCache.Get(cacheKey)
 	var cachedCumulativeValue *podCumulativeUsage
 	if !found {
 		logger.Infof("Didn't find cumulative values in cache for pod: pod name '%s', UID '%s'", pod.Name, cacheKey)
@@ -164,23 +164,23 @@ func (containerInsights *containerInsightsPodStatsGetter) updateCumulativeValues
 	} else {
 		cachedCumulativeValue = c.(*podCumulativeUsage)
 	}
-	defer containerInsights.cumulativeUsageCache.Set(cacheKey, cachedCumulativeValue, cache.DefaultExpiration)
+	defer g.cumulativeUsageCache.Set(cacheKey, cachedCumulativeValue, cache.DefaultExpiration)
 
 	logger.Debugf("container_insights.updateCumulativeValues, cachedCumulativeValue=%v", cachedCumulativeValue)
-	if rxSeries := metrics.getNetworkRxMetricsSeries(); len(rxSeries) > 0 {
+	if rxSeries := metrics.getNetworkRx(); len(rxSeries) > 0 {
 		data := rxSeries[len(rxSeries)-1]
 		stat.Network.Time = metav1.NewTime(data.Timestamp)
 		updateCumulativeUsage(logger, rxSeries, &cachedCumulativeValue.networkRx, stat.Network.RxBytes, 1)
 	}
 
-	if txSeries := metrics.getNetworkTxMetricsSeries(); len(txSeries) > 0 {
+	if txSeries := metrics.getNetworkTx(); len(txSeries) > 0 {
 		data := txSeries[len(txSeries)-1]
 		stat.Network.Time = metav1.NewTime(data.Timestamp)
 		updateCumulativeUsage(logger, txSeries, &cachedCumulativeValue.networkTx, stat.Network.TxBytes, 1)
 	}
 
 	for _, containerStats := range stat.Containers {
-		if cpuSeries, found := metrics.getCPUMetricsSeries(containerStats.Name); found && len(cpuSeries) > 0 {
+		if cpuSeries, found := metrics.getCPU(containerStats.Name); found && len(cpuSeries) > 0 {
 			if containerStats.CPU.UsageCoreNanoSeconds == nil {
 				containerStats.CPU.UsageCoreNanoSeconds = newUInt64Pointer(0)
 			}
@@ -231,7 +231,7 @@ type containerInsightsMetricsWrapper struct {
 	memoryMetricsSeries   map[string][]aci.TimeSeriesEntry
 }
 
-func queryContainerInsightsMetrics(logger log.Logger, ctx context.Context, metricsGetter ContainerGroupMetricsGetter, resourceGroup, containerGroup string, start, end time.Time) (*containerInsightsMetricsWrapper, error) {
+func queryContainerInsightsMetrics(logger log.Logger, ctx context.Context, metricsGetter MetricsGetter, resourceGroup, containerGroup string, start, end time.Time) (*containerInsightsMetricsWrapper, error) {
 	wrapper := &containerInsightsMetricsWrapper{
 		cpuMetricsSeries:    make(map[string][]aci.TimeSeriesEntry),
 		memoryMetricsSeries: make(map[string][]aci.TimeSeriesEntry),
@@ -296,20 +296,20 @@ func queryContainerInsightsMetrics(logger log.Logger, ctx context.Context, metri
 	return wrapper, nil
 }
 
-func (wrapper *containerInsightsMetricsWrapper) getCPUMetricsSeries(containerName string) ([]aci.TimeSeriesEntry, bool) {
+func (wrapper *containerInsightsMetricsWrapper) getCPU(containerName string) ([]aci.TimeSeriesEntry, bool) {
 	val, found := wrapper.cpuMetricsSeries[containerName]
 	return val, found
 }
 
-func (wrapper *containerInsightsMetricsWrapper) getMemoryMetricsSeries(containerName string) ([]aci.TimeSeriesEntry, bool) {
+func (wrapper *containerInsightsMetricsWrapper) getMemory(containerName string) ([]aci.TimeSeriesEntry, bool) {
 	val, found := wrapper.memoryMetricsSeries[containerName]
 	return val, found
 }
 
-func (wrapper *containerInsightsMetricsWrapper) getNetworkTxMetricsSeries() []aci.TimeSeriesEntry {
+func (wrapper *containerInsightsMetricsWrapper) getNetworkTx() []aci.TimeSeriesEntry {
 	return wrapper.networkTxMetricSeries
 }
 
-func (wrapper *containerInsightsMetricsWrapper) getNetworkRxMetricsSeries() []aci.TimeSeriesEntry {
+func (wrapper *containerInsightsMetricsWrapper) getNetworkRx() []aci.TimeSeriesEntry {
 	return wrapper.networkRxMetricSeries
 }

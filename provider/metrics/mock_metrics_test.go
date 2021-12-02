@@ -51,31 +51,31 @@ func (mr *MockPodGetterMockRecorder) GetPods() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPods", reflect.TypeOf((*MockPodGetter)(nil).GetPods))
 }
 
-// MockContainerGroupMetricsGetter is a mock of ContainerGroupMetricsGetter interface.
-type MockContainerGroupMetricsGetter struct {
+// MockMetricsGetter is a mock of MetricsGetter interface.
+type MockMetricsGetter struct {
 	ctrl     *gomock.Controller
-	recorder *MockContainerGroupMetricsGetterMockRecorder
+	recorder *MockMetricsGetterMockRecorder
 }
 
-// MockContainerGroupMetricsGetterMockRecorder is the mock recorder for MockContainerGroupMetricsGetter.
-type MockContainerGroupMetricsGetterMockRecorder struct {
-	mock *MockContainerGroupMetricsGetter
+// MockMetricsGetterMockRecorder is the mock recorder for MockMetricsGetter.
+type MockMetricsGetterMockRecorder struct {
+	mock *MockMetricsGetter
 }
 
-// NewMockContainerGroupMetricsGetter creates a new mock instance.
-func NewMockContainerGroupMetricsGetter(ctrl *gomock.Controller) *MockContainerGroupMetricsGetter {
-	mock := &MockContainerGroupMetricsGetter{ctrl: ctrl}
-	mock.recorder = &MockContainerGroupMetricsGetterMockRecorder{mock}
+// NewMockMetricsGetter creates a new mock instance.
+func NewMockMetricsGetter(ctrl *gomock.Controller) *MockMetricsGetter {
+	mock := &MockMetricsGetter{ctrl: ctrl}
+	mock.recorder = &MockMetricsGetterMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockContainerGroupMetricsGetter) EXPECT() *MockContainerGroupMetricsGetterMockRecorder {
+func (m *MockMetricsGetter) EXPECT() *MockMetricsGetterMockRecorder {
 	return m.recorder
 }
 
 // GetContainerGroupMetrics mocks base method.
-func (m *MockContainerGroupMetricsGetter) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options aci.MetricsRequest) (*aci.ContainerGroupMetricsResult, error) {
+func (m *MockMetricsGetter) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options aci.MetricsRequest) (*aci.ContainerGroupMetricsResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetContainerGroupMetrics", ctx, resourceGroup, containerGroup, options)
 	ret0, _ := ret[0].(*aci.ContainerGroupMetricsResult)
@@ -84,36 +84,36 @@ func (m *MockContainerGroupMetricsGetter) GetContainerGroupMetrics(ctx context.C
 }
 
 // GetContainerGroupMetrics indicates an expected call of GetContainerGroupMetrics.
-func (mr *MockContainerGroupMetricsGetterMockRecorder) GetContainerGroupMetrics(ctx, resourceGroup, containerGroup, options interface{}) *gomock.Call {
+func (mr *MockMetricsGetterMockRecorder) GetContainerGroupMetrics(ctx, resourceGroup, containerGroup, options interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerGroupMetrics", reflect.TypeOf((*MockContainerGroupMetricsGetter)(nil).GetContainerGroupMetrics), ctx, resourceGroup, containerGroup, options)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerGroupMetrics", reflect.TypeOf((*MockMetricsGetter)(nil).GetContainerGroupMetrics), ctx, resourceGroup, containerGroup, options)
 }
 
-// MockContaienrGroupGetter is a mock of ContaienrGroupGetter interface.
-type MockContaienrGroupGetter struct {
+// MockContainerGroupGetter is a mock of ContainerGroupGetter interface.
+type MockContainerGroupGetter struct {
 	ctrl     *gomock.Controller
-	recorder *MockContaienrGroupGetterMockRecorder
+	recorder *MockContainerGroupGetterMockRecorder
 }
 
-// MockContaienrGroupGetterMockRecorder is the mock recorder for MockContaienrGroupGetter.
-type MockContaienrGroupGetterMockRecorder struct {
-	mock *MockContaienrGroupGetter
+// MockContainerGroupGetterMockRecorder is the mock recorder for MockContainerGroupGetter.
+type MockContainerGroupGetterMockRecorder struct {
+	mock *MockContainerGroupGetter
 }
 
-// NewMockContaienrGroupGetter creates a new mock instance.
-func NewMockContaienrGroupGetter(ctrl *gomock.Controller) *MockContaienrGroupGetter {
-	mock := &MockContaienrGroupGetter{ctrl: ctrl}
-	mock.recorder = &MockContaienrGroupGetterMockRecorder{mock}
+// NewMockContainerGroupGetter creates a new mock instance.
+func NewMockContainerGroupGetter(ctrl *gomock.Controller) *MockContainerGroupGetter {
+	mock := &MockContainerGroupGetter{ctrl: ctrl}
+	mock.recorder = &MockContainerGroupGetterMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockContaienrGroupGetter) EXPECT() *MockContaienrGroupGetterMockRecorder {
+func (m *MockContainerGroupGetter) EXPECT() *MockContainerGroupGetterMockRecorder {
 	return m.recorder
 }
 
 // GetContainerGroup mocks base method.
-func (m *MockContaienrGroupGetter) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*aci.ContainerGroup, *int, error) {
+func (m *MockContainerGroupGetter) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*aci.ContainerGroup, *int, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetContainerGroup", ctx, resourceGroup, containerGroupName)
 	ret0, _ := ret[0].(*aci.ContainerGroup)
@@ -123,9 +123,9 @@ func (m *MockContaienrGroupGetter) GetContainerGroup(ctx context.Context, resour
 }
 
 // GetContainerGroup indicates an expected call of GetContainerGroup.
-func (mr *MockContaienrGroupGetterMockRecorder) GetContainerGroup(ctx, resourceGroup, containerGroupName interface{}) *gomock.Call {
+func (mr *MockContainerGroupGetterMockRecorder) GetContainerGroup(ctx, resourceGroup, containerGroupName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerGroup", reflect.TypeOf((*MockContaienrGroupGetter)(nil).GetContainerGroup), ctx, resourceGroup, containerGroupName)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerGroup", reflect.TypeOf((*MockContainerGroupGetter)(nil).GetContainerGroup), ctx, resourceGroup, containerGroupName)
 }
 
 // MockpodStatsGetter is a mock of podStatsGetter interface.

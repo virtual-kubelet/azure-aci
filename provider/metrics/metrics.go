@@ -27,12 +27,12 @@ type PodGetter interface {
 }
 
 // package dependency: query the Pod's correspoinding Container Group metrics from Container Insights
-type ContainerGroupMetricsGetter interface {
+type MetricsGetter interface {
 	GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options aci.MetricsRequest) (*aci.ContainerGroupMetricsResult, error)
 }
 
 // package dependency: query the Container Group information
-type ContaienrGroupGetter interface {
+type ContainerGroupGetter interface {
 	GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*aci.ContainerGroup, *int, error)
 }
 
@@ -48,12 +48,12 @@ type ACIPodMetricsProvider struct {
 	nodeName           string
 	metricsSync        sync.Mutex
 	podGetter          PodGetter
-	aciCGGetter        ContaienrGroupGetter
-	aciCGMetricsGetter ContainerGroupMetricsGetter
+	aciCGGetter        ContainerGroupGetter
+	aciCGMetricsGetter MetricsGetter
 	podStatsGetter     podStatsGetter
 }
 
-func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGetter, aciCGGetter ContaienrGroupGetter, aciCGMetricsGetter ContainerGroupMetricsGetter) *ACIPodMetricsProvider {
+func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGetter, aciCGGetter ContainerGroupGetter, aciCGMetricsGetter MetricsGetter) *ACIPodMetricsProvider {
 	provider := ACIPodMetricsProvider{
 		nodeName:           nodeName,
 		podGetter:          podGetter,
@@ -61,10 +61,9 @@ func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGe
 		aciCGMetricsGetter: aciCGMetricsGetter,
 	}
 
-	// containerInsightGetter := WrapCachedPodStatsGetter(
-	// 	30,
-	// 	NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
-	containerInsightGetter := NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup)
+	containerInsightGetter := WrapCachedPodStatsGetter(
+		30,
+		NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
 	realTimeGetter := WrapCachedPodStatsGetter(
 		5,
 		NewRealTimeMetrics())
@@ -73,12 +72,12 @@ func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter PodGe
 }
 
 // GetStatsSummary returns the stats summary for pods running on ACI
-func (provider *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {
+func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {
 	ctx, span := trace.StartSpan(ctx, "GetSummaryStats")
 	defer span.End()
 
-	provider.metricsSync.Lock()
-	defer provider.metricsSync.Unlock()
+	p.metricsSync.Lock()
+	defer p.metricsSync.Unlock()
 
 	log.G(ctx).Debug("acquired metrics mutex")
 
@@ -88,7 +87,7 @@ func (provider *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (sum
 	default:
 	}
 
-	pods := provider.podGetter.GetPods()
+	pods := p.podGetter.GetPods()
 
 	var errGroup errgroup.Group
 	chResult := make(chan stats.PodStats, len(pods))
@@ -119,7 +118,7 @@ func (provider *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (sum
 
 			logger.Debug("Acquired semaphore")
 
-			podMetrics, err := provider.podStatsGetter.getPodStats(ctx, pod)
+			podMetrics, err := p.podStatsGetter.getPodStats(ctx, pod)
 			if err != nil {
 				span.SetStatus(err)
 				return errors.Wrapf(err, "error fetching metrics for pods '%s'", pod.Name)
@@ -139,7 +138,7 @@ func (provider *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (sum
 
 	var s stats.Summary
 	s.Node = stats.NodeStats{
-		NodeName: provider.nodeName,
+		NodeName: p.nodeName,
 	}
 	s.Pods = make([]stats.PodStats, 0, len(chResult))
 
@@ -154,11 +153,11 @@ type podStatsGetterDecider struct {
 	containerInsightsGetter podStatsGetter
 	realTimeGetter          podStatsGetter
 	rgName                  string
-	aciCGGetter             ContaienrGroupGetter
+	aciCGGetter             ContainerGroupGetter
 	cache                   *cache.Cache
 }
 
-func NewPodStatsGetterDecider(containerInsightsGetter podStatsGetter, realTimeGetter podStatsGetter, rgName string, aciCGGetter ContaienrGroupGetter) *podStatsGetterDecider {
+func NewPodStatsGetterDecider(containerInsightsGetter podStatsGetter, realTimeGetter podStatsGetter, rgName string, aciCGGetter ContainerGroupGetter) *podStatsGetterDecider {
 	decider := &podStatsGetterDecider{
 		containerInsightsGetter: containerInsightsGetter,
 		realTimeGetter:          realTimeGetter,

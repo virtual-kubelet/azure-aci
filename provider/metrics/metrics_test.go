@@ -71,7 +71,7 @@ func TestPodStatsGetterDecider(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockedAciCgGetter := NewMockContaienrGroupGetter(ctrl)
+		mockedAciCgGetter := NewMockContainerGroupGetter(ctrl)
 		httpStatus := 200
 
 		// Times(2) because we expect the Container Group not be cached
@@ -108,7 +108,7 @@ func TestPodStatsGetterDecider(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
-		mockedAciCgGetter := NewMockContaienrGroupGetter(ctrl)
+		mockedAciCgGetter := NewMockContainerGroupGetter(ctrl)
 		httpStatus := 200
 
 		// Times(1) here because we expect the Container Group be cached
