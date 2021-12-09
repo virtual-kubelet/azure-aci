@@ -217,7 +217,7 @@ func retryPolicy(resp *http.Response, err error) (bool, error) {
 
 		// The error is likely recoverable so retry. this includes
 		// conection closed, connection failure, timeout, request canceled, etc.
-		return true, nil
+		return true, err
 	}
 
 	for _, retriableCode := range StatusCodesForRetry {

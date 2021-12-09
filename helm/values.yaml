@@ -39,6 +39,7 @@ providers:
     aciResourceGroup:
     aciRegion:
     masterUri:
+    enableRealTimeMetrics: false
     loganalytics:
       enabled: false
       workspaceId:

@@ -17,18 +17,17 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	client "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/azure-aci/client/network"
+	"github.com/virtual-kubelet/azure-aci/provider/metrics"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
-	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
@@ -70,35 +69,34 @@ const (
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
-	aciClient          *aci.Client
-	resourceManager    *manager.ResourceManager
-	resourceGroup      string
-	region             string
-	nodeName           string
-	operatingSystem    string
-	cpu                string
-	memory             string
-	pods               string
-	gpu                string
-	gpuSKUs            []aci.GPUSKU
-	internalIP         string
-	daemonEndpointPort int32
-	diagnostics        *aci.ContainerGroupDiagnostics
-	subnetName         string
-	subnetCIDR         string
-	vnetSubscriptionID string
-	vnetName           string
-	vnetResourceGroup  string
-	clusterDomain      string
-	kubeProxyExtension *aci.Extension
-	kubeDNSIP          string
-	extraUserAgent     string
-	retryConfig        client.HTTPRetryConfig
+	aciClient                *aci.Client
+	resourceManager          *manager.ResourceManager
+	resourceGroup            string
+	region                   string
+	nodeName                 string
+	operatingSystem          string
+	cpu                      string
+	memory                   string
+	pods                     string
+	gpu                      string
+	gpuSKUs                  []aci.GPUSKU
+	internalIP               string
+	daemonEndpointPort       int32
+	diagnostics              *aci.ContainerGroupDiagnostics
+	subnetName               string
+	subnetCIDR               string
+	vnetSubscriptionID       string
+	vnetName                 string
+	vnetResourceGroup        string
+	clusterDomain            string
+	kubeProxyExtension       *aci.Extension
+	realtimeMetricsExtension *aci.Extension
+	kubeDNSIP                string
+	extraUserAgent           string
+	retryConfig              client.HTTPRetryConfig
+	tracker                  *PodsTracker
 
-	metricsSync     sync.Mutex
-	metricsSyncTime time.Time
-	lastMetric      *stats.Summary
-	tracker         *PodsTracker
+	metrics.ACIPodMetricsProvider
 }
 
 // AuthConfig is the secret returned from an ImageRegistryCredential
@@ -393,12 +391,18 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 			return nil, fmt.Errorf("error creating kube proxy extension: %v", err)
 		}
 
+		enableRealTimeMetricsExtension := os.Getenv("ENABLE_REAL_TIME_METRICS")
+		if enableRealTimeMetricsExtension == "true" {
+			p.realtimeMetricsExtension, err = getRealtimeMetricsExtension()
+		}
+
 		p.kubeDNSIP = "10.0.0.10"
 		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
 			p.kubeDNSIP = kubeDNSIP
 		}
 	}
 
+	p.ACIPodMetricsProvider = *metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.aciClient, p.aciClient)
 	return &p, err
 }
 
@@ -505,6 +509,18 @@ func (p *ACIProvider) setupNetwork(auth *client.Authentication) error {
 	return nil
 }
 
+func getRealtimeMetricsExtension() (*aci.Extension, error) {
+	extension := aci.Extension{
+		Name: "vk-realtime-metrics",
+		Properties: &aci.ExtensionProperties{
+			Type:              aci.ExtensionTypeRealtimeMetrics,
+			Version:           aci.ExtensionVersion1_0,
+			Settings:          map[string]string{},
+			ProtectedSettings: map[string]string{},
+		},
+	}
+	return &extension, nil
+}
 
 func getKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*aci.Extension, error) {
 	name := "virtual-kubelet"
@@ -703,6 +719,9 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
+	if p.realtimeMetricsExtension != nil {
+		containerGroup.ContainerGroupProperties.Extensions = append(containerGroup.ContainerGroupProperties.Extensions, p.realtimeMetricsExtension)
+	}
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
@@ -734,7 +753,7 @@ func (p *ACIProvider) amendVnetResources(containerGroup *aci.ContainerGroup, pod
 		return
 	}
 
-	containerGroup.ContainerGroupProperties.SubnetIds = []*aci.SubnetIdDefinition{&aci.SubnetIdDefinition{ID: "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName} }
+	containerGroup.ContainerGroupProperties.SubnetIds = []*aci.SubnetIdDefinition{&aci.SubnetIdDefinition{ID: "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName}}
 	containerGroup.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
 	containerGroup.ContainerGroupProperties.Extensions = []*aci.Extension{p.kubeProxyExtension}
 }

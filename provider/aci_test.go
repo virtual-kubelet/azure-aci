@@ -21,6 +21,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
+
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"

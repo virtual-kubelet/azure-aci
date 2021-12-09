@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vk-e2e-hpa
+  namespace: vk
+spec:
+  containers:
+  - image: k8s.gcr.io/hpa-example
+    imagePullPolicy: Always
+    name: hpa-example
+    resources:
+      requests:
+        memory: 1G
+        cpu: 1
+    ports:
+    - containerPort: 80
+      name: http
+      protocol: TCP
+  - image: busybox 
+    name: busybox
+    imagePullPolicy: Always
+    command: [
+      "sh",
+      "-c", 
+      "sleep 10; while sleep 0.01; do wget -q -O- http://127.0.0.1; done",
+    ]
+    resources:
+      requests:
+        memory: 1G
+        cpu: 1
+  nodeSelector:
+    kubernetes.io/role: agent
+    beta.kubernetes.io/os: linux
+    type: virtual-kubelet
+    # kubernetes.io/hostname: minsha-vk
+  tolerations:
+  - key: virtual-kubelet.io/provider
+    operator: Exists
