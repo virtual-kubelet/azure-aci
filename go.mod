@@ -13,6 +13,7 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/BurntSushi/toml v0.3.1
 	github.com/dimchansky/utfbom v1.1.0
+	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
@@ -32,3 +33,6 @@ require (
 	k8s.io/apimachinery v0.19.10
 	k8s.io/client-go v0.19.10
 )
+
+// fix cve
+replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt/v4 v4.1.0
