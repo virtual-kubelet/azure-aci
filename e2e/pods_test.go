@@ -49,7 +49,7 @@ func TestPodLifecycle(t *testing.T) {
 	}
 
 	t.Log("clean up pod")
-	cmd = kubectl("delete", "deploy/vk-e2e-hpa")
+	cmd = kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
