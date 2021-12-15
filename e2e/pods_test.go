@@ -26,7 +26,7 @@ func TestPodLifecycle(t *testing.T) {
 	if !ok {
 		timeout = 300 * time.Second
 	}
-	cmd = kubectl("wait", "--for=condition=ready", "--timeout="+timeout.String(), "pod/vk-e2e-hpa -n vk-test")
+	cmd = kubectl("wait", "--for=condition=ready", "--timeout="+timeout.String(), "pod/vk-e2e-hpa", "-n vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
