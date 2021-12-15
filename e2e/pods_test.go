@@ -36,7 +36,7 @@ func TestPodLifecycle(t *testing.T) {
 	deadline = time.Now().Add(5 * time.Minute)
 	for {
 		t.Log("query metrics ....")
-		cmd = kubectl("get", "--raw", "/apis/metrics.k8s.io/v1beta1/namespaces/vk/pods/vk-e2e-hpa")
+		cmd = kubectl("get", "--raw", "/apis/metrics.k8s.io/v1beta1/namespaces/vk-test/pods/vk-e2e-hpa")
 		out, err := cmd.CombinedOutput()
 		if time.Now().After(deadline) {
 			t.Fatal("failed to query pod's stats from metris server API")
