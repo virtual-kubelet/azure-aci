@@ -51,7 +51,7 @@ func (c *Client) CreateResourceGroup(resourceGroup string, properties Group) (*G
 	defer resp.Body.Close()
 
 	// 200 (OK) and 201 (Created) are a successful responses.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return nil, err
 	}
 

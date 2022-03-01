@@ -2,9 +2,7 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -42,22 +40,25 @@ type errorReply struct {
 
 // CheckResponse returns an error (of type *Error) if the response
 // status code is not 2xx.
-func CheckResponse(res *http.Response) error {
+func CheckResponse(
+	res *http.Response,
+	ioReader IoReaderUtils,
+	jsonUtils JsonUtils,
+) error {
 	if res.StatusCode >= 200 && res.StatusCode <= 299 {
 		return nil
 	}
-
-	slurp, err := ioutil.ReadAll(res.Body)
-	if err == nil {
-		jerr := new(errorReply)
-		err = json.Unmarshal(slurp, jerr)
-		if err == nil && jerr.Error != nil {
-			if jerr.Error.StatusCode == 0 {
-				jerr.Error.StatusCode = res.StatusCode
+	resBodyReads, ioReaderErr := ioReader.dataReader(res.Body)
+	if ioReaderErr == nil {
+		errorReply := new(errorReply)
+		jsonUnMarshallErr := jsonUtils.unMarshall(resBodyReads, errorReply)
+		if jsonUnMarshallErr == nil && errorReply.Error != nil {
+			if errorReply.Error.StatusCode == 0 {
+				errorReply.Error.StatusCode = res.StatusCode
 			}
-			jerr.Error.Body = string(slurp)
-			jerr.Error.URL = res.Request.URL.String()
-			return jerr.Error
+			errorReply.Error.Body = string(resBodyReads)
+			errorReply.Error.URL = res.Request.URL.String()
+			return errorReply.Error
 		}
 	}
 

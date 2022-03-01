@@ -46,7 +46,7 @@ func (c *Client) ResourceGroupExists(resourceGroup string) (bool, error) {
 	}
 
 	// 204 (NoContent) and 404 are successful responses.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return false, err
 	}
 

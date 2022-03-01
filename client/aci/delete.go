@@ -44,7 +44,7 @@ func (c *Client) DeleteContainerGroup(ctx context.Context, resourceGroup, contai
 	}
 	defer resp.Body.Close()
 
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return err
 	}
 

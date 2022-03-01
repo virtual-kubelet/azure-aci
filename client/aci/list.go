@@ -54,7 +54,7 @@ func (c *Client) ListContainerGroups(ctx context.Context, resourceGroup string) 
 	defer resp.Body.Close()
 
 	// 200 (OK) is a success response.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return nil, err
 	}
 

@@ -80,7 +80,7 @@ func (c *Client) GetContainerGroupMetrics(ctx context.Context, resourceGroup, co
 	defer resp.Body.Close()
 
 	// 200 (OK) is a success response.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return nil, err
 	}
 

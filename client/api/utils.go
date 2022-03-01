@@ -2,7 +2,9 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"text/template"
@@ -48,4 +50,24 @@ func ExpandURL(u *url.URL, expansions map[string]string) error {
 	u.RawPath = bt.String()
 
 	return nil
+}
+
+type IoReaderUtils struct {
+	dataReader func(r io.Reader) ([]byte, error)
+}
+
+func NewIoReaderUtils() IoReaderUtils {
+	return IoReaderUtils{
+		dataReader: io.ReadAll,
+	}
+}
+
+type JsonUtils struct {
+	unMarshall func(data []byte, v interface{}) error
+}
+
+func NewJsonUtils() JsonUtils {
+	return JsonUtils{
+		unMarshall: json.Unmarshal,
+	}
 }

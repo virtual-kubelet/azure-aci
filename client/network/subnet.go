@@ -74,7 +74,7 @@ func (c *Client) GetSubnet(subscriptionID, resourceGroup, vnet, name string) (*n
 	defer resp.Body.Close()
 
 	// 200 (OK) is a success response.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return nil, err
 	}
 
@@ -124,7 +124,7 @@ func (c *Client) CreateOrUpdateSubnet(subscriptionID, resourceGroup, vnet string
 	defer resp.Body.Close()
 
 	// 200 (OK) is a success response.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return nil, err
 	}
 

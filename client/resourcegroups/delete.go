@@ -41,7 +41,7 @@ func (c *Client) DeleteResourceGroup(resourceGroup string) error {
 	defer resp.Body.Close()
 
 	// 200 (OK) and 202 (Accepted) are successful responses.
-	if err := api.CheckResponse(resp); err != nil {
+	if err := api.CheckResponse(resp, api.NewIoReaderUtils(), api.NewJsonUtils()); err != nil {
 		return err
 	}
 
