@@ -2,9 +2,7 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 )
 
@@ -43,21 +41,23 @@ type errorReply struct {
 // CheckResponse returns an error (of type *Error) if the response
 // status code is not 2xx.
 func CheckResponse(res *http.Response) error {
-	if res.StatusCode >= 200 && res.StatusCode <= 299 {
+	const MinValidStatusCode = 200
+	const MaxValidStatusCode = 299
+
+	if res.StatusCode >= MinValidStatusCode && res.StatusCode <= MaxValidStatusCode {
 		return nil
 	}
-
-	slurp, err := ioutil.ReadAll(res.Body)
-	if err == nil {
-		jerr := new(errorReply)
-		err = json.Unmarshal(slurp, jerr)
-		if err == nil && jerr.Error != nil {
-			if jerr.Error.StatusCode == 0 {
-				jerr.Error.StatusCode = res.StatusCode
+	resBodyReads, ioReaderErr := ioReadAll(res.Body)
+	if ioReaderErr == nil {
+		jsonResBody := new(errorReply)
+		jsonUnMarshallErr := jsonUnmarshall(resBodyReads, jsonResBody)
+		if jsonUnMarshallErr == nil && jsonResBody.Error != nil {
+			if jsonResBody.Error.StatusCode == 0 {
+				jsonResBody.Error.StatusCode = res.StatusCode
 			}
-			jerr.Error.Body = string(slurp)
-			jerr.Error.URL = res.Request.URL.String()
-			return jerr.Error
+			jsonResBody.Error.Body = string(resBodyReads)
+			jsonResBody.Error.URL = res.Request.URL.String()
+			return jsonResBody.Error
 		}
 	}
 
