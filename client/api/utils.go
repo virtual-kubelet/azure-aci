@@ -2,7 +2,10 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"math/rand"
 	"net/url"
 	"strings"
 	"text/template"
@@ -48,4 +51,23 @@ func ExpandURL(u *url.URL, expansions map[string]string) error {
 	u.RawPath = bt.String()
 
 	return nil
+}
+
+var ioReadAll = io.ReadAll
+
+var jsonUnmarshall = json.Unmarshal
+
+func RandBetween(min int, max int) int {
+	return rand.Intn(max-min) + min
+}
+
+func RandStr() string {
+	const length = 10 // specific size to avoid user passes in unreasonably large size, causing runtime error
+	b := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		b[i] = byte(RandBetween(97, 122))
+	}
+
+	return string(b)
 }
