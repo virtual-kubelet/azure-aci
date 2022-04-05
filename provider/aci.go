@@ -657,6 +657,16 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.Location = p.region
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
+	priority := pod.Annotations["priority"]
+	if priority != "" {
+		if priority == "Spot" {
+			containerGroup.ContainerGroupProperties.Priority = aci.Spot
+		} else if priority == "Regular" {
+			containerGroup.ContainerGroupProperties.Priority = aci.Regular
+		} else {
+			return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
+		}
+	}
 
 	// get containers
 	containers, err := p.getContainers(pod)
@@ -716,6 +726,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"Namespace":         pod.Namespace,
 		"UID":               podUID,
 		"CreationTimestamp": podCreationTimestamp,
+		"Priority":          pod.Annotations["priority"],
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
