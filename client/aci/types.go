@@ -107,6 +107,7 @@ type ContainerGroupProperties struct {
 	SubnetIds                []*SubnetIdDefinition                `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
+	Priority                 ContainerGroupPriority               `json:"priority,omitempty"`
 }
 
 // ContainerGroupPropertiesInstanceView is the instance view of the container group. Only valid in response.

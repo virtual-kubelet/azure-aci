@@ -659,13 +659,15 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 	priority := pod.Annotations["priority"]
 	if priority != "" {
-		if priority == "Spot" {
+		if priority == string(aci.Spot) {
 			containerGroup.ContainerGroupProperties.Priority = aci.Spot
-		} else if priority == "Regular" {
+		} else if priority == string(aci.Regular) {
 			containerGroup.ContainerGroupProperties.Priority = aci.Regular
 		} else {
 			return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
 		}
+	} else {
+		containerGroup.ContainerGroupProperties.Priority = aci.Regular
 	}
 
 	// get containers
