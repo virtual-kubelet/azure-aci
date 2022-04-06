@@ -417,7 +417,6 @@ func TestCreatePodWithSpotPriority(t *testing.T) {
 
 		return http.StatusOK, cg
 	}
-	t.Logf((string(priority)))
 
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -536,8 +535,8 @@ func TestCreatePodWithRegularPriority(t *testing.T) {
 	}
 }
 
-// Tests create pod with null priority in annotation.
-func TestCreatePodWithNullPriority(t *testing.T) {
+// Tests create pod with empty priority in annotation.
+func TestCreatePodWithEmptyPriority(t *testing.T) {
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
 
