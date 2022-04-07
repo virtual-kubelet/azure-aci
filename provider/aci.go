@@ -62,6 +62,10 @@ const (
 )
 
 const (
+	priority = "virtual-kubelet.io/priority-type"
+)
+
+const (
 	statusReasonPodDeleted            = "NotFound"
 	statusMessagePodDeleted           = "The pod may have been deleted from the provider"
 	containerExitCodePodDeleted int32 = 0
@@ -658,19 +662,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 	if pod.Annotations != nil {
-		priority, priorityExists := pod.Annotations["priority"]
-
+		priorityType, priorityExists := pod.Annotations["priority"]
 		if priorityExists {
-			if priority != "" {
-				if priority == string(aci.Spot) {
-					containerGroup.ContainerGroupProperties.Priority = aci.Spot
-				} else if priority == string(aci.Regular) {
-					containerGroup.ContainerGroupProperties.Priority = aci.Regular
-				} else {
-					return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
-				}
-			} else {
+			if priorityType == string(aci.Spot) {
+				containerGroup.ContainerGroupProperties.Priority = aci.Spot
+			} else if priorityType == string(aci.Regular) {
 				containerGroup.ContainerGroupProperties.Priority = aci.Regular
+			} else {
+				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priorityType)
 			}
 		}
 	}
