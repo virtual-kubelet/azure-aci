@@ -62,7 +62,7 @@ const (
 )
 
 const (
-	priority = "virtual-kubelet.io/priority-type"
+	priorityTypeAnnotation = "priority"
 )
 
 const (
@@ -662,14 +662,15 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 	if pod.Annotations != nil {
-		priorityType, priorityExists := pod.Annotations["priority"]
+		priority, priorityExists := pod.Annotations[priorityTypeAnnotation]
 		if priorityExists {
-			if priorityType == string(aci.Spot) {
+
+			if strings.EqualFold(priority, string(aci.Spot)) {
 				containerGroup.ContainerGroupProperties.Priority = aci.Spot
-			} else if priorityType == string(aci.Regular) {
+			} else if strings.EqualFold(priority, string(aci.Regular)) {
 				containerGroup.ContainerGroupProperties.Priority = aci.Regular
 			} else {
-				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priorityType)
+				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
 			}
 		}
 	}

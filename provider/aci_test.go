@@ -423,8 +423,8 @@ func TestCreatePodWithSpotPriority(t *testing.T) {
 			Name:      podName,
 			Namespace: podNamespace,
 			Annotations: map[string]string{
-				gpuTypeAnnotation: string(gpuSKU),
-				priority:          string(priorityType),
+				gpuTypeAnnotation:      string(gpuSKU),
+				priorityTypeAnnotation: string(priorityType),
 			},
 		},
 		Spec: v1.PodSpec{
@@ -508,8 +508,8 @@ func TestCreatePodWithRegularPriority(t *testing.T) {
 			Name:      podName,
 			Namespace: podNamespace,
 			Annotations: map[string]string{
-				gpuTypeAnnotation: string(gpuSKU),
-				priority:          string(priorityType),
+				gpuTypeAnnotation:      string(gpuSKU),
+				priorityTypeAnnotation: string(priorityType),
 			},
 		},
 		Spec: v1.PodSpec{
@@ -576,8 +576,8 @@ func TestCreatePodWithEmptyPriority(t *testing.T) {
 			Name:      podName,
 			Namespace: podNamespace,
 			Annotations: map[string]string{
-				gpuTypeAnnotation: string(gpuSKU),
-				priority:          string(priorityType),
+				gpuTypeAnnotation:      string(gpuSKU),
+				priorityTypeAnnotation: string(priorityType),
 			},
 		},
 		Spec: v1.PodSpec{
@@ -643,8 +643,8 @@ func TestCreatePodWithInvalidPriority(t *testing.T) {
 			Name:      podName,
 			Namespace: podNamespace,
 			Annotations: map[string]string{
-				gpuTypeAnnotation: string(gpuSKU),
-				priority:          string(priorityType),
+				gpuTypeAnnotation:      string(gpuSKU),
+				priorityTypeAnnotation: string(priorityType),
 			},
 		},
 		Spec: v1.PodSpec{
