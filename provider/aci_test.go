@@ -450,6 +450,91 @@ func TestCreatePodWithSpotPriority(t *testing.T) {
 	}
 }
 
+// Tests create pod with Spot priority in annotation - case insensitve check
+func TestCreatePodWithSpotPriorityIgnoreCase(t *testing.T) {
+	aadServerMocker := NewAADMock()
+	aciServerMocker := NewACIMock()
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	gpuSKU := aci.GPUSKU("sku-" + uuid.New().String())
+	priorityType := "spot"
+
+	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
+		manifest := &aci.ResourceProviderManifest{
+			Metadata: &aci.ResourceProviderMetadata{
+				GPURegionalSKUs: []*aci.GPURegionalSKU{
+					&aci.GPURegionalSKU{
+						Location: fakeRegion,
+						SKUs:     []aci.GPUSKU{aci.K80, aci.P100, gpuSKU},
+					},
+				},
+			},
+		}
+
+		return http.StatusOK, manifest
+	}
+
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil)
+	if err != nil {
+		t.Fatalf("failed to create the test provider. %s", err.Error())
+		return
+	}
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Equal(1.98, cg.ContainerGroupProperties.Containers[0].Resources.Requests.CPU), "Request CPU is not expected")
+		assert.Check(t, is.Equal(3.4, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests.GPU != nil, "Requests GPU is not expected")
+		assert.Check(t, is.Equal(int32(1), cg.ContainerGroupProperties.Containers[0].Resources.Requests.GPU.Count), "Requests GPU Count is not expected")
+		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Requests.GPU.SKU), "Requests GPU SKU is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU != nil, "Limits GPU is not expected")
+		assert.Check(t, is.Equal(int32(1), cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.Count), "Requests GPU Count is not expected")
+		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.SKU), "Requests GPU SKU is not expected")
+		assert.Check(t, is.Equal(aci.Spot, cg.ContainerGroupProperties.Priority), "Container group priority does not match")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+			Annotations: map[string]string{
+				gpuTypeAnnotation:      string(gpuSKU),
+				priorityTypeAnnotation: string(priorityType),
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							"cpu":    resource.MustParse("1.981"),
+							"memory": resource.MustParse("3.49G"),
+						},
+						Limits: v1.ResourceList{
+							gpuResourceName: resource.MustParse("1"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
+	}
+}
+
 // Tests create pod with Regular priority in annotation.
 func TestCreatePodWithRegularPriority(t *testing.T) {
 	aadServerMocker := NewAADMock()
