@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	testifyassert "github.com/stretchr/testify/assert"
+
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 )
@@ -1189,5 +1191,177 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
+	}
+}
+
+func TestCreatePodWithCSIVolume(t *testing.T) {
+	podName := "pod-name"
+	podNamespace := "ns-name"
+	pvName := "pv-name"
+	fakeVolumeSecret := "fake-volume-secret"
+
+	aadServerMocker := NewAADMock()
+	aciServerMocker := NewACIMock()
+	mockCtrl := gomock.NewController(GinkgoT())
+	mockPodLister := NewMockPodLister(mockCtrl)
+	mockSecretLister := NewMockSecretLister(mockCtrl)
+	mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+	mockConfigMapLister := NewMockConfigMapLister(mockCtrl)
+	mockServiceLister := NewMockServiceLister(mockCtrl)
+	mockPvcLister := NewMockPersistentVolumeClaimLister(mockCtrl)
+	mockPvLister := NewMockPersistentVolumeLister(mockCtrl)
+
+	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
+		manifest := &aci.ResourceProviderManifest{
+			Metadata: &aci.ResourceProviderMetadata{
+				GPURegionalSKUs: []*aci.GPURegionalSKU{
+					{
+						Location: fakeRegion,
+						SKUs:     []aci.GPUSKU{aci.K80, aci.P100, aci.V100},
+					},
+				},
+			},
+		}
+
+		return http.StatusOK, manifest
+	}
+	resourceManager, err := manager.NewResourceManager(mockPodLister, mockSecretLister, mockConfigMapLister, mockServiceLister, mockPvcLister, mockPvLister)
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks for resourceManager", err)
+	}
+
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, resourceManager)
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
+
+		return http.StatusOK, cg
+	}
+
+	configMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+	mockConfigMapLister.EXPECT().ConfigMaps(podNamespace).Return(configMapNamespaceLister)
+	configMapNamespaceLister.EXPECT().Get("kube-root-ca.crt").Return(&v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kube-root-ca.crt",
+		},
+		Data: map[string]string{
+			"ca.crt": "fake-ca-data",
+			"foo":    "bar",
+		},
+	}, nil)
+
+	mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+
+	mockSecretNamespaceLister.EXPECT().Get(fakeVolumeSecret).Return(&v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fakeVolumeSecret,
+			Namespace: podNamespace,
+		},
+		Data: map[string][]byte{
+			"azurestorageaccountname": []byte("azure storage account name"),
+			"azurestorageaccountkey":  []byte("azure storage account key")},
+	}, nil)
+
+	mockPvLister.EXPECT().Get(pvName).Return(&v1.PersistentVolume{
+		Spec: v1.PersistentVolumeSpec{
+			PersistentVolumeSource: v1.PersistentVolumeSource{
+				CSI: &v1.CSIPersistentVolumeSource{
+					Driver: "file.csi.azure.com",
+					NodeStageSecretRef: &v1.SecretReference{
+						Name:      fakeVolumeSecret,
+						Namespace: podNamespace,
+					},
+				},
+			},
+		},
+	}, nil)
+
+	readOnly := false
+
+	cases := []struct {
+		description   string
+		volume        v1.Volume
+		expectedError error
+	}{
+		{
+			description: "Volume has NodePublishSecretRef with valid value",
+			volume: v1.Volume{
+				Name: pvName,
+				VolumeSource: v1.VolumeSource{
+					CSI: &v1.CSIVolumeSource{
+						Driver: "file.csi.azure.com",
+						NodePublishSecretRef: &v1.LocalObjectReference{
+							Name: fakeVolumeSecret,
+						},
+						ReadOnly: &readOnly,
+					},
+				}},
+			expectedError: nil,
+		},
+		{
+			description: "Volume has no NodePublishSecretRef",
+			volume: v1.Volume{
+				Name: pvName,
+				VolumeSource: v1.VolumeSource{
+					CSI: &v1.CSIVolumeSource{
+						Driver:   "file.csi.azure.com",
+						ReadOnly: &readOnly,
+					},
+				}},
+			expectedError: fmt.Errorf("NodePublishSecretRef for AzureFile CSI driver %s cannot be empty or nil", pvName),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: podNamespace,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{
+						{
+							Name: "nginx",
+							ReadinessProbe: &v1.Probe{
+								Handler: v1.Handler{
+									HTTPGet: &v1.HTTPGetAction{
+										Port: intstr.FromInt(8080),
+										Path: "/",
+									},
+								},
+								InitialDelaySeconds: 10,
+								PeriodSeconds:       5,
+								TimeoutSeconds:      60,
+								SuccessThreshold:    3,
+								FailureThreshold:    5,
+							},
+						},
+					},
+				},
+			}
+
+			volumeMount := v1.VolumeMount{
+				Name:      pvName,
+				MountPath: "/temp",
+			}
+			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, volumeMount)
+
+			pod.Spec.Volumes = append(pod.Spec.Volumes, tc.volume)
+
+			err = provider.CreatePod(context.Background(), pod)
+
+			testifyassert.Equalf(t, tc.expectedError, err, "\nTest case:  %s", tc.description)
+		})
 	}
 }

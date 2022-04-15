@@ -47,6 +47,9 @@ const (
 	virtualKubeletDNSNameLabel = "virtualkubelet.io/dnsnamelabel"
 
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
+	// Parameter names defined in azure file CSI driver, refer to
+	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
+	azureFileShareName = "shareName"
 )
 
 // DNS configuration settings
@@ -1632,9 +1635,54 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*aci.ContainerProbe, e
 	}, nil
 }
 
+func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.Volume, error) {
+	azureSource := &aci.AzureFileVolume{
+		ReadOnly: *volume.CSI.ReadOnly,
+	}
+	if volume.CSI.NodePublishSecretRef != nil && volume.CSI.NodePublishSecretRef.Name != "" {
+
+		// Set the storage account name and key
+		secret, err := p.resourceManager.GetSecret(volume.CSI.NodePublishSecretRef.Name, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("The secret %s for AzureFile CSI driver %s is not found, err: %s", volume.CSI.NodePublishSecretRef.Name, volume.Name, err)
+		}
+
+		if secret == nil {
+			return nil, fmt.Errorf("Getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
+		}
+
+		azureSource.StorageAccountName = string(secret.Data["azurestorageaccountname"])
+		azureSource.StorageAccountKey = string(secret.Data["azurestorageaccountkey"])
+
+		// Set shareName
+		if volume.CSI.VolumeAttributes != nil {
+			if shareName, ok := volume.CSI.VolumeAttributes[azureFileShareName]; ok {
+				azureSource.ShareName = shareName
+			}
+		}
+		volume := aci.Volume{
+			Name:      volume.Name,
+			AzureFile: azureSource,
+		}
+		return &volume, nil
+	} else {
+		return nil, fmt.Errorf("NodePublishSecretRef for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
+	}
+}
+
 func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 	volumes := make([]aci.Volume, 0, len(pod.Spec.Volumes))
 	for _, v := range pod.Spec.Volumes {
+		// Handle the case for Azure File CSI driver
+		if v.CSI != nil {
+			csiVolume, err := p.getAzureFileCSI(v, pod.Namespace)
+			if err != nil {
+				return volumes, err
+			}
+			volumes = append(volumes, *csiVolume)
+			continue
+		}
+
 		// Handle the case for the AzureFile volume.
 		if v.AzureFile != nil {
 			secret, err := p.resourceManager.GetSecret(v.AzureFile.SecretName, pod.Namespace)
