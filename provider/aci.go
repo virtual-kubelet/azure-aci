@@ -661,18 +661,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.Location = p.region
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
-	if pod.Annotations != nil {
-		priority, priorityExists := pod.Annotations[priorityTypeAnnotation]
-		if priorityExists {
 
-			if strings.EqualFold(priority, string(aci.Spot)) {
-				containerGroup.ContainerGroupProperties.Priority = aci.Spot
-			} else if strings.EqualFold(priority, string(aci.Regular)) {
-				containerGroup.ContainerGroupProperties.Priority = aci.Regular
-			} else {
-				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
-			}
-		}
+	//set container group priority property
+	if err := setContainerGroupPriority(&containerGroup, pod); err != nil {
+		return fmt.Errorf("error setting container group priority: %v", err)
 	}
 
 	// get containers
@@ -733,7 +725,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"Namespace":         pod.Namespace,
 		"UID":               podUID,
 		"CreationTimestamp": podCreationTimestamp,
-		"Priority":          pod.Annotations["priority"],
+		"Priority":          pod.Annotations[priorityTypeAnnotation],
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
@@ -744,6 +736,26 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
 	return p.createContainerGroup(ctx, pod.Namespace, pod.Name, &containerGroup)
+}
+
+// Set the Container Group Priority Property
+// Accepted Values : Regular, Spot
+func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) error {
+
+	if pod.Annotations != nil {
+		priority, priorityExists := pod.Annotations[priorityTypeAnnotation]
+		if priorityExists {
+			if strings.EqualFold(priority, string(aci.Spot)) {
+				containerGroup.ContainerGroupProperties.Priority = aci.Spot
+			} else if strings.EqualFold(priority, string(aci.Regular)) {
+				containerGroup.ContainerGroupProperties.Priority = aci.Regular
+			} else {
+				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
+			}
+		}
+	}
+
+	return nil
 }
 
 func (p *ACIProvider) createContainerGroup(ctx context.Context, podNS, podName string, cg *aci.ContainerGroup) error {
