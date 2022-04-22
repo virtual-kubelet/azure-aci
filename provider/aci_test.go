@@ -1222,17 +1222,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 				},
 			},
 		}
-
 		return http.StatusOK, manifest
-	}
-	resourceManager, err := manager.NewResourceManager(mockPodLister, mockSecretLister, mockConfigMapLister, mockServiceLister, mockPvcLister, mockPvLister)
-	if err != nil {
-		t.Fatal("Unable to prepare the mocks for resourceManager", err)
-	}
-
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker, resourceManager)
-	if err != nil {
-		t.Fatal("Unable to create test provider", err)
 	}
 
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
@@ -1260,9 +1250,8 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		},
 	}, nil)
 
-	mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-
-	mockSecretNamespaceLister.EXPECT().Get(fakeVolumeSecret).Return(&v1.Secret{
+	readOnly := false
+	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fakeVolumeSecret,
 			Namespace: podNamespace,
@@ -1270,9 +1259,8 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		Data: map[string][]byte{
 			"azurestorageaccountname": []byte("azure storage account name"),
 			"azurestorageaccountkey":  []byte("azure storage account key")},
-	}, nil)
-
-	mockPvLister.EXPECT().Get(pvName).Return(&v1.PersistentVolume{
+	}
+	fakePV := v1.PersistentVolume{
 		Spec: v1.PersistentVolumeSpec{
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				CSI: &v1.CSIPersistentVolumeSource{
@@ -1281,35 +1269,46 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 						Name:      fakeVolumeSecret,
 						Namespace: podNamespace,
 					},
+					NodePublishSecretRef: &v1.SecretReference{
+						Name:      fakeVolumeSecret,
+						Namespace: podNamespace,
+					},
 				},
 			},
 		},
-	}, nil)
+	}
 
-	readOnly := false
+	fakePodVolume := v1.Volume{
+		Name: pvName,
+		VolumeSource: v1.VolumeSource{
+			CSI: &v1.CSIVolumeSource{
+				Driver: "file.csi.azure.com",
+				NodePublishSecretRef: &v1.LocalObjectReference{
+					Name: fakeVolumeSecret,
+				},
+				ReadOnly: &readOnly,
+			},
+		},
+	}
 
 	cases := []struct {
-		description   string
-		volume        v1.Volume
-		expectedError error
+		description      string
+		persistentVolume *v1.PersistentVolume
+		secretVolume     *v1.Secret
+		volume           v1.Volume
+		expectedError    error
 	}{
 		{
-			description: "Volume has NodePublishSecretRef with valid value",
-			volume: v1.Volume{
-				Name: pvName,
-				VolumeSource: v1.VolumeSource{
-					CSI: &v1.CSIVolumeSource{
-						Driver: "file.csi.azure.com",
-						NodePublishSecretRef: &v1.LocalObjectReference{
-							Name: fakeVolumeSecret,
-						},
-						ReadOnly: &readOnly,
-					},
-				}},
-			expectedError: nil,
+			description:      "Volume has NodePublishSecretRef with valid value",
+			persistentVolume: &fakePV,
+			secretVolume:     &fakeSecret,
+			volume:           fakePodVolume,
+			expectedError:    nil,
 		},
 		{
-			description: "Volume has no NodePublishSecretRef",
+			description:      "Volume has no NodePublishSecretRef",
+			persistentVolume: &fakePV,
+			secretVolume:     &fakeSecret,
 			volume: v1.Volume{
 				Name: pvName,
 				VolumeSource: v1.VolumeSource{
@@ -1320,9 +1319,70 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 				}},
 			expectedError: fmt.Errorf("NodePublishSecretRef for AzureFile CSI driver %s cannot be empty or nil", pvName),
 		},
+		{
+			description: "Volume is Disk Driver",
+			persistentVolume: &v1.PersistentVolume{
+				Spec: v1.PersistentVolumeSpec{
+					PersistentVolumeSource: v1.PersistentVolumeSource{
+						CSI: &v1.CSIPersistentVolumeSource{
+							Driver: "disk.csi.azure.com",
+							NodeStageSecretRef: &v1.SecretReference{
+								Name:      fakeVolumeSecret,
+								Namespace: podNamespace,
+							},
+							NodePublishSecretRef: &v1.SecretReference{
+								Name:      fakeVolumeSecret,
+								Namespace: podNamespace,
+							},
+						},
+					},
+				},
+			},
+			secretVolume: &fakeSecret,
+			volume: v1.Volume{
+				Name: pvName,
+				VolumeSource: v1.VolumeSource{
+					CSI: &v1.CSIVolumeSource{
+						Driver: "disk.csi.azure.com",
+						NodePublishSecretRef: &v1.LocalObjectReference{
+							Name: fakeVolumeSecret,
+						},
+						ReadOnly: &readOnly,
+					},
+				}},
+			expectedError: fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", podName, pvName),
+		},
+		{
+			description:      "Volume has NodePublishSecretRef with empty secret",
+			persistentVolume: &fakePV,
+			secretVolume:     nil,
+			volume: v1.Volume{
+				Name: pvName,
+				VolumeSource: v1.VolumeSource{
+					CSI: &v1.CSIVolumeSource{
+						Driver: "file.csi.azure.com",
+						NodePublishSecretRef: &v1.LocalObjectReference{
+							Name: "fakeEmptyVolumeSecret",
+						},
+						ReadOnly: &readOnly,
+					},
+				},
+			},
+			expectedError: fmt.Errorf("Getting secret for AzureFile CSI driver %s returned an empty secret", pvName),
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
+
+			resourceManager, err := manager.NewResourceManager(mockPodLister, mockSecretLister, mockConfigMapLister, mockServiceLister, mockPvcLister, mockPvLister)
+			if err != nil {
+				t.Fatal("Unable to prepare the mocks for resourceManager", err)
+			}
+
+			provider, err := createTestProvider(aadServerMocker, aciServerMocker, resourceManager)
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
 
 			pod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1357,6 +1417,14 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			}
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, volumeMount)
 
+			mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+
+			if tc.secretVolume == nil {
+				mockSecretNamespaceLister.EXPECT().Get(tc.volume.CSI.NodePublishSecretRef.Name).Return(nil, nil)
+			} else {
+				mockSecretNamespaceLister.EXPECT().Get(tc.secretVolume.Name).Return(tc.secretVolume, nil)
+			}
+			mockPvLister.EXPECT().Get(pvName).Return(tc.persistentVolume, nil)
 			pod.Spec.Volumes = append(pod.Spec.Volumes, tc.volume)
 
 			err = provider.CreatePod(context.Background(), pod)
