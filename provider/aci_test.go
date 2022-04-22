@@ -1348,7 +1348,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 						ReadOnly: &readOnly,
 					},
 				}},
-			expectedError: fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", podName, pvName),
+			expectedError: fmt.Errorf("Pod %s requires volume %s which is of an unsupported type %s", podName, pvName, "disk.csi.azure.com"),
 		},
 		{
 			description:      "Volume has NodePublishSecretRef with empty secret",

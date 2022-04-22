@@ -1678,16 +1678,16 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 	for _, v := range pod.Spec.Volumes {
 		// Handle the case for Azure File CSI driver
 		if v.CSI != nil {
-			// Check if the CSI driver if file (Disk is not supported by ACI)
+			// Check if the CSI driver is file (Disk is not supported by ACI)
 			if v.CSI.Driver == AzureFileDriverName {
 				csiVolume, err := p.getAzureFileCSI(v, pod.Namespace)
 				if err != nil {
-					return volumes, err
+					return nil, err
 				}
 				volumes = append(volumes, *csiVolume)
 				continue
 			} else {
-				return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", pod.Name, v.Name)
+				return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type %s", pod.Name, v.Name, v.CSI.Driver)
 			}
 		}
 
