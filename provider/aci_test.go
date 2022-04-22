@@ -1427,7 +1427,11 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 
 			err = provider.CreatePod(context.Background(), pod)
 
-			assert.Equal(t, tc.expectedError, err)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.NilError(t, tc.expectedError, err)
+			}
 		})
 	}
 }
