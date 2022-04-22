@@ -28,8 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	testifyassert "github.com/stretchr/testify/assert"
-
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 )
@@ -1429,7 +1427,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 
 			err = provider.CreatePod(context.Background(), pod)
 
-			testifyassert.Equalf(t, tc.expectedError, err, "\nTest case:  %s", tc.description)
+			assert.Equal(t, tc.expectedError, err)
 		})
 	}
 }
