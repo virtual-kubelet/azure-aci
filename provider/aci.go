@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/gorilla/websocket"
 	client "github.com/virtual-kubelet/azure-aci/client"
@@ -50,6 +51,8 @@ const (
 	// Parameter names defined in azure file CSI driver, refer to
 	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
 	azureFileShareName = "shareName"
+	// AzureFileDriverName is the name of the CSI driver for Azure File
+	AzureFileDriverName = "file.csi.azure.com"
 )
 
 // DNS configuration settings
@@ -1644,7 +1647,7 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 		// Set the storage account name and key
 		secret, err := p.resourceManager.GetSecret(volume.CSI.NodePublishSecretRef.Name, namespace)
 		if err != nil {
-			return nil, fmt.Errorf("The secret %s for AzureFile CSI driver %s is not found, err: %s", volume.CSI.NodePublishSecretRef.Name, volume.Name, err)
+			return nil, errors.Wrap(err, fmt.Sprintf("The secret %s for AzureFile CSI driver %s is not found", volume.CSI.NodePublishSecretRef.Name, volume.Name))
 		}
 
 		if secret == nil {
@@ -1675,12 +1678,17 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 	for _, v := range pod.Spec.Volumes {
 		// Handle the case for Azure File CSI driver
 		if v.CSI != nil {
-			csiVolume, err := p.getAzureFileCSI(v, pod.Namespace)
-			if err != nil {
-				return volumes, err
+			// Check if the CSI driver if file (Disk is not supported by ACI)
+			if v.CSI.Driver == AzureFileDriverName {
+				csiVolume, err := p.getAzureFileCSI(v, pod.Namespace)
+				if err != nil {
+					return volumes, err
+				}
+				volumes = append(volumes, *csiVolume)
+				continue
+			} else {
+				return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", pod.Name, v.Name)
 			}
-			volumes = append(volumes, *csiVolume)
-			continue
 		}
 
 		// Handle the case for the AzureFile volume.
