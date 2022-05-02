@@ -14,7 +14,6 @@ import (
 const (
 	defaultUserAgent = "virtual-kubelet/azure-arm-aci/2021-07-01"
 	apiVersion       = "2021-07-01"
-	apiVersionForPriority = "2021-10-01"
 
 	containerGroupURLPath                    = "subscriptions/{{.subscriptionId}}/resourceGroups/{{.resourceGroup}}/providers/Microsoft.ContainerInstance/containerGroups/{{.containerGroupName}}"
 	containerGroupListURLPath                = "subscriptions/{{.subscriptionId}}/providers/Microsoft.ContainerInstance/containerGroups"

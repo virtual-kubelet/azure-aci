@@ -17,15 +17,9 @@ import (
 // From: https://docs.microsoft.com/en-us/rest/api/container-instances/containergroups/createorupdate
 func (c *Client) CreateContainerGroup(ctx context.Context, resourceGroup, containerGroupName string, containerGroup ContainerGroup) (*ContainerGroup, error) {
 	urlParams := url.Values{
-		"api-version": []string{apiVersion},
+		"api-version": []string{getAPIVersion(containerGroup, ctx)},
 	}
 
-    priority, priorityExists := containerGroup.Tags["Priority"]
-    if priorityExists && len(priority) > 0 {
-	    urlParams = url.Values{
-		"api-version": []string{apiVersionForPriority},
-	    }
-    }
 	// Create the url.
 	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerGroupURLPath)
 	uri += "?" + url.Values(urlParams).Encode()
