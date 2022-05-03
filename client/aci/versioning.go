@@ -9,26 +9,34 @@ var minVersionSupport = map[string]string {
     "Priority": "2021-10-01",
 }
 
-// CurrentAssumption: version is decided based on values in containerGroup.Tags
-// Set the minimum api version required based on the properties
-// find the minimum version for each of the tags, based on known values
-// find the max of the above min versions for each
-func getAPIVersion(containerGroup ContainerGroup, ctx context.Context) string {
-    finalApiVersion := apiVersion
-    for key, val := range containerGroup.Tags {
-        minVersion, ok := minVersionSupport[key]
-        if len(val) == 0 || !ok {
-            minVersion = apiVersion
-        }
-        if finalApiVersion < minVersion {
-            finalApiVersion = minVersion
-        }
-    }
-    log.G(ctx).Infof("setting api version to %s", finalApiVersion)
-    return finalApiVersion
+type VersionProvider struct {
+    finalVersion string
+    ctx context.Context
 }
 
+func newVersionProvider(defaultVersion string, ctx context.Context) (*VersionProvider) {
+    return &VersionProvider{defaultVersion, ctx}
+}
+
+// call check version based on some property
+// return the version Provider with finalVersion updated 
+// keep adding more checks under this in future
+func (versionProvider *VersionProvider) getVersion(containerGroup ContainerGroup) (* VersionProvider) {
+
+    versionProvider.setVersionFromProperty(string(containerGroup.ContainerGroupProperties.Priority), "Priority")
+
+    log.G(versionProvider.ctx).Infof("API Version set to %s \n", versionProvider.finalVersion)
+    return  versionProvider
+}
+
+// find the minimum version for a property from the map
+func (versionProvider *VersionProvider) setVersionFromProperty(property string, keyRef string) (*VersionProvider) {
+    minVersion, ok := minVersionSupport[keyRef]
+    if len(property) > 0 && ok && versionProvider.finalVersion < minVersion {
+        versionProvider.finalVersion = minVersion
+    }
+    return versionProvider
+}
 
 // TODO:
-// pass podspec in create to allow for detailed versioning ??
 // maintain minVersionsSupport in an external json ??
