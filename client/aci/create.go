@@ -16,16 +16,9 @@ import (
 // provided properties.
 // From: https://docs.microsoft.com/en-us/rest/api/container-instances/containergroups/createorupdate
 func (c *Client) CreateContainerGroup(ctx context.Context, resourceGroup, containerGroupName string, containerGroup ContainerGroup) (*ContainerGroup, error) {
-
-	// create a new VersionProvider object
-	versionProvider, err := newVersionProvider(apiVersion)
-	if err != nil {
-		return nil, err
-	}
-
+    versionProvider := newVersionProvider(apiVersion, ctx)
 	urlParams := url.Values{
-		// use versionProvider to get the correct min api version
-		"api-version": []string{versionProvider.getVersion(containerGroup, ctx).finalVersion},
+		"api-version": []string{versionProvider.getVersion(containerGroup).finalVersion},
 	}
 
 	// Create the url.
