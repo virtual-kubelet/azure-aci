@@ -5,31 +5,36 @@ import (
     "context"
 )
 
+// map of minimum api version required for different properties
+// TODO: read from a separate json file if it gets too large
 var minVersionSupport = map[string]string {
     "Priority": "2021-10-01",
 }
 
+// Basic object for selecting api version based on various properties
+// Maintains the api version selected after checking certain properties
 type VersionProvider struct {
     finalVersion string
-    ctx context.Context
 }
 
-func newVersionProvider(defaultVersion string, ctx context.Context) (*VersionProvider) {
-    return &VersionProvider{defaultVersion, ctx}
+// creates a new instance of VErsionProvider, and sets default version
+// assumes api version to be of the format YYYY-mm-dd[-suffix]
+// assumes that the api version format will not be violated
+func newVersionProvider(defaultVersion string) (*VersionProvider) {
+    return &VersionProvider{defaultVersion}
 }
 
-// call check version based on some property
-// return the version Provider with finalVersion updated 
-// keep adding more checks under this in future
-func (versionProvider *VersionProvider) getVersion(containerGroup ContainerGroup) (* VersionProvider) {
+// returns the api version for the specific ContainerGroup instance based on various properties
+func (versionProvider *VersionProvider) getVersion(containerGroup ContainerGroup, ctx context.Context) (* VersionProvider) {
 
     versionProvider.setVersionFromProperty(string(containerGroup.ContainerGroupProperties.Priority), "Priority")
 
-    log.G(versionProvider.ctx).Infof("API Version set to %s \n", versionProvider.finalVersion)
+    log.G(ctx).Infof("API Version set to %s \n", versionProvider.finalVersion)
     return  versionProvider
 }
 
-// find the minimum version for a property from the map
+// find the min api version for a string property based on the value in minVersionSupport map
+// assumes that the api version always uses the correct format YYYY-mm-dd[-suffix]
 func (versionProvider *VersionProvider) setVersionFromProperty(property string, keyRef string) (*VersionProvider) {
     minVersion, ok := minVersionSupport[keyRef]
     if len(property) > 0 && ok && versionProvider.finalVersion < minVersion {
@@ -37,6 +42,3 @@ func (versionProvider *VersionProvider) setVersionFromProperty(property string, 
     }
     return versionProvider
 }
-
-// TODO:
-// maintain minVersionsSupport in an external json ??
