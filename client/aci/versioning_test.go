@@ -14,15 +14,15 @@ func TestSetVersionFromPropertyInMap(t *testing.T) {
 	versionProvider:= newVersionProvider(defaultVersion)
 
 	// should use defualt version when property is not populated
-	versionProvider.setVersionFromProperty("", key)
+	versionProvider.setVersionFromProperty("", key, context.Background())
 	assert.Check(t, is.Equal(versionProvider.finalVersion, defaultVersion), "Default version should be used when a property value is empty")
 
 	// should use api version present in map if priority is Spot
-	versionProvider.setVersionFromProperty("Spot", key)
+	versionProvider.setVersionFromProperty("Spot", key, context.Background())
 	assert.Check(t, is.Equal(versionProvider.finalVersion, minVersionSupport[key]), "When a version is available for the property in map, the final version should be >= min api version for the property")
 
 	// should use api version present in map if priority is Regular
-	versionProvider.setVersionFromProperty("Regular", key)
+	versionProvider.setVersionFromProperty("Regular", key, context.Background())
 	assert.Check(t, is.Equal(versionProvider.finalVersion, minVersionSupport[key]), "When a version is available for the property in map, the final version should be >= min api version for the property")
 
 }
@@ -34,7 +34,7 @@ func TestSetLowerVersionFromPropertyInMap (t *testing.T) {
 	versionProvider := newVersionProvider(largeDefaultVersion)
 
 	// should use largeDefaultVersion as it is > the min api version for thiis key
-	versionProvider.setVersionFromProperty("Regular", key)
+	versionProvider.setVersionFromProperty("Regular", key, context.Background())
 	assert.Check(t, versionProvider.finalVersion >= minVersionSupport[key], "Use larger version among default and min api versions for various properties")
 }
 
@@ -45,7 +45,7 @@ func TestSetVersionFromPropertyNotInMap(t *testing.T) {
 	versionProvider:= newVersionProvider(defaultVersion)
 
 	// should use default version when property is not present in map
-	versionProvider.setVersionFromProperty("propertyValue", key)
+	versionProvider.setVersionFromProperty("propertyValue", key, context.Background())
 	assert.Check(t, versionProvider.finalVersion == defaultVersion, "Default version should be used when no version for a property is available in map")
 }
 
