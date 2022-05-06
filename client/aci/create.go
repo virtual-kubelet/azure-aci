@@ -10,7 +10,7 @@ import (
 	"net/url"
 
 	"github.com/virtual-kubelet/azure-aci/client/api"
-    "github.com/virtual-kubelet/virtual-kubelet/log"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
 )
 
 // CreateContainerGroup creates a new Azure Container Instance with the
@@ -30,6 +30,7 @@ func (c *Client) CreateContainerGroup(ctx context.Context, resourceGroup, contai
 	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerGroupURLPath)
 	uri += "?" + url.Values(urlParams).Encode()
 	log.G(ctx).Infof("Using url '%s' for Create", uri)
+
 	// Create the body for the request.
 	b := new(bytes.Buffer)
 	if err := json.NewEncoder(b).Encode(containerGroup); err != nil {
