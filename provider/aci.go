@@ -1645,28 +1645,28 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 	azureSource := &aci.AzureFileVolume{}
 
 	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
-		secretName := volume.CSI.VolumeAttributes[azureFileSecretName]
-		if secretName != "" {
-			secret, err := p.resourceManager.GetSecret(secretName, namespace)
+		for k, v := range volume.CSI.VolumeAttributes {
+			switch strings.ToLower(k) {
+			case azureFileSecretName:
+				secretName := v
 
-			if err != nil {
-				return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
+				secret, err := p.resourceManager.GetSecret(secretName, namespace)
+
+				if err != nil {
+					return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
+				}
+
+				if secret == nil {
+					return nil, fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
+				}
+
+				// Set the storage account name and key
+				azureSource.StorageAccountName = strings.TrimSpace(string(secret.Data[azureFileStorageAccountName]))
+				azureSource.StorageAccountKey = strings.TrimSpace(string(secret.Data[azureFileStorageAccountKey]))
+
+			case azureFileShareName:
+				azureSource.ShareName = v
 			}
-
-			if secret == nil {
-				return nil, fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
-			}
-			// Set the storage account name and key
-
-			azureSource.StorageAccountName = strings.TrimSpace(strings.ToLower(string(secret.Data[azureFileStorageAccountName])))
-			azureSource.StorageAccountKey = strings.TrimSpace(strings.ToLower(string(secret.Data[azureFileStorageAccountKey])))
-		} else {
-			return nil, fmt.Errorf("secret name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
-		}
-		// Set shareName
-
-		if shareName, ok := volume.CSI.VolumeAttributes[azureFileShareName]; ok {
-			azureSource.ShareName = shareName
 		}
 	} else {
 		return nil, fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
