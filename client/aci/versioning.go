@@ -3,7 +3,6 @@ package aci
 import (
     "github.com/virtual-kubelet/virtual-kubelet/log"
     "context"
-	"fmt"
 )
 
 //<summary>
@@ -47,14 +46,13 @@ func (versionProvider *VersionProvider) getVersion(containerGroup ContainerGroup
 
     versionProvider.setVersionFromProperty(string(containerGroup.ContainerGroupProperties.Priority), "Priority", ctx)
 
-	fmt.Printf("API Version set to %s \n", versionProvider.finalVersion)
     log.G(ctx).Infof("API Version set to %s \n", versionProvider.finalVersion)
-    return  versionProvider
+    return versionProvider
 }
 
 //<summary>
-// find the min api version for a string property based on the value in minVersionSupport map
-// assumes that the api version always uses the correct format YYYY-mm-dd[-suffix]
+//	find the min api version for a string property based on the value in minVersionSupport map
+//	assumes that the api version always uses the correct format YYYY-mm-dd[-suffix]
 //</summary>
 //<param name="property">the string value of some property field that should be checked<param>
 //<param name="keyRef">the key for the property in the minVersionSupport map</param>
@@ -67,7 +65,6 @@ func (versionProvider *VersionProvider) setVersionFromProperty(property string, 
     if len(property) > 0 && ok && versionProvider.finalVersion < minVersion {
         versionProvider.finalVersion = minVersion
     }
-	fmt.Printf("Selected API Version %s for property %s with value %s \n", versionProvider.finalVersion, keyRef, property)
     log.G(ctx).Infof("Selected API Version %s for property %s with value %s \n", versionProvider.finalVersion, keyRef, property)
     return versionProvider
 }
