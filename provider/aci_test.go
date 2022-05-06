@@ -1254,8 +1254,8 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			Namespace: podNamespace,
 		},
 		Data: map[string][]byte{
-			"azurestorageaccountname": []byte("azure storage account name"),
-			"azurestorageaccountkey":  []byte("azure storage account key")},
+			azureFileStorageAccountName: []byte("azure storage account name"),
+			azureFileStorageAccountKey:  []byte("azure storage account key")},
 	}
 
 	fakeVolumeMount := v1.VolumeMount{

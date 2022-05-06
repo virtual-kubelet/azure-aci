@@ -50,10 +50,12 @@ const (
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 	// Parameter names defined in azure file CSI driver, refer to
 	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
-	azureFileShareName  = "shareName"
-	azureFileSecretName = "secretName"
+	azureFileShareName  = "sharename"
+	azureFileSecretName = "secretname"
 	// AzureFileDriverName is the name of the CSI driver for Azure File
-	AzureFileDriverName = "file.csi.azure.com"
+	AzureFileDriverName         = "file.csi.azure.com"
+	azureFileStorageAccountName = "azurestorageaccountname"
+	azureFileStorageAccountKey  = "azurestorageaccountkey"
 )
 
 // DNS configuration settings
@@ -1656,8 +1658,8 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 			}
 			// Set the storage account name and key
 
-			azureSource.StorageAccountName = string(secret.Data["azurestorageaccountname"])
-			azureSource.StorageAccountKey = string(secret.Data["azurestorageaccountkey"])
+			azureSource.StorageAccountName = strings.TrimSpace(strings.ToLower(string(secret.Data[azureFileStorageAccountName])))
+			azureSource.StorageAccountKey = strings.TrimSpace(strings.ToLower(string(secret.Data[azureFileStorageAccountKey])))
 		} else {
 			return nil, fmt.Errorf("secret name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
 		}
@@ -1709,8 +1711,8 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 				AzureFile: &aci.AzureFileVolume{
 					ShareName:          v.AzureFile.ShareName,
 					ReadOnly:           v.AzureFile.ReadOnly,
-					StorageAccountName: string(secret.Data["azurestorageaccountname"]),
-					StorageAccountKey:  string(secret.Data["azurestorageaccountkey"]),
+					StorageAccountName: string(secret.Data[azureFileStorageAccountName]),
+					StorageAccountKey:  string(secret.Data[azureFileStorageAccountKey]),
 				},
 			})
 			continue
