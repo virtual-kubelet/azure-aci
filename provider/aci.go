@@ -725,7 +725,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"Namespace":         pod.Namespace,
 		"UID":               podUID,
 		"CreationTimestamp": podCreationTimestamp,
-		"Priority":          pod.Annotations[priorityTypeAnnotation],
+		"virtual-kubelet.io-priority": pod.Annotations[priorityTypeAnnotation],
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
