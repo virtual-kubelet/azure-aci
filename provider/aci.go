@@ -62,7 +62,7 @@ const (
 )
 
 const (
-	priorityTypeAnnotation = "priority"
+	priorityTypeAnnotation = "virtual-kubelet.io/priority"
 )
 
 const (
@@ -739,6 +739,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 }
 
 // Set the Container Group Priority Property
+// value is set based on the priorityTypeAnnotation field under anotations in the pod spec
 // Accepted Values : Regular, Spot
 func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) error {
 
