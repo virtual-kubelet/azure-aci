@@ -725,7 +725,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"Namespace":         pod.Namespace,
 		"UID":               podUID,
 		"CreationTimestamp": podCreationTimestamp,
-		"virtual-kubelet.io-priority": pod.Annotations[priorityTypeAnnotation],
+	}
+
+	if err := setContainerGroupPriorityTag(&containerGroup, pod); err != nil {
+		return fmt.Errorf("error setting continerGroup priority tag %v", err)
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
@@ -752,6 +755,28 @@ func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) 
 				containerGroup.ContainerGroupProperties.Priority = aci.Regular
 			} else {
 				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
+			}
+		}
+	}
+
+	return nil
+}
+
+// set Container Group Priority Tag
+// use tag name virtual-kubelet.io-priority
+// only set this tag when a priority annotaion is present
+func setContainerGroupPriorityTag(containerGroup *aci.ContainerGroup, pod *v1.Pod) error {
+
+	priorityTagName := "virtual-kubelet.io-priority"
+	if pod.Annotations != nil {
+		priority, priorityExists := pod.Annotations[priorityTypeAnnotation]
+		if priorityExists {
+			if strings.EqualFold(priority, string(aci.Spot)) {
+				containerGroup.Tags[priorityTagName] = string(aci.Spot)
+			} else if strings.EqualFold(priority, string(aci.Regular)) {
+				containerGroup.Tags[priorityTagName] = string(aci.Regular)
+			} else {
+				return fmt.Errorf("the pod requires either regular or spot priority. invalid value %s", priority)
 			}
 		}
 	}

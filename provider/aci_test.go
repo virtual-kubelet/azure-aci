@@ -131,6 +131,10 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 		assert.Check(t, is.Equal(1.5, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
 
+		priorityTag, ok := cg.Tags["virtual-kubelet.io-priority"]
+		assert.Check(t, is.Equal(ok, false), "Priority tag should not be set")
+		assert.Check(t, is.Equal("", priorityTag), "Container Group Priority should not be set")
+
 		return http.StatusOK, cg
 	}
 
@@ -415,6 +419,10 @@ func TestCreatePodWithSpotPriority(t *testing.T) {
 		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.SKU), "Requests GPU SKU is not expected")
 		assert.Check(t, is.Equal(aci.Spot, cg.ContainerGroupProperties.Priority), "Container group priority does not match")
 
+		priorityTag, ok := cg.Tags["virtual-kubelet.io-priority"]
+		assert.Check(t, is.Equal(ok, true), "Priority tag was not set")
+		assert.Check(t, is.Equal(string(aci.Spot), priorityTag), "Container Group Priority Tag does not match")
+
 		return http.StatusOK, cg
 	}
 
@@ -500,6 +508,10 @@ func TestCreatePodWithSpotPriorityIgnoreCase(t *testing.T) {
 		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.SKU), "Requests GPU SKU is not expected")
 		assert.Check(t, is.Equal(aci.Spot, cg.ContainerGroupProperties.Priority), "Container group priority does not match")
 
+		priorityTag, ok := cg.Tags["virtual-kubelet.io-priority"]
+		assert.Check(t, is.Equal(ok, true), "Priority tag was not set")
+		assert.Check(t, is.Equal(string(aci.Spot), priorityTag), "Container Group Priority Tag does not match")
+
 		return http.StatusOK, cg
 	}
 
@@ -584,6 +596,10 @@ func TestCreatePodWithRegularPriority(t *testing.T) {
 		assert.Check(t, is.Equal(int32(1), cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.Count), "Requests GPU Count is not expected")
 		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.SKU), "Requests GPU SKU is not expected")
 		assert.Check(t, is.Equal(aci.Regular, cg.ContainerGroupProperties.Priority), "Container group priority does not match")
+
+		priorityTag, ok := cg.Tags["virtual-kubelet.io-priority"]
+		assert.Check(t, is.Equal(ok, true), "Priority tag was not set")
+		assert.Check(t, is.Equal(string(aci.Regular), priorityTag), "Container Group Priority Tag does not match")
 
 		return http.StatusOK, cg
 	}
