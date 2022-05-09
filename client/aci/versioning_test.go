@@ -33,7 +33,7 @@ func TestSetLowerVersionFromPropertyInMap (t *testing.T) {
 	largeDefaultVersion := "9999-99-99"
 	versionProvider := newVersionProvider(largeDefaultVersion)
 
-	// should use largeDefaultVersion as it is > the min api version for thiis key
+	// should use largeDefaultVersion as it is > the min api version for this key
 	versionProvider.setVersionFromProperty("Regular", key, context.Background())
 	assert.Check(t, versionProvider.finalVersion >= minVersionSupport[key], "Use larger version among default and min api versions for various properties")
 }
