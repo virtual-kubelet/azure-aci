@@ -62,7 +62,8 @@ const (
 )
 
 const (
-	priorityTypeAnnotation = "priority"
+	priorityTypeAnnotation = "virtual-kubelet.io/priority"
+	priorityTagName	       = "virtual-kubelet.io-priority"
 )
 
 const (
@@ -662,11 +663,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
-	//set container group priority property
-	if err := setContainerGroupPriority(&containerGroup, pod); err != nil {
-		return fmt.Errorf("error setting container group priority: %v", err)
-	}
-
 	// get containers
 	containers, err := p.getContainers(pod)
 	if err != nil {
@@ -725,7 +721,11 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"Namespace":         pod.Namespace,
 		"UID":               podUID,
 		"CreationTimestamp": podCreationTimestamp,
-		"Priority":          pod.Annotations[priorityTypeAnnotation],
+	}
+
+	//set container group priority property and Tag
+	if err := setContainerGroupPriority(&containerGroup, pod); err != nil {
+		return fmt.Errorf("error setting container group priority: %v", err)
 	}
 
 	p.amendVnetResources(&containerGroup, pod)
@@ -738,7 +738,9 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	return p.createContainerGroup(ctx, pod.Namespace, pod.Name, &containerGroup)
 }
 
-// Set the Container Group Priority Property
+// Set the Container Group Priority Property and Tag
+// Set the Container Group Priority Tag with Tag name virtual-kubelet.io-priority
+// value is set based on the priorityTypeAnnotation field under annotations in the pod spec
 // Accepted Values : Regular, Spot
 func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) error {
 
@@ -747,8 +749,10 @@ func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) 
 		if priorityExists {
 			if strings.EqualFold(priority, string(aci.Spot)) {
 				containerGroup.ContainerGroupProperties.Priority = aci.Spot
+				containerGroup.Tags[priorityTagName] = string(aci.Spot)
 			} else if strings.EqualFold(priority, string(aci.Regular)) {
 				containerGroup.ContainerGroupProperties.Priority = aci.Regular
+				containerGroup.Tags[priorityTagName] = string(aci.Regular)
 			} else {
 				return fmt.Errorf("The pod requires either Regular or Spot priority. Invalid value %s", priority)
 			}
