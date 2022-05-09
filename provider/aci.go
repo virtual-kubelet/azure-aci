@@ -1643,34 +1643,40 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*aci.ContainerProbe, e
 
 func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.Volume, error) {
 	azureSource := &aci.AzureFileVolume{}
-
+	var secretName, shareName string
 	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
 		for k, v := range volume.CSI.VolumeAttributes {
 			switch strings.ToLower(k) {
 			case azureFileSecretName:
-				secretName := v
-
-				secret, err := p.resourceManager.GetSecret(secretName, namespace)
-
-				if err != nil {
-					return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
-				}
-
-				if secret == nil {
-					return nil, fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
-				}
-
-				// Set the storage account name and key
-				azureSource.StorageAccountName = strings.TrimSpace(string(secret.Data[azureFileStorageAccountName]))
-				azureSource.StorageAccountKey = strings.TrimSpace(string(secret.Data[azureFileStorageAccountKey]))
-
+				secretName = v
 			case azureFileShareName:
-				azureSource.ShareName = v
+				shareName = v
 			}
 		}
 	} else {
 		return nil, fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
 	}
+
+	if shareName == "" {
+		return nil, fmt.Errorf("secret share name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
+	}
+
+	// Set shareName
+	azureSource.ShareName = shareName
+
+	secret, err := p.resourceManager.GetSecret(secretName, namespace)
+
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
+	}
+
+	if secret == nil {
+		return nil, fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
+	}
+
+	// Set the storage account name and key
+	azureSource.StorageAccountName = strings.TrimSpace(string(secret.Data[azureFileStorageAccountName]))
+	azureSource.StorageAccountKey = strings.TrimSpace(string(secret.Data[azureFileStorageAccountKey]))
 	return &aci.Volume{
 		Name:      volume.Name,
 		AzureFile: azureSource,

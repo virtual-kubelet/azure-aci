@@ -1197,6 +1197,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	podNamespace := "ns-name"
 	fakeVolumeSecret := "fake-volume-secret"
 	fakeShareName := "aksshare"
+	azureFileVolumeName := "azure"
 
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
@@ -1259,12 +1260,12 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	}
 
 	fakeVolumeMount := v1.VolumeMount{
-		Name:      "azure",
+		Name:      azureFileVolumeName,
 		MountPath: "/mnt/azure",
 	}
 
 	fakePodVolume := v1.Volume{
-		Name: "azure",
+		Name: azureFileVolumeName,
 		VolumeSource: v1.VolumeSource{
 			CSI: &v1.CSIVolumeSource{
 				Driver: "file.csi.azure.com",
@@ -1286,7 +1287,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			description:   "Secret is nil",
 			secretVolume:  nil,
 			volume:        fakePodVolume,
-			expectedError: fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", "azure"),
+			expectedError: fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", azureFileVolumeName),
 		},
 		{
 			description:   "Volume has a secret with a valid value",
@@ -1298,20 +1299,35 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			description:  "Volume has no secret",
 			secretVolume: &fakeSecret,
 			volume: v1.Volume{
-				Name: "azure",
+				Name: azureFileVolumeName,
 				VolumeSource: v1.VolumeSource{
 					CSI: &v1.CSIVolumeSource{
 						Driver:           "file.csi.azure.com",
 						VolumeAttributes: map[string]string{},
 					},
 				}},
-			expectedError: fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", "azure"),
+			expectedError: fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", azureFileVolumeName),
+		},
+		{
+			description:  "Volume has no share name",
+			secretVolume: &fakeSecret,
+			volume: v1.Volume{
+				Name: azureFileVolumeName,
+				VolumeSource: v1.VolumeSource{
+					CSI: &v1.CSIVolumeSource{
+						Driver: "file.csi.azure.com",
+						VolumeAttributes: map[string]string{
+							azureFileSecretName: fakeVolumeSecret,
+						},
+					},
+				}},
+			expectedError: fmt.Errorf("secret share name for AzureFile CSI driver %s cannot be empty or nil", azureFileVolumeName),
 		},
 		{
 			description:  "Volume is Disk Driver",
 			secretVolume: &fakeSecret,
 			volume: v1.Volume{
-				Name: "azure",
+				Name: azureFileVolumeName,
 				VolumeSource: v1.VolumeSource{
 					CSI: &v1.CSIVolumeSource{
 						Driver: "disk.csi.azure.com",
@@ -1321,7 +1337,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 						},
 					},
 				}},
-			expectedError: fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", podName, "azure", "disk.csi.azure.com"),
+			expectedError: fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", podName, azureFileVolumeName, "disk.csi.azure.com"),
 		},
 	}
 	for _, tc := range cases {
