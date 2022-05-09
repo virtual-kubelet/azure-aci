@@ -63,6 +63,7 @@ const (
 
 const (
 	priorityTypeAnnotation = "virtual-kubelet.io/priority"
+	priorityTagName	       = "virtual-kubelet.io-priority"
 )
 
 const (
@@ -743,7 +744,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 // Accepted Values : Regular, Spot
 func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) error {
 
-	priorityTagName := "virtual-kubelet.io-priority"
 	if pod.Annotations != nil {
 		priority, priorityExists := pod.Annotations[priorityTypeAnnotation]
 		if priorityExists {
@@ -761,7 +761,6 @@ func setContainerGroupPriority(containerGroup *aci.ContainerGroup, pod *v1.Pod) 
 
 	return nil
 }
-
 
 func (p *ACIProvider) createContainerGroup(ctx context.Context, podNS, podName string, cg *aci.ContainerGroup) error {
 	ctx, span := trace.StartSpan(ctx, "aci.createContainerGroup")
