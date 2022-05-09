@@ -28,8 +28,11 @@ jobs:
           name: Build
           command: make build
       - run:
-          name: Tests
+          name: Run tests and coverage
           command: make testauth test
+      - run:
+          name: Upload coverage to Codecov
+          command: bash <(curl -s https://codecov.io/bash)
 
 workflows:
   version: 2
