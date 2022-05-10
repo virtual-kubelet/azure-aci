@@ -1,6 +1,7 @@
 version: 2
 jobs:
   validate:
+    parallelism: 2
     docker:
       - image: golang:1.16
     working_directory: /go/src/github.com/virtual-kubelet/azure-aci
