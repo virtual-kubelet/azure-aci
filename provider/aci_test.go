@@ -1296,20 +1296,6 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			description: "Volume has a secret with no storage credentials",
-			secretVolume: &v1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      fakeVolumeSecret,
-					Namespace: podNamespace,
-				},
-				Data: map[string][]byte{
-					"otherdata": []byte("azure storage account name"),
-				},
-			},
-			volume:        fakePodVolume,
-			expectedError: fmt.Errorf("the secret doesn't contain the azure storage account credentials needed for AzureFile CSI driver %s", azureFileVolumeName),
-		},
-		{
 			description:  "Volume has no secret",
 			secretVolume: &fakeSecret,
 			volume: v1.Volume{

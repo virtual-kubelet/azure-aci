@@ -1675,10 +1675,6 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 	}
 
 	// Set the storage account name and key
-	if secret.Data[azureFileStorageAccountName] == nil || secret.Data[azureFileStorageAccountKey] == nil {
-		return nil, fmt.Errorf("the secret doesn't contain the azure storage account credentials needed for AzureFile CSI driver %s", volume.Name)
-	}
-
 	azureSource.StorageAccountName = strings.TrimSpace(string(secret.Data[azureFileStorageAccountName]))
 	azureSource.StorageAccountKey = strings.TrimSpace(string(secret.Data[azureFileStorageAccountKey]))
 	return &aci.Volume{
