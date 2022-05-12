@@ -47,7 +47,7 @@ vet:
 
 .PHONY: lint
 lint:
-	@$(LINTER_BIN) run --skip-files "test.go" --new-from-rev "HEAD~$(git rev-list master.. --count)"  ./...
+	@$(LINTER_BIN) run --skip-files "test.go" --new-from-rev "HEAD~$(git rev-list master.. --count)"  ./... --timeout 5m0s
 
 .PHONY: check-mod
 check-mod: # verifies that module changes for go.mod and go.sum are checked in
