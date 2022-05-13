@@ -10,19 +10,26 @@ import (
 	"net/url"
 
 	"github.com/virtual-kubelet/azure-aci/client/api"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
 )
 
 // CreateContainerGroup creates a new Azure Container Instance with the
 // provided properties.
 // From: https://docs.microsoft.com/en-us/rest/api/container-instances/containergroups/createorupdate
 func (c *Client) CreateContainerGroup(ctx context.Context, resourceGroup, containerGroupName string, containerGroup ContainerGroup) (*ContainerGroup, error) {
+
+	// create a new VersionProvider object
+	versionProvider := newVersionProvider(apiVersion)
+
 	urlParams := url.Values{
-		"api-version": []string{apiVersion},
+		// use versionProvider to get the correct min api version
+		"api-version": []string{versionProvider.getVersion(containerGroup, ctx).finalVersion},
 	}
 
 	// Create the url.
 	uri := api.ResolveRelative(c.auth.ResourceManagerEndpoint, containerGroupURLPath)
 	uri += "?" + url.Values(urlParams).Encode()
+	log.G(ctx).Infof("Using url '%s' for Create", uri)
 
 	// Create the body for the request.
 	b := new(bytes.Buffer)
