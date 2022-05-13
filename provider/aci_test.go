@@ -1195,8 +1195,9 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 func TestCreatePodWithCSIVolume(t *testing.T) {
 	podName := "pod-name"
 	podNamespace := "ns-name"
-	pvName := "pv-name"
 	fakeVolumeSecret := "fake-volume-secret"
+	fakeShareName := "aksshare"
+	azureFileVolumeName := "azure"
 
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
@@ -1248,125 +1249,95 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		},
 	}, nil)
 
-	readOnly := false
 	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fakeVolumeSecret,
 			Namespace: podNamespace,
 		},
 		Data: map[string][]byte{
-			"azurestorageaccountname": []byte("azure storage account name"),
-			"azurestorageaccountkey":  []byte("azure storage account key")},
+			azureFileStorageAccountName: []byte("azure storage account name"),
+			azureFileStorageAccountKey:  []byte("azure storage account key")},
 	}
-	fakePV := v1.PersistentVolume{
-		Spec: v1.PersistentVolumeSpec{
-			PersistentVolumeSource: v1.PersistentVolumeSource{
-				CSI: &v1.CSIPersistentVolumeSource{
-					Driver: "file.csi.azure.com",
-					NodeStageSecretRef: &v1.SecretReference{
-						Name:      fakeVolumeSecret,
-						Namespace: podNamespace,
-					},
-					NodePublishSecretRef: &v1.SecretReference{
-						Name:      fakeVolumeSecret,
-						Namespace: podNamespace,
-					},
-				},
-			},
-		},
+
+	fakeVolumeMount := v1.VolumeMount{
+		Name:      azureFileVolumeName,
+		MountPath: "/mnt/azure",
 	}
 
 	fakePodVolume := v1.Volume{
-		Name: pvName,
+		Name: azureFileVolumeName,
 		VolumeSource: v1.VolumeSource{
 			CSI: &v1.CSIVolumeSource{
 				Driver: "file.csi.azure.com",
-				NodePublishSecretRef: &v1.LocalObjectReference{
-					Name: fakeVolumeSecret,
+				VolumeAttributes: map[string]string{
+					azureFileSecretName: fakeVolumeSecret,
+					azureFileShareName:  fakeShareName,
 				},
-				ReadOnly: &readOnly,
 			},
 		},
 	}
 
 	cases := []struct {
-		description      string
-		persistentVolume *v1.PersistentVolume
-		secretVolume     *v1.Secret
-		volume           v1.Volume
-		expectedError    error
+		description   string
+		secretVolume  *v1.Secret
+		volume        v1.Volume
+		expectedError error
 	}{
 		{
-			description:      "Volume has NodePublishSecretRef with valid value",
-			persistentVolume: &fakePV,
-			secretVolume:     &fakeSecret,
-			volume:           fakePodVolume,
-			expectedError:    nil,
+			description:   "Secret is nil",
+			secretVolume:  nil,
+			volume:        fakePodVolume,
+			expectedError: fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", azureFileVolumeName),
 		},
 		{
-			description:      "Volume has no NodePublishSecretRef",
-			persistentVolume: &fakePV,
-			secretVolume:     &fakeSecret,
-			volume: v1.Volume{
-				Name: pvName,
-				VolumeSource: v1.VolumeSource{
-					CSI: &v1.CSIVolumeSource{
-						Driver:   "file.csi.azure.com",
-						ReadOnly: &readOnly,
-					},
-				}},
-			expectedError: fmt.Errorf("NodePublishSecretRef for AzureFile CSI driver %s cannot be empty or nil", pvName),
+			description:   "Volume has a secret with a valid value",
+			secretVolume:  &fakeSecret,
+			volume:        fakePodVolume,
+			expectedError: nil,
 		},
 		{
-			description: "Volume is Disk Driver",
-			persistentVolume: &v1.PersistentVolume{
-				Spec: v1.PersistentVolumeSpec{
-					PersistentVolumeSource: v1.PersistentVolumeSource{
-						CSI: &v1.CSIPersistentVolumeSource{
-							Driver: "disk.csi.azure.com",
-							NodeStageSecretRef: &v1.SecretReference{
-								Name:      fakeVolumeSecret,
-								Namespace: podNamespace,
-							},
-							NodePublishSecretRef: &v1.SecretReference{
-								Name:      fakeVolumeSecret,
-								Namespace: podNamespace,
-							},
-						},
-					},
-				},
-			},
+			description:  "Volume has no secret",
 			secretVolume: &fakeSecret,
 			volume: v1.Volume{
-				Name: pvName,
+				Name: azureFileVolumeName,
 				VolumeSource: v1.VolumeSource{
 					CSI: &v1.CSIVolumeSource{
-						Driver: "disk.csi.azure.com",
-						NodePublishSecretRef: &v1.LocalObjectReference{
-							Name: fakeVolumeSecret,
-						},
-						ReadOnly: &readOnly,
+						Driver:           "file.csi.azure.com",
+						VolumeAttributes: map[string]string{},
 					},
 				}},
-			expectedError: fmt.Errorf("Pod %s requires volume %s which is of an unsupported type %s", podName, pvName, "disk.csi.azure.com"),
+			expectedError: fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", azureFileVolumeName),
 		},
 		{
-			description:      "Volume has NodePublishSecretRef with empty secret",
-			persistentVolume: &fakePV,
-			secretVolume:     nil,
+			description:  "Volume has no share name",
+			secretVolume: &fakeSecret,
 			volume: v1.Volume{
-				Name: pvName,
+				Name: azureFileVolumeName,
 				VolumeSource: v1.VolumeSource{
 					CSI: &v1.CSIVolumeSource{
 						Driver: "file.csi.azure.com",
-						NodePublishSecretRef: &v1.LocalObjectReference{
-							Name: "fakeEmptyVolumeSecret",
+						VolumeAttributes: map[string]string{
+							azureFileSecretName: fakeVolumeSecret,
 						},
-						ReadOnly: &readOnly,
 					},
-				},
-			},
-			expectedError: fmt.Errorf("Getting secret for AzureFile CSI driver %s returned an empty secret", pvName),
+				}},
+			expectedError: fmt.Errorf("secret share name for AzureFile CSI driver %s cannot be empty or nil", azureFileVolumeName),
+		},
+		{
+			description:  "Volume is Disk Driver",
+			secretVolume: &fakeSecret,
+			volume: v1.Volume{
+				Name: azureFileVolumeName,
+				VolumeSource: v1.VolumeSource{
+					CSI: &v1.CSIVolumeSource{
+						Driver: "disk.csi.azure.com",
+						VolumeAttributes: map[string]string{
+							azureFileSecretName: fakeVolumeSecret,
+							azureFileShareName:  fakeShareName,
+						},
+					},
+				}},
+			expectedError: fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", podName, azureFileVolumeName, "disk.csi.azure.com"),
 		},
 	}
 	for _, tc := range cases {
@@ -1409,20 +1380,13 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 				},
 			}
 
-			volumeMount := v1.VolumeMount{
-				Name:      pvName,
-				MountPath: "/temp",
-			}
-			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, volumeMount)
+			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)
 
-			mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-
-			if tc.secretVolume == nil {
-				mockSecretNamespaceLister.EXPECT().Get(tc.volume.CSI.NodePublishSecretRef.Name).Return(nil, nil)
-			} else {
-				mockSecretNamespaceLister.EXPECT().Get(tc.secretVolume.Name).Return(tc.secretVolume, nil)
+			if tc.volume.CSI.VolumeAttributes != nil && len(tc.volume.CSI.VolumeAttributes) != 0 {
+				mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(tc.volume.CSI.VolumeAttributes[azureFileSecretName]).Return(tc.secretVolume, nil)
 			}
-			mockPvLister.EXPECT().Get(pvName).Return(tc.persistentVolume, nil)
+
 			pod.Spec.Volumes = append(pod.Spec.Volumes, tc.volume)
 
 			err = provider.CreatePod(context.Background(), pod)

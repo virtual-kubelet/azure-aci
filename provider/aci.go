@@ -50,9 +50,12 @@ const (
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 	// Parameter names defined in azure file CSI driver, refer to
 	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
-	azureFileShareName = "shareName"
+	azureFileShareName  = "sharename"
+	azureFileSecretName = "secretname"
 	// AzureFileDriverName is the name of the CSI driver for Azure File
-	AzureFileDriverName = "file.csi.azure.com"
+	AzureFileDriverName         = "file.csi.azure.com"
+	azureFileStorageAccountName = "azurestorageaccountname"
+	azureFileStorageAccountKey  = "azurestorageaccountkey"
 )
 
 // DNS configuration settings
@@ -1639,38 +1642,45 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*aci.ContainerProbe, e
 }
 
 func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.Volume, error) {
-	azureSource := &aci.AzureFileVolume{
-		ReadOnly: *volume.CSI.ReadOnly,
-	}
-	if volume.CSI.NodePublishSecretRef != nil && volume.CSI.NodePublishSecretRef.Name != "" {
-
-		// Set the storage account name and key
-		secret, err := p.resourceManager.GetSecret(volume.CSI.NodePublishSecretRef.Name, namespace)
-		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("The secret %s for AzureFile CSI driver %s is not found", volume.CSI.NodePublishSecretRef.Name, volume.Name))
-		}
-
-		if secret == nil {
-			return nil, fmt.Errorf("Getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
-		}
-
-		azureSource.StorageAccountName = string(secret.Data["azurestorageaccountname"])
-		azureSource.StorageAccountKey = string(secret.Data["azurestorageaccountkey"])
-
-		// Set shareName
-		if volume.CSI.VolumeAttributes != nil {
-			if shareName, ok := volume.CSI.VolumeAttributes[azureFileShareName]; ok {
-				azureSource.ShareName = shareName
+	azureSource := &aci.AzureFileVolume{}
+	var secretName, shareName string
+	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
+		for k, v := range volume.CSI.VolumeAttributes {
+			switch strings.ToLower(k) {
+			case azureFileSecretName:
+				secretName = v
+			case azureFileShareName:
+				shareName = v
 			}
 		}
-		volume := aci.Volume{
-			Name:      volume.Name,
-			AzureFile: azureSource,
-		}
-		return &volume, nil
 	} else {
-		return nil, fmt.Errorf("NodePublishSecretRef for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
+		return nil, fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
 	}
+
+	if shareName == "" {
+		return nil, fmt.Errorf("secret share name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
+	}
+
+	// Set shareName
+	azureSource.ShareName = shareName
+
+	secret, err := p.resourceManager.GetSecret(secretName, namespace)
+
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
+	}
+
+	if secret == nil {
+		return nil, fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
+	}
+
+	// Set the storage account name and key
+	azureSource.StorageAccountName = strings.TrimSpace(string(secret.Data[azureFileStorageAccountName]))
+	azureSource.StorageAccountKey = strings.TrimSpace(string(secret.Data[azureFileStorageAccountKey]))
+	return &aci.Volume{
+		Name:      volume.Name,
+		AzureFile: azureSource,
+	}, nil
 }
 
 func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
@@ -1687,7 +1697,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 				volumes = append(volumes, *csiVolume)
 				continue
 			} else {
-				return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type %s", pod.Name, v.Name, v.CSI.Driver)
+				return nil, fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", pod.Name, v.Name, v.CSI.Driver)
 			}
 		}
 
@@ -1707,8 +1717,8 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 				AzureFile: &aci.AzureFileVolume{
 					ShareName:          v.AzureFile.ShareName,
 					ReadOnly:           v.AzureFile.ReadOnly,
-					StorageAccountName: string(secret.Data["azurestorageaccountname"]),
-					StorageAccountKey:  string(secret.Data["azurestorageaccountkey"]),
+					StorageAccountName: string(secret.Data[azureFileStorageAccountName]),
+					StorageAccountKey:  string(secret.Data[azureFileStorageAccountKey]),
 				},
 			})
 			continue
