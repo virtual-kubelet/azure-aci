@@ -667,6 +667,11 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
+	// get initContainers
+	initContainers, err := p.getInitContainers(pod)
+	if err != nil {
+		return err
+	}
 	// get containers
 	containers, err := p.getContainers(pod)
 	if err != nil {
@@ -683,6 +688,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		return err
 	}
 	// assign all the things
+	containerGroup.ContainerGroupProperties.InitContainers = initContainers
 	containerGroup.ContainerGroupProperties.Containers = containers
 	containerGroup.ContainerGroupProperties.Volumes = volumes
 	containerGroup.ContainerGroupProperties.ImageRegistryCredentials = creds
@@ -1441,6 +1447,10 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	}
 
 	return ips, err
+}
+
+func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
+	return initContainers, nil
 }
 
 func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
