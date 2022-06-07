@@ -1461,6 +1461,17 @@ func (p *ACIProvider) getVolumeMounts(container *v1.Container) []aci.VolumeMount
 	return volumeMounts
 }
 
+func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) []aci.EnvironmentVariable {
+	environmentVariable := make([]aci.EnvironmentVariable, 0, len(container.Env))
+	for _, e := range container.Env {
+		if e.Value != "" {
+			envVar := getACIEnvVar(e)
+			environmentVariable = append(environmentVariable, envVar)
+		}
+	}
+	return environmentVariable
+}
+
 func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.Container, error) {
 	initContainers := make([]aci.Container, 0, len(pod.Spec.InitContainers))
 	/*for _, initContainer := range pod.Spec.InitContainers {
@@ -1494,13 +1505,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 
 		c.VolumeMounts = p.getVolumeMounts(&container)
 
-		c.EnvironmentVariables = make([]aci.EnvironmentVariable, 0, len(container.Env))
-		for _, e := range container.Env {
-			if e.Value != "" {
-				envVar := getACIEnvVar(e)
-				c.EnvironmentVariables = append(c.EnvironmentVariables, envVar)
-			}
-		}
+		c.EnvironmentVariables = p.getEnvironmentVariables(&container)
 
 		// NOTE(robbiezhang): ACI CPU request must be times of 10m
 		cpuRequest := 1.00
