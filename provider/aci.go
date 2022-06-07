@@ -1449,6 +1449,18 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	return ips, err
 }
 
+func (p *ACIProvider) getVolumeMounts(container) ([]aci.VolumeMount) {
+	volumeMounts = make([]aci.VolumeMount, 0, len(container.VolumeMounts))
+	for _, v := range container.VolumeMounts {
+		volumeMounts= append(volumeMounts, aci.VolumeMount{
+			Name:      v.Name,
+			MountPath: v.MountPath,
+			ReadOnly:  v.ReadOnly,
+		})
+	}
+	return volumeMounts
+}
+
 func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
 	initContainers := make([]aci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -1480,14 +1492,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 			})
 		}
 
-		c.VolumeMounts = make([]aci.VolumeMount, 0, len(container.VolumeMounts))
-		for _, v := range container.VolumeMounts {
-			c.VolumeMounts = append(c.VolumeMounts, aci.VolumeMount{
-				Name:      v.Name,
-				MountPath: v.MountPath,
-				ReadOnly:  v.ReadOnly,
-			})
-		}
+		c.VolumeMounts = getVolumeMounts(container)
 
 		c.EnvironmentVariables = make([]aci.EnvironmentVariable, 0, len(container.Env))
 		for _, e := range container.Env {
