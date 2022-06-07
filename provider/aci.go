@@ -1450,6 +1450,10 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 }
 
 func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
+	initContainers := make([]aci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
+	for _, initContainer := range pod.Spec.InitContainers {
+
+	}
 	return initContainers, nil
 }
 
