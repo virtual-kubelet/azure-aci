@@ -87,7 +87,7 @@ type ContainerGroup struct {
 type ContainerGroupProperties struct {
 	ProvisioningState        string                               `json:"provisioningState,omitempty"`
 	Containers               []Container                          `json:"containers,omitempty"`
-	InitContainers           []InitContainerDefinition            `json:"initContainers,omitempty"`
+	InitContainers           []Container            `json:"initContainers,omitempty"`
 	ImageRegistryCredentials []ImageRegistryCredential            `json:"imageRegistryCredentials,omitempty"`
 	RestartPolicy            ContainerGroupRestartPolicy          `json:"restartPolicy,omitempty"`
 	IPAddress                *IPAddress                           `json:"ipAddress,omitempty"`
