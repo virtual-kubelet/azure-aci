@@ -4,6 +4,10 @@
 *.dll
 *.so
 *.dylib
+*.bash
+
+helm-start.sh
+podspcs.yaml
 
 # Test binary, build with `go test -c`
 *.test
