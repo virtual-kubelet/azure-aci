@@ -1449,6 +1449,19 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	return ips, err
 }
 
+func (p *ACIProvider) getBasicContainer(container *v1.Container) (aci.Container, error) {
+	if len(container.Command) == 0 && len(container.Args) > 0 {
+		return aci.Container{}, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+	}
+	return aci.Container{
+		Name: container.Name,
+		ContainerProperties: aci.ContainerProperties{
+			Image:   container.Image,
+			Command: append(container.Command, container.Args...),
+		},
+	}, nil
+}
+
 func (p *ACIProvider) getVolumeMounts(container *v1.Container) []aci.VolumeMount {
 	volumeMounts := make([]aci.VolumeMount, 0, len(container.VolumeMounts))
 	for _, v := range container.VolumeMounts {
@@ -1495,19 +1508,12 @@ func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.Container, error) {
 func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 	containers := make([]aci.Container, 0, len(pod.Spec.Containers))
 	for _, container := range pod.Spec.Containers {
-
-		if len(container.Command) == 0 && len(container.Args) > 0 {
-			return nil, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
-		}
-		c := aci.Container{
-			Name: container.Name,
-			ContainerProperties: aci.ContainerProperties{
-				Image:   container.Image,
-				Command: append(container.Command, container.Args...),
-				Ports:   make([]aci.ContainerPort, 0, len(container.Ports)),
-			},
+		c, err := p.getBasicContainer(&container)
+		if err != nil {
+			return nil, err
 		}
 
+		c.ContainerProperties.Ports = make([]aci.ContainerPort, 0, len(container.Ports))
 		for _, p := range container.Ports {
 			c.Ports = append(c.Ports, aci.ContainerPort{
 				Port:     p.ContainerPort,

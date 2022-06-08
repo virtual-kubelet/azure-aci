@@ -87,7 +87,7 @@ type ContainerGroup struct {
 type ContainerGroupProperties struct {
 	ProvisioningState        string                               `json:"provisioningState,omitempty"`
 	Containers               []Container                          `json:"containers,omitempty"`
-	InitContainers           []Container            `json:"initContainers,omitempty"`
+	InitContainers           []Container                          `json:"initContainers,omitempty"`
 	ImageRegistryCredentials []ImageRegistryCredential            `json:"imageRegistryCredentials,omitempty"`
 	RestartPolicy            ContainerGroupRestartPolicy          `json:"restartPolicy,omitempty"`
 	IPAddress                *IPAddress                           `json:"ipAddress,omitempty"`
@@ -95,7 +95,7 @@ type ContainerGroupProperties struct {
 	Volumes                  []Volume                             `json:"volumes,omitempty"`
 	InstanceView             ContainerGroupPropertiesInstanceView `json:"instanceView,omitempty"`
 	Diagnostics              *ContainerGroupDiagnostics           `json:"diagnostics,omitempty"`
-	SubnetIds           	 []*SubnetIdDefinition            `json:"subnetIds,omitempty"`
+	SubnetIds                []*SubnetIdDefinition                `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
 }
@@ -106,7 +106,7 @@ type ContainerGroupPropertiesInstanceView struct {
 	State  string  `json:"state,omitempty"`
 }
 
-// SubnetIdDefinition is the subnet ID, the format should be 
+// SubnetIdDefinition is the subnet ID, the format should be
 // /subscriptions/{subscriptionID}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/{VNET}/subnets/{Subnet}
 type SubnetIdDefinition struct {
 	ID string `json:"id,omitempty"`
@@ -243,7 +243,7 @@ type GPUSKU string
 
 const (
 	// K80 specifies the K80 GPU SKU
-	K80  GPUSKU = "K80"
+	K80 GPUSKU = "K80"
 	// P100 specifies the P100 GPU SKU
 	P100 GPUSKU = "P100"
 	// V100 specifies the V100 GPU SKU
@@ -461,7 +461,7 @@ type ExtensionType string
 
 // Supported extension types
 const (
-	ExtensionTypeKubeProxy ExtensionType = "kube-proxy"
+	ExtensionTypeKubeProxy       ExtensionType = "kube-proxy"
 	ExtensionTypeRealtimeMetrics ExtensionType = "realtime-metrics"
 )
 
