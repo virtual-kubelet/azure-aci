@@ -72,6 +72,12 @@ type Container struct {
 	ContainerProperties `json:"properties,omitempty"`
 }
 
+// InitContainerDefinition is a initContainer instance.
+type InitContainerDefinition struct {
+	Name                    string `json:"name,omitempty"`
+	InitContainerProperties `json:"properties,omitempty"`
+}
+
 // ContainerGroup is a container group.
 type ContainerGroup struct {
 	api.ResponseMetadata     `json:"-"`
@@ -87,7 +93,7 @@ type ContainerGroup struct {
 type ContainerGroupProperties struct {
 	ProvisioningState        string                               `json:"provisioningState,omitempty"`
 	Containers               []Container                          `json:"containers,omitempty"`
-	InitContainers           []Container                          `json:"initContainers,omitempty"`
+	InitContainers           []InitContainerDefinition            `json:"initContainers,omitempty"`
 	ImageRegistryCredentials []ImageRegistryCredential            `json:"imageRegistryCredentials,omitempty"`
 	RestartPolicy            ContainerGroupRestartPolicy          `json:"restartPolicy,omitempty"`
 	IPAddress                *IPAddress                           `json:"ipAddress,omitempty"`
@@ -136,6 +142,15 @@ type ContainerProperties struct {
 	VolumeMounts         []VolumeMount                   `json:"volumeMounts,omitempty"`
 	LivenessProbe        *ContainerProbe                 `json:"livenessProbe,omitempty"`
 	ReadinessProbe       *ContainerProbe                 `json:"readinessProbe,omitempty"`
+}
+
+// ContainerProperties is the container instance properties.
+type InitContainerProperties struct {
+	Image                string                          `json:"image,omitempty"`
+	Command              []string                        `json:"command,omitempty"`
+	EnvironmentVariables []EnvironmentVariable           `json:"environmentVariables,omitempty"`
+	InstanceView         ContainerPropertiesInstanceView `json:"instanceView,omitempty"`
+	VolumeMounts         []VolumeMount                   `json:"volumeMounts,omitempty"`
 }
 
 // ContainerPropertiesInstanceView is the instance view of the container instance. Only valid in response.

@@ -1485,8 +1485,8 @@ func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) []aci.Env
 	return environmentVariable
 }
 
-func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.Container, error) {
-	initContainers := make([]aci.Container, 0, len(pod.Spec.InitContainers))
+func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
+	initContainers := make([]aci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for _, initContainer := range pod.Spec.InitContainers {
 		c, err := p.getBasicContainer(&initContainer)
 		if err != nil {
@@ -1497,7 +1497,17 @@ func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.Container, error) {
 
 		c.EnvironmentVariables = p.getEnvironmentVariables(&initContainer)
 
-		initContainers = append(initContainers, c)
+		//for reuse code, first declare a container and then translate to InitContainerDefinition
+		newInitContainer := aci.InitContainerDefinition{
+			Name: c.Name,
+			InitContainerProperties: aci.InitContainerProperties{
+				Image:                c.Image,
+				Command:              c.Command,
+				EnvironmentVariables: c.EnvironmentVariables,
+				VolumeMounts:         c.VolumeMounts,
+			},
+		}
+		initContainers = append(initContainers, newInitContainer)
 	}
 	return initContainers, nil
 }
