@@ -1449,17 +1449,15 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	return ips, err
 }
 
-func (p *ACIProvider) getBasicContainer(container *v1.Container) (aci.Container, error) {
+func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	if len(container.Command) == 0 && len(container.Args) > 0 {
-		return aci.Container{}, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
 	}
-	return aci.Container{
-		Name: container.Name,
-		ContainerProperties: aci.ContainerProperties{
-			Image:   container.Image,
-			Command: append(container.Command, container.Args...),
-		},
-	}, nil
+	return nil
+}
+
+func (p *ACIProvider) getCommand(container *v1.Container) []string {
+	return append(container.Command, container.Args...)
 }
 
 func (p *ACIProvider) getVolumeMounts(container *v1.Container) []aci.VolumeMount {
@@ -1488,25 +1486,21 @@ func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) []aci.Env
 func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
 	initContainers := make([]aci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for _, initContainer := range pod.Spec.InitContainers {
-		c, err := p.getBasicContainer(&initContainer)
+		err := p.verifyContainer(&initContainer)
 		if err != nil {
 			return nil, err
 		}
 
-		c.VolumeMounts = p.getVolumeMounts(&initContainer)
-
-		c.EnvironmentVariables = p.getEnvironmentVariables(&initContainer)
-
-		//for reuse code, first declare a container and then translate to InitContainerDefinition
 		newInitContainer := aci.InitContainerDefinition{
-			Name: c.Name,
-			InitContainerProperties: aci.InitContainerProperties{
-				Image:                c.Image,
-				Command:              c.Command,
-				EnvironmentVariables: c.EnvironmentVariables,
-				VolumeMounts:         c.VolumeMounts,
-			},
+			Name: initContainer.Name,
 		}
+
+		newInitContainer.Image = initContainer.Image
+		newInitContainer.Command = p.getCommand(&initContainer)
+
+		newInitContainer.VolumeMounts = p.getVolumeMounts(&initContainer)
+		newInitContainer.EnvironmentVariables = p.getEnvironmentVariables(&initContainer)
+
 		initContainers = append(initContainers, newInitContainer)
 	}
 	return initContainers, nil
@@ -1515,12 +1509,19 @@ func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinit
 func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 	containers := make([]aci.Container, 0, len(pod.Spec.Containers))
 	for _, container := range pod.Spec.Containers {
-		c, err := p.getBasicContainer(&container)
+		err := p.verifyContainer(&container)
 		if err != nil {
 			return nil, err
 		}
 
-		c.ContainerProperties.Ports = make([]aci.ContainerPort, 0, len(container.Ports))
+		c := aci.Container{
+			Name: container.Name,
+		}
+
+		c.Image = container.Image
+		c.Command = p.getCommand(&container)
+
+		c.Ports = make([]aci.ContainerPort, 0, len(container.Ports))
 		for _, p := range container.Ports {
 			c.Ports = append(c.Ports, aci.ContainerPort{
 				Port:     p.ContainerPort,
@@ -1529,7 +1530,6 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 		}
 
 		c.VolumeMounts = p.getVolumeMounts(&container)
-
 		c.EnvironmentVariables = p.getEnvironmentVariables(&container)
 
 		// NOTE(robbiezhang): ACI CPU request must be times of 10m

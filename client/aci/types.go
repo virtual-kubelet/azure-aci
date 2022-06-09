@@ -144,7 +144,7 @@ type ContainerProperties struct {
 	ReadinessProbe       *ContainerProbe                 `json:"readinessProbe,omitempty"`
 }
 
-// ContainerProperties is the container instance properties.
+// InitContainerProperties is the initContainer instance properties.
 type InitContainerProperties struct {
 	Image                string                          `json:"image,omitempty"`
 	Command              []string                        `json:"command,omitempty"`
