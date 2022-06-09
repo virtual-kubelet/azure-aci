@@ -1491,10 +1491,25 @@ func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinit
 			return nil, err
 		}
 
+		if initContainer.Ports != nil {
+			return nil, errdefs.InvalidInput("ACI initContainers does not support ports.")
+		}
+		if initContainer.Resources.Requests != nil {
+			return nil, errdefs.InvalidInput("ACI initContainers does not support resources requests.")
+		}
+		if initContainer.Resources.Limits != nil {
+			return nil, errdefs.InvalidInput("ACI initContainers does not support resources limits.")
+		}
+		if initContainer.LivenessProbe != nil {
+			return nil, errdefs.InvalidInput("ACI initContainers does not support livenessProbe.")
+		}
+		if initContainer.ReadinessProbe != nil {
+			return nil, errdefs.InvalidInput("ACI initContainers does not support readinessProbe.")
+		}
+
 		newInitContainer := aci.InitContainerDefinition{
 			Name: initContainer.Name,
 		}
-
 		newInitContainer.Image = initContainer.Image
 		newInitContainer.Command = p.getCommand(&initContainer)
 
@@ -1517,7 +1532,6 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 		c := aci.Container{
 			Name: container.Name,
 		}
-
 		c.Image = container.Image
 		c.Command = p.getCommand(&container)
 
