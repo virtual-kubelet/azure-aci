@@ -4,7 +4,6 @@
 *.dll
 *.so
 *.dylib
-*.bash
 
 helm-start.sh
 podspcs.yaml
