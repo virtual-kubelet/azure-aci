@@ -1410,18 +1410,28 @@ func TestCreatePodWithInitContainer(t *testing.T) {
 
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
+	azureFileVolumeName := "azure"
 
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
 		assert.Check(t, cg.ContainerGroupProperties.InitContainers != nil, "InitContainer should not be nil")
 		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
-		assert.Check(t, is.Equal(2, len(cg.ContainerGroupProperties.InitContainers)), "2 InitContainer are expected")
-		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, is.Equal(2, len(cg.ContainerGroupProperties.InitContainers)), "2 InitContainers are expected")
+
+		assert.Check(t, is.Equal("initContainer 01", cg.ContainerGroupProperties.InitContainers[0].Name), "first initContainer name must be \"initContainer 01\"")
+		assert.Check(t, is.Equal("alpine", cg.ContainerGroupProperties.InitContainers[0].Image), "InitContainer Image is not the expected")
+		assert.Check(t, cg.ContainerGroupProperties.InitContainers[0].VolumeMounts != nil, "VolumeMounts for InitContainer should not be nil")
 
 		return http.StatusOK, cg
+	}
+
+	fakeVolumeMount := v1.VolumeMount{
+		Name:      azureFileVolumeName,
+		MountPath: "/mnt/azure",
 	}
 
 	pod := &v1.Pod{
@@ -1432,7 +1442,7 @@ func TestCreatePodWithInitContainer(t *testing.T) {
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name: "nginx",
+					Name: "container name",
 				},
 			},
 			InitContainers: []v1.Container{
@@ -1447,8 +1457,275 @@ func TestCreatePodWithInitContainer(t *testing.T) {
 			},
 		},
 	}
+	pod.Spec.InitContainers[0].VolumeMounts = append(pod.Spec.InitContainers[0].VolumeMounts, fakeVolumeMount)
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
+	}
+}
+
+//Test Init Container with Ports,
+//ACI does not support initContainer with ports, errors expected
+func TestCreateInitContainerWithPort(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "container name",
+				},
+			},
+			InitContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					Ports: []v1.ContainerPort{
+						{
+							Name:          "port name",
+							ContainerPort: 80,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err == nil {
+		t.Fatal("Ports for ACI initContainers are not supported", err)
+	}
+}
+
+//Test Init Container with Resources specs,
+//ACI does not support initContainer with Resources specs, errors expected
+func TestCreateInitContainerWithResourcesSpecs(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "container name",
+				},
+			},
+			InitContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							"cpu":    resource.MustParse("1.981"),
+							"memory": resource.MustParse("3.49G"),
+						},
+						Limits: v1.ResourceList{
+							gpuResourceName: resource.MustParse("10"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err == nil {
+		t.Fatal("Resource specs for ACI initContainers are not supported", err)
+	}
+
+	pod = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "container name",
+				},
+			},
+			InitContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					Resources: v1.ResourceRequirements{
+						Limits: v1.ResourceList{
+							gpuResourceName: resource.MustParse("10"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err == nil {
+		t.Fatal("Resource specs for ACI initContainers are not supported", err)
+	}
+
+	pod = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "container name",
+				},
+			},
+			InitContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							"cpu":    resource.MustParse("1.981"),
+							"memory": resource.MustParse("3.49G"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err == nil {
+		t.Fatal("Resource specs for ACI initContainers are not supported", err)
+	}
+}
+
+//Test Init Container with LivenessProbe,
+//ACI does not support initContainer with LivenessProbe, errors expected
+func TestCreateInitContainerWithLivenessProbe(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "container name",
+				},
+			},
+			InitContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					LivenessProbe: &v1.Probe{
+						Handler: v1.Handler{
+							HTTPGet: &v1.HTTPGetAction{
+								Port: intstr.FromString("http"),
+								Path: "/",
+							},
+						},
+						InitialDelaySeconds: 10,
+						PeriodSeconds:       5,
+						TimeoutSeconds:      60,
+						SuccessThreshold:    3,
+						FailureThreshold:    5,
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err == nil {
+		t.Fatal("LivenessProbe for ACI initContainers is not supported", err)
+	}
+}
+
+//Test Init Container with ReadinessProbe,
+//ACI does not support initContainer with ReadinessProbe, errors expected
+func TestCreateInitContainerWithReadinessProbe(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "container name",
+				},
+			},
+			InitContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					ReadinessProbe: &v1.Probe{
+						Handler: v1.Handler{
+							HTTPGet: &v1.HTTPGetAction{
+								Port: intstr.FromInt(8080),
+								Path: "/",
+							},
+						},
+						InitialDelaySeconds: 10,
+						PeriodSeconds:       5,
+						TimeoutSeconds:      60,
+						SuccessThreshold:    3,
+						FailureThreshold:    5,
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err == nil {
+		t.Fatal("ReadinessProbe for ACI initContainers is not supported", err)
 	}
 }
