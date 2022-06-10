@@ -78,6 +78,15 @@ type InitContainerDefinition struct {
 	InitContainerProperties `json:"properties,omitempty"`
 }
 
+// InitContainerProperties is the initContainer instance properties.
+type InitContainerProperties struct {
+	Image                string                          `json:"image,omitempty"`
+	Command              []string                        `json:"command,omitempty"`
+	EnvironmentVariables []EnvironmentVariable           `json:"environmentVariables,omitempty"`
+	InstanceView         ContainerPropertiesInstanceView `json:"instanceView,omitempty"`
+	VolumeMounts         []VolumeMount                   `json:"volumeMounts,omitempty"`
+}
+
 // ContainerGroup is a container group.
 type ContainerGroup struct {
 	api.ResponseMetadata     `json:"-"`
@@ -142,15 +151,6 @@ type ContainerProperties struct {
 	VolumeMounts         []VolumeMount                   `json:"volumeMounts,omitempty"`
 	LivenessProbe        *ContainerProbe                 `json:"livenessProbe,omitempty"`
 	ReadinessProbe       *ContainerProbe                 `json:"readinessProbe,omitempty"`
-}
-
-// InitContainerProperties is the initContainer instance properties.
-type InitContainerProperties struct {
-	Image                string                          `json:"image,omitempty"`
-	Command              []string                        `json:"command,omitempty"`
-	EnvironmentVariables []EnvironmentVariable           `json:"environmentVariables,omitempty"`
-	InstanceView         ContainerPropertiesInstanceView `json:"instanceView,omitempty"`
-	VolumeMounts         []VolumeMount                   `json:"volumeMounts,omitempty"`
 }
 
 // ContainerPropertiesInstanceView is the instance view of the container instance. Only valid in response.
