@@ -1449,6 +1449,8 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	return ips, err
 }
 
+//verify if Container is properly declared for the use on ACI
+//this method is used for both initConainers and containers
 func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	if len(container.Command) == 0 && len(container.Args) > 0 {
 		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
@@ -1456,10 +1458,14 @@ func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	return nil
 }
 
+//get the command declared on Container
+//this method is used for both initConainers and containers
 func (p *ACIProvider) getCommand(container *v1.Container) []string {
 	return append(container.Command, container.Args...)
 }
 
+//get VolumeMounts declared on Container as []aci.VolumeMount
+//this method is used for both initConainers and containers
 func (p *ACIProvider) getVolumeMounts(container *v1.Container) []aci.VolumeMount {
 	volumeMounts := make([]aci.VolumeMount, 0, len(container.VolumeMounts))
 	for _, v := range container.VolumeMounts {
@@ -1472,6 +1478,8 @@ func (p *ACIProvider) getVolumeMounts(container *v1.Container) []aci.VolumeMount
 	return volumeMounts
 }
 
+//get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
+//this method is used for both initConainers and containers
 func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) []aci.EnvironmentVariable {
 	environmentVariable := make([]aci.EnvironmentVariable, 0, len(container.Env))
 	for _, e := range container.Env {
@@ -1483,6 +1491,7 @@ func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) []aci.Env
 	return environmentVariable
 }
 
+//get InitContainers defined in Pod as []aci.InitContainerDefinition
 func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
 	initContainers := make([]aci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for _, initContainer := range pod.Spec.InitContainers {
@@ -1521,6 +1530,7 @@ func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinit
 	return initContainers, nil
 }
 
+//get Containers defined in Pod as []aci.Container type
 func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 	containers := make([]aci.Container, 0, len(pod.Spec.Containers))
 	for _, container := range pod.Spec.Containers {

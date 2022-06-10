@@ -1400,6 +1400,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	}
 }
 
+//Test create InitContainers
 func TestCreatePodWithInitContainer(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
 
