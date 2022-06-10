@@ -5,9 +5,6 @@
 *.so
 *.dylib
 
-helm-start.sh
-podspcs.yaml
-
 # Test binary, build with `go test -c`
 *.test
 
