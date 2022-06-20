@@ -41,6 +41,7 @@ const (
 	fakeNodeName      = "vk"
 	fakeRegion        = "eastus"
 	fakeUserIdentity  = "00000000-0000-0000-0000-000000000000"
+	fakeClusterURI	  = "https://fake.cluster.uri:000"
 )
 
 // Test make registry credential
@@ -837,6 +838,7 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock, reso
 	os.Setenv("AZURE_AUTH_LOCATION", file.Name())
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
+	os.Setenv("MASTER_URI", fakeClusterURI)
 
 	if resourceManager == nil {
 		resourceManager, err = manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
