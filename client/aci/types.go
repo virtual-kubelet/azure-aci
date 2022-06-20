@@ -82,24 +82,10 @@ type AKSCluster struct {
 type AKSClusterPropertiesTruncated struct {
 	Fqdn string `json:"fqdn,omitempty"`
 	IdentityProfile AKSIdentityProfile `json:"identityProfile,omitempty"`
-	PodIdentityProfile AKSPodIdentityProfile `json:"podIdentityProfile,omitempty"`
-}
-
-type AKSPodIdentityProfile struct {
-	Enabled bool
-	UserAssignedIdentities []UserAssignedIdentity
 }
 
 type AKSIdentityProfile struct {
 	KubeletIdentity AzIdentity
-}
-
-type UserAssignedIdentity struct {
-	Name string
-	Namespace string
-	Identity AzIdentity
-	BindingSelector string
-	ProvisioningState string // restrict this ?
 }
 
 type AzIdentity struct {
