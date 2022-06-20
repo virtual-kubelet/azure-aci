@@ -698,7 +698,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	// use MI (kubelet identity) for image pull when image pull secrets are not present
-	if len(creds) > 0 {
+	if len(creds) == 0 {
 		// get Managed Identity based creds
 		creds = p.getImagePullManagedIdentitySecrets(pod, &cluster.Properties.IdentityProfile.KubeletIdentity, &containerGroup)
 		//set containerGroupIdentity
@@ -1394,8 +1394,6 @@ func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *
 	serverNames := p.getImageServerNames(pod)
 	ips := make([]aci.ImageRegistryCredential, 0, len(serverNames))
 	if identity != nil{
-		// use log here
-		fmt.Printf("Image pull secrets not present.. Using Kubelet Identity for Image Pull")
 		for _, server := range serverNames {
 			cred := aci.ImageRegistryCredential{
 				Server:  server,
