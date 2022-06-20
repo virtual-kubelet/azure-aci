@@ -1414,7 +1414,7 @@ func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *a
 		Type: identityType,
 		UserAssignedIdentities: identityList,
 	}
-	containerGroup.Identity = cgIdentity
+	containerGroup.Identity = &cgIdentity
 }
 
 func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageRegistryCredential, error) {

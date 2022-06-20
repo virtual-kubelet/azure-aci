@@ -108,7 +108,7 @@ type ContainerGroup struct {
 	Location                 string            `json:"location,omitempty"`
 	Tags                     map[string]string `json:"tags,omitempty"`
 	ContainerGroupProperties `json:"properties,omitempty"`
-	Identity ACIContainerGroupIdentity `json:"identity,omitempty"`
+	Identity *ACIContainerGroupIdentity `json:"identity,omitempty"`
 }
 
 // ContainerGroupProperties is
