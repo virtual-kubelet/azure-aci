@@ -139,12 +139,17 @@ func (mock *ACIMock) start() {
 	router.HandleFunc(
 		aksClustersListURLRoute,
 		func(w http.ResponseWriter, r *http.Request) {
-			statusCode := 200
+			statusCode := http.StatusOK
 			response := &aci.AKSClusterListResult{
 				Value: []aci.AKSCluster{
 					aci.AKSCluster{
 						Properties: aci.AKSClusterPropertiesTruncated{
 							Fqdn: "fake.cluster.uri",
+							IdentityProfile: aci.AKSIdentityProfile{
+								KubeletIdentity: aci.AzIdentity{
+									ResourceId: "fakeKubeletIdentityResourceId",
+								},
+							},
 						},
 					},
 				},
