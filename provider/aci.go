@@ -1346,7 +1346,11 @@ func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
 	for _, container := range pod.Spec.Containers {
 		img := container.Image
 		re := regexp.MustCompile(`/`)
-		server := re.Split(img, -1)[0]
+		servers := re.Split(img, -1)
+		server := servers[0]
+		if len(servers) < 2 {
+			server = "docker.io"
+		}
 		serverNamesMap[server] = 0
 	}
 
