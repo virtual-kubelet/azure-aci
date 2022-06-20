@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"regexp"
+
 	"github.com/pkg/errors"
 
 	"github.com/gorilla/websocket"
@@ -667,16 +669,42 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
+
+	// get cluster details 
+	// should I fetch here ??
+	// only try to fetch if MASTER_URI != "" ??
+	masterURI := os.Getenv("MASTER_URI")
+	t := regexp.MustCompile(`[:/]`)
+	masterURISplit := t.Split(masterURI, -1)
+	clusterFqdn := ""
+	if len(masterURISplit) > 1 {
+		clusterFqdn = masterURISplit[3]
+	}
+	cluster, err := p.aciClient.GetAKSCluster(ctx, p.resourceGroup, clusterFqdn)
+	if err != nil {
+		return err
+	}
+
 	// get containers
 	containers, err := p.getContainers(pod)
 	if err != nil {
 		return err
 	}
+
 	// get registry creds
 	creds, err := p.getImagePullSecrets(pod)
 	if err != nil {
 		return err
 	}
+
+	// use MI (kubelet identity) for image pull when image pull secrets are not present
+	if len(creds) > 0 {
+		// get Managed Identity based creds
+		creds = p.getImagePullManagedIdentitySecrets(pod, &cluster.Properties.IdentityProfile.KubeletIdentity, &containerGroup)
+		//set containerGroupIdentity
+		p.setContainerGroupIdentity(ctx, &cluster.Properties.IdentityProfile.KubeletIdentity, "UserAssigned", &containerGroup)
+	}
+
 	// get volumes
 	volumes, err := p.getVolumes(pod)
 	if err != nil {
@@ -1311,7 +1339,26 @@ func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 	}
 }
 
+// get list of distinct servernames from pod
+func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
+	// using map to avoid duplicates
+	serverNamesMap := map[string]int{}
+	for _, container := range pod.Spec.Containers {
+		img := container.Image
+		re := regexp.MustCompile(`/`)
+		server := re.Split(img, -1)[0]
+		serverNamesMap[server] = 0
+	}
+
+	serverNames := []string{}
+	for k, _ := range serverNamesMap {
+		serverNames = append(serverNames, k)
+	}
+	return serverNames
+}
+
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCredential, error) {
+
 	ips := make([]aci.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	for _, ref := range pod.Spec.ImagePullSecrets {
 		secret, err := p.resourceManager.GetSecret(ref.Name, pod.Namespace)
@@ -1335,7 +1382,37 @@ func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCrede
 		}
 
 	}
+
 	return ips, nil
+}
+
+func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *aci.AzIdentity, contianerGroup * aci.ContainerGroup) []aci.ImageRegistryCredential {
+	serverNames := p.getImageServerNames(pod)
+	ips := make([]aci.ImageRegistryCredential, 0, len(serverNames))
+	if identity != nil{
+		// use log here
+		fmt.Printf("Image pull secrets not present.. Using Kubelet Identity for Image Pull")
+		for _, server := range serverNames {
+			cred := aci.ImageRegistryCredential{
+				Server:  server,
+				Identity: identity.ResourceId,
+			}
+			ips = append(ips, cred)
+		}
+	}
+	return ips
+
+}
+
+// sets Identity as User Assigned ContainerGroup Identity
+func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, identityType string, containerGroup *aci.ContainerGroup) {
+	identityList := map[string]map[string]string{}
+	identityList[identity.ResourceId] = map[string]string{}
+	cgIdentity := aci.ACIContainerGroupIdentity{
+		Type: identityType,
+		UserAssignedIdentities: identityList,
+	}
+	containerGroup.Identity = cgIdentity
 }
 
 func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageRegistryCredential, error) {
