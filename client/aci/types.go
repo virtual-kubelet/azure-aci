@@ -67,27 +67,32 @@ type AzureFileVolume struct {
 }
 
 // AKSClusterListResult is the aks cluster list response that contains cluster properties
+// ttps://management.azure.com/subscriptions/{subscription}/resourceGroups/{resouorce-groups}/providers/Microsoft.ContainerService/managedClusters/{clusterid}?api-version=2022-04-01
 type AKSClusterListResult struct {
 	api.ResponseMetadata `json:"-"`
 	Value                []AKSCluster			  `json:"value,omitempty"`
 	NextLink             string					  `json:"nextLink,omitempty"`
 }
 
+// AKS cluster object along with some properties
 type AKSCluster struct {
 	Id string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
 	Properties AKSClusterPropertiesTruncated `json:"properties,omitempty"`
 }
 
+// truncated properties only include identity profile (kubelet identity)
 type AKSClusterPropertiesTruncated struct {
 	Fqdn string `json:"fqdn,omitempty"`
 	IdentityProfile AKSIdentityProfile `json:"identityProfile,omitempty"`
 }
 
+// AKS Identity profile definition
 type AKSIdentityProfile struct {
 	KubeletIdentity AzIdentity
 }
 
+// Azure managed identity definition
 type AzIdentity struct {
 	ResourceId string
 	ClientId string
@@ -127,6 +132,7 @@ type ContainerGroupProperties struct {
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
 }
 
+// container group identity object
 type ACIContainerGroupIdentity struct {
 	PrincipalId string `json:"principalid,omitempty"`
 	TenantId string `json:"tenantid,omitempty"`
