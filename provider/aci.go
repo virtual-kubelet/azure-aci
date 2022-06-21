@@ -669,10 +669,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
-
-	// get cluster details 
-	// should I fetch here ??
-	// only try to fetch if MASTER_URI != "" ??
 	masterURI := os.Getenv("MASTER_URI")
 	t := regexp.MustCompile(`[:/]`)
 	masterURISplit := t.Split(masterURI, -1)
@@ -1390,6 +1386,7 @@ func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCrede
 	return ips, nil
 }
 
+// returns an arry of ACI ImageRegistryCredential objects based on the identity specified
 func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *aci.AzIdentity, contianerGroup * aci.ContainerGroup) []aci.ImageRegistryCredential {
 	serverNames := p.getImageServerNames(pod)
 	ips := make([]aci.ImageRegistryCredential, 0, len(serverNames))
@@ -1403,7 +1400,6 @@ func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *
 		}
 	}
 	return ips
-
 }
 
 // sets Identity as User Assigned ContainerGroup Identity
