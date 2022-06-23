@@ -1406,7 +1406,6 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 func TestCreatePodManagedIdentity(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
 
-	serverName := "docker.io"
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
@@ -1428,10 +1427,7 @@ func TestCreatePodManagedIdentity(t *testing.T) {
 		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
 		assert.Check(t, cg.Identity != nil, "Container group identity should not be nil")
 		assert.Check(t, is.Equal(len(cg.Identity.UserAssignedIdentities), 1), "Container group identity should be set")
-		assert.Check(t, is.Equal(len(cg.ContainerGroupProperties.ImageRegistryCredentials), 1), "Image registry credentials should be set")
-		assert.Check(t, is.Equal(cg.ContainerGroupProperties.ImageRegistryCredentials[0].Server, serverName), "Server name should be docker.io by default")
-		assert.Check(t, len(cg.ContainerGroupProperties.ImageRegistryCredentials[0].Identity) > 0, "Identity should be a non empty string")
-		assert.Check(t, len(cg.ContainerGroupProperties.ImageRegistryCredentials[0].Password) == 0, "Password should not be set")
+		assert.Check(t, is.Equal(len(cg.ContainerGroupProperties.ImageRegistryCredentials), 0), "Image registry credentials should not be set for non acr registry")
 
 		return http.StatusOK, cg
 	}

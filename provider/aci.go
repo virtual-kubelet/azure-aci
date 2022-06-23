@@ -1335,19 +1335,20 @@ func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 	}
 }
 
-// get list of distinct servernames from pod
+// get list of distinct acr servernames from pod
 func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
 	// using map to avoid duplicates
 	serverNamesMap := map[string]int{}
+	acrRegexp := "[a-z]+\\.azurecr\\.io"
 	for _, container := range pod.Spec.Containers {
 		img := container.Image
 		re := regexp.MustCompile(`/`)
-		servers := re.Split(img, -1)
-		server := servers[0]
-		if len(servers) < 2 {
-			server = "docker.io"
+		imageSplit := re.Split(img, -1)
+		server := imageSplit[0]
+		isMatch, _ := regexp.MatchString(acrRegexp, server)
+		if len(imageSplit) > 1 && isMatch {
+			serverNamesMap[server] = 0
 		}
-		serverNamesMap[server] = 0
 	}
 
 	serverNames := []string{}
@@ -1404,6 +1405,9 @@ func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *
 
 // sets Identity as User Assigned ContainerGroup Identity
 func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, identityType string, containerGroup *aci.ContainerGroup) {
+	if identity == nil {
+		return
+	}
 	identityList := map[string]map[string]string{}
 	identityList[identity.ResourceId] = map[string]string{}
 	cgIdentity := aci.ACIContainerGroupIdentity{
