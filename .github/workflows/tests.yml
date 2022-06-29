@@ -3,27 +3,40 @@ name: azure-aci-test
 on:
   push:
     branches:
-      - main
+      - master
       - release-*
   workflow_dispatch: {}
   pull_request:
     branches:
-      - main
+      - master
       - release-*
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
+env:
+  CLIENTID: 'dabfde11-eb06-43e3-963e-8bba90cb1e5d'
+  CLIENTSECRET: 'PJ~8Q~2eHA9tv736Vk~vDUZdrPfPf.TfwVfQKb0m'
+  SUBSCRIPTIONID: 'f3b504bb-826e-46c7-a1b7-674a5a0ae43a'
+  TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+  ACTIVEDIRECTORYENDPOINTURL: 'https://login.microsoftonline.com'
+  RESOURCEMANAGERENDPOINTURL: 'https://management.azure.com/'
+  ACTIVEDIRECTORYGRAPHRESOURCEID: 'https://login.microsoftonline.com'
+  SQLMANAGEMENTENDPOINTURL: 'https://management.core.windows.net:8443/'
+  GALLERYENDPOINTURL: 'https://gallery.azure.com/'
+  MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
+  OMSWORKSPACEID: 'f8eeed65-b64c-4d0f-ac99-09c6b9991803'
+  OMSWORKSPACEKEY: 'o_MUWQOM.ALtt0DP_6kqwlTHM~9oYCcyi6'
 
 jobs:
   detect-noop:
     runs-on: ubuntu-latest
     outputs:
-      noop: ${{ steps.noop.outputs.should_skip }}
+      noop: ${{ steps.noop.outputs.should_skip  }}
     steps:
       - name: Detect No-op Changes
         id: noop
         uses: fkirc/skip-duplicate-actions@v4.0.0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN  }}
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
@@ -35,21 +48,33 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: ${{ secrets.GO_VERSION  }}
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
 
       - name: Run go vet
-        uses: make vet
-
+        run: make vet
       - name: Run unit tests & Generate coverage
         run: make testauth test
+        env:
+          clientId: ${{ env.CLIENTID  }}
+          clientSecret: ${{ env.CLIENTSECRET  }}
+          subscriptionId: ${{ env.SUBSCRIPTIONID  }}
+          tenantId: ${{ env.TENANT_ID }}
+          activeDirectoryEndpointUrl: ${{ env.ACTIVEDIRECTORYENDPOINTURL  }}
+          resourceManagerEndpointUrl: ${{ env.RESOURCEMANAGERENDPOINTURL  }}
+          activeDirectoryGraphResourceId: ${{ env.ACTIVEDIRECTORYGRAPHRESOURCEID  }}
+          sqlManagementEndpointUrl: ${{ env.SQLMANAGEMENTENDPOINTURL  }}
+          galleryEndpointUrl: ${{ env.GALLERYENDPOINTURL  }}
+          managementEndpointUrl: ${{ env.MANAGEMENTENDPOINTURL  }}
+          omsworkspaceID: ${{ env.OMSWORKSPACEID  }}
+          omsworkspaceKey: ${{ env.OMSWORKSPACEKEY  }}
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3
         with:
           ## Repository upload token - get it from codecov.io. Required only for private repositories
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN  }}
           ## Comma-separated list of files to upload
-          files: ./coverage.xml
+          files: ./coverage.out
