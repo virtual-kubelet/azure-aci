@@ -1,4 +1,6 @@
-LINTER_BIN ?= golangci-lint
+GOLANGCI_LINT_VER := v1.41.1
+GOLANGCI_LINT_BIN := golangci-lint
+GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
 GO111MODULE := on
 export GO111MODULE
@@ -13,6 +15,14 @@ OUTPUT_TYPE ?= docker
 BUILDPLATFORM ?= linux/amd64
 VERSION      := $(shell git describe --tags --always --dirty="-dev")
 IMG_TAG ?= $(VERSION)
+
+
+## --------------------------------------
+## Tooling Binaries
+## --------------------------------------
+
+$(GOLANGCI_LINT):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
 .PHONY: safebuild
 # docker build
@@ -45,9 +55,17 @@ test:
 vet:
 	@go vet ./... #$(packages)
 
+## --------------------------------------
+## Linting
+## --------------------------------------
+
 .PHONY: lint
-lint:
-	@$(LINTER_BIN) run --skip-files "test.go" --new-from-rev "HEAD~$(git rev-list master.. --count)"  ./... --timeout 5m0s
+lint: $(GOLANGCI_LINT)
+	$(GOLANGCI_LINT) run -v
+
+.PHONY: lint-full
+lint-full: $(GOLANGCI_LINT) ## Run slower linters to detect possible issues
+	$(GOLANGCI_LINT) run -v --fast=false
 
 .PHONY: check-mod
 check-mod: # verifies that module changes for go.mod and go.sum are checked in
