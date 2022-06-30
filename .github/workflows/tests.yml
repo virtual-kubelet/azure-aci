@@ -2,29 +2,14 @@ name: azure-aci-test
 
 on:
   push:
-    branches:
-      - master
-      - release-*
-  workflow_dispatch: {}
+    branches: [master]
   pull_request:
-    branches:
-      - master
-      - release-*
-    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
+    branches: [master]
+    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
 
-env:
-  CLIENTID: 'dabfde11-eb06-43e3-963e-8bba90cb1e5d'
-  CLIENTSECRET: 'PJ~8Q~2eHA9tv736Vk~vDUZdrPfPf.TfwVfQKb0m'
-  SUBSCRIPTIONID: 'f3b504bb-826e-46c7-a1b7-674a5a0ae43a'
-  TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
-  ACTIVEDIRECTORYENDPOINTURL: 'https://login.microsoftonline.com'
-  RESOURCEMANAGERENDPOINTURL: 'https://management.azure.com/'
-  ACTIVEDIRECTORYGRAPHRESOURCEID: 'https://login.microsoftonline.com'
-  SQLMANAGEMENTENDPOINTURL: 'https://management.core.windows.net:8443/'
-  GALLERYENDPOINTURL: 'https://gallery.azure.com/'
-  MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
-  OMSWORKSPACEID: 'f8eeed65-b64c-4d0f-ac99-09c6b9991803'
-  OMSWORKSPACEKEY: 'o_MUWQOM.ALtt0DP_6kqwlTHM~9oYCcyi6'
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   detect-noop:
@@ -40,7 +25,18 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
-  unit-tests:
+  tests:
+    env:
+      CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
+      SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
+      TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+      ACTIVEDIRECTORYENDPOINTURL: 'https://login.microsoftonline.com'
+      RESOURCEMANAGERENDPOINTURL: 'https://management.azure.com/'
+      ACTIVEDIRECTORYGRAPHRESOURCEID: 'https://login.microsoftonline.com'
+      SQLMANAGEMENTENDPOINTURL: 'https://management.core.windows.net:8443/'
+      GALLERYENDPOINTURL: 'https://gallery.azure.com/'
+      MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
+      OMSWORKSPACEID: '4f211d5f-39a4-4a52-a3bb-b49cf4fc7017'
     runs-on: ubuntu-latest
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
@@ -52,14 +48,24 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
+      - name: Install Azure CLI latest
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+          az version
       - name: Run go vet
         run: make vet
+      - uses: azure/login@v1.4.5
+        with:
+          client-id: ${{ env.CLIENTID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTIONID }}
+
       - name: Run unit tests & Generate coverage
-        run: make testauth test
         env:
           clientId: ${{ env.CLIENTID  }}
-          clientSecret: ${{ env.CLIENTSECRET  }}
           subscriptionId: ${{ env.SUBSCRIPTIONID  }}
           tenantId: ${{ env.TENANT_ID }}
           activeDirectoryEndpointUrl: ${{ env.ACTIVEDIRECTORYENDPOINTURL  }}
@@ -69,7 +75,10 @@ jobs:
           galleryEndpointUrl: ${{ env.GALLERYENDPOINTURL  }}
           managementEndpointUrl: ${{ env.MANAGEMENTENDPOINTURL  }}
           omsworkspaceID: ${{ env.OMSWORKSPACEID  }}
-          omsworkspaceKey: ${{ env.OMSWORKSPACEKEY  }}
+        run: |
+          clientSecret=$(az ad app credential reset --id $clientId --query password --output tsv)
+          omsworkspaceKey=$(az monitor log-analytics workspace get-shared-keys --resource-group VK-loganalytics  --workspace-name vk-aci)
+          clientSecret=$clientSecret omsworkspaceKey=$omsworkspaceKey make testauth test
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3

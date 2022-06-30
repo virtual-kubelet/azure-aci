@@ -83,14 +83,14 @@ mod:
 	@go mod tidy
 
 .PHONY: testauth
-testauth: TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
+testauth: test-cred-json test-loganalytics-json
 
-TEST_CREDENTIALS_JSON:
+test-cred-json:
 	@echo Building test credentials
 	chmod a+x hack/ci/create_credentials.sh
 	hack/ci/create_credentials.sh
 
-TEST_LOGANALYTICS_JSON:
+test-loganalytics-json:
 	@echo Building log analytics credentials
 	chmod a+x hack/ci/create_loganalytics_auth.sh
 	hack/ci/create_loganalytics_auth.sh

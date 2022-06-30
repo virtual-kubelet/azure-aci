@@ -4,8 +4,6 @@ set -e -u
 
 mkdir -p $(dirname "${TEST_CREDENTIALS_JSON}")
 
-echo $clientId
-
 # This will build the credentials during the CI
 cat <<EOF > "${TEST_CREDENTIALS_JSON}"
 {

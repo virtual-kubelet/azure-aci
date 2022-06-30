@@ -8,13 +8,18 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/services/network/mgmt/2018-08-01/network"
+	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/go-autorest/autorest/azure/auth"
 	"github.com/Azure/go-autorest/autorest/mocks"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/api"
+	acinetwork "github.com/virtual-kubelet/azure-aci/client/network"
 	"github.com/virtual-kubelet/azure-aci/client/resourcegroups"
 	"go.opencensus.io/plugin/ochttp"
 	"go.opencensus.io/plugin/ochttp/propagation/b3"
@@ -23,10 +28,11 @@ import (
 var (
 	client                   *Client
 	location                 = "westus"
-	resourceGroup            = "virtual-kubelet-tests"
+	resourceGroup            = "virtual-node-test-rg"
 	containerGroup           = "virtual-kubelet-test-container-group"
+	virtualNetwork           = "virtual-kubelet-tests-vnet"
 	subscriptionID           string
-	testUserIdentityClientId = "97c70c2a-fa56-4b70-95b5-1c67ca26f383"
+	testUserIdentityClientId = "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
 )
 
 var defaultRetryConfig = azure.HTTPRetryConfig{
@@ -590,6 +596,59 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 
 	diagnostics.LogAnalytics.LogType = LogAnlyticsLogTypeContainerInsights
 
+	// create vnet
+	var vnetAuthOnce sync.Once
+	var azAuth autorest.Authorizer
+
+	authentication, err := azure.NewAuthenticationFromFile(os.Getenv("AZURE_AUTH_LOCATION"))
+	if err != nil {
+		log.Fatalf("Failed to load Azure authentication file: %v", err)
+	}
+
+	vnetAuthOnce.Do(func() {
+		var err error
+		azAuth, err = auth.NewClientCredentialsConfig(authentication.ClientID, authentication.ClientSecret, authentication.TenantID).Authorizer()
+		if err != nil {
+			t.Fatalf("error setting up client auth for vnet create: %v", err)
+		}
+	})
+
+	networkClient := network.NewVirtualNetworksClient(subscriptionID)
+	networkClient.Authorizer = azAuth
+
+	prefixes := []string{"10.0.0.0/24"}
+	result, err := networkClient.CreateOrUpdate(context.Background(), resourceGroup, virtualNetwork, network.VirtualNetwork{
+		Name:     &virtualNetwork,
+		Location: &location,
+		VirtualNetworkPropertiesFormat: &network.VirtualNetworkPropertiesFormat{
+			AddressSpace: &network.AddressSpace{
+				AddressPrefixes: &prefixes,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := result.WaitForCompletionRef(context.Background(), networkClient.Client); err != nil {
+		t.Fatal(err)
+	}
+	subnet := acinetwork.NewSubnetWithContainerInstanceDelegation("aci-connector", prefixes[0])
+
+	subnetClient, err := acinetwork.NewClient(authentication, "unit-test", defaultRetryConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1, err := subnetClient.CreateOrUpdateSubnet(authentication.SubscriptionID, resourceGroup, virtualNetwork, subnet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s1 == nil {
+		t.Fatal("create subnet should return subnet")
+	}
+	if s1.ID == nil || *s1.ID == "" {
+		t.Fatal("create subnet should return subnet.ID")
+	}
+
 	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
 		Location: location,
 		ContainerGroupProperties: ContainerGroupProperties{
@@ -621,7 +680,13 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 			},
 			SubnetIds: []*SubnetIdDefinition{
 				&SubnetIdDefinition{
-					ID: "/subscriptions/da28f5e5-aa45-46fe-90c8-053ca49ab4b5/resourceGroups/virtual-kubelet-tests/providers/Microsoft.Network/virtualNetworks/virtual-kubelet-tests-vnet/subnets/aci-connector",
+					ID: fmt.Sprintf(
+						"/subscriptions/%s/resourceGroups/%s/providers"+
+							"/Microsoft.Network/virtualNetworks/%s/subnets/aci-connector",
+						authentication.SubscriptionID,
+						resourceGroup,
+						virtualNetwork,
+					),
 				},
 			},
 			Extensions: []*Extension{
@@ -655,6 +720,9 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 	}
 	if err := client.DeleteContainerGroup(context.Background(), resourceGroup, containerGroupName); err != nil {
 		t.Fatalf("Delete Container Group failed: %s", err.Error())
+	}
+	if _, err := networkClient.Delete(context.Background(), resourceGroup, virtualNetwork); err != nil {
+		t.Fatalf("Delete Virtual Network failed: %s", err.Error())
 	}
 }
 
