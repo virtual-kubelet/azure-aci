@@ -50,17 +50,23 @@ func CleanPodFromKubectl(t *testing.T, podName string) {
 }
 
 func TestPodLifecycle(t *testing.T) {
-	kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test")
+	podName := "vk-e2e-hpa"
+	podDir := "fixtures/hpa.yml"
 
-	CreatePodFromKubectl(t, "vk-e2e-hpa", "fixtures/hpa.yml")
-	QueryKubectlMetrics(t, "vk-e2e-hpa")
-	CleanPodFromKubectl(t, "vk-e2e-hpa")
+	kubectl("delete", "pod/"+podName, "--namespace=vk-test")
+
+	CreatePodFromKubectl(t, podName, podDir)
+	QueryKubectlMetrics(t, podName)
+	CleanPodFromKubectl(t, podName)
 }
 
 func TestInitContainerPod(t *testing.T) {
-	kubectl("delete", "pod/vk-e2e-initcontainers", "--namespace=vk-test")
+	podName := "vk-e2e-initcontainers"
+	podDir := "fixtures/initcontainers_pod.yml"
 
-	CreatePodFromKubectl(t, "vk-e2e-initcontainers", "fixtures/initcontainers_pod.yml")
-	QueryKubectlMetrics(t, "vk-e2e-initcontainers")
-	CleanPodFromKubectl(t, "vk-e2e-initcontainers")
+	kubectl("delete", "pod/"+podName, "--namespace=vk-test")
+
+	CreatePodFromKubectl(t, podName, podDir)
+	QueryKubectlMetrics(t, podName)
+	CleanPodFromKubectl(t, podName)
 }
