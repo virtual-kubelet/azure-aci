@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+//create the pod 'podName' with the pod specs on 'podDir'
 func CreatePodFromKubectl(t *testing.T, podName string, podDir string) {
 	cmd := kubectl("apply", "-f", podDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -24,6 +25,7 @@ func CreatePodFromKubectl(t *testing.T, podName string, podDir string) {
 	t.Log("success create pod")
 }
 
+//query the metrics of the pod
 func QueryKubectlMetrics(t *testing.T, podName string) {
 	deadline := time.Now().Add(5 * time.Minute)
 	for {
@@ -41,7 +43,8 @@ func QueryKubectlMetrics(t *testing.T, podName string) {
 	}
 }
 
-func CleanPodFromKubectl(t *testing.T, podName string) {
+//delete pod
+func DeletePodFromKubectl(t *testing.T, podName string) {
 	t.Log("clean up pod")
 	cmd := kubectl("delete", "pod/"+podName, "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -57,9 +60,10 @@ func TestPodLifecycle(t *testing.T) {
 
 	CreatePodFromKubectl(t, podName, podDir)
 	QueryKubectlMetrics(t, podName)
-	CleanPodFromKubectl(t, podName)
+	DeletePodFromKubectl(t, podName)
 }
 
+//e2e test for create a pod with init containers
 func TestInitContainerPod(t *testing.T) {
 	podName := "vk-e2e-initcontainers"
 	podDir := "fixtures/initcontainers_pod.yml"
@@ -68,5 +72,5 @@ func TestInitContainerPod(t *testing.T) {
 
 	CreatePodFromKubectl(t, podName, podDir)
 	QueryKubectlMetrics(t, podName)
-	CleanPodFromKubectl(t, podName)
+	DeletePodFromKubectl(t, podName)
 }
