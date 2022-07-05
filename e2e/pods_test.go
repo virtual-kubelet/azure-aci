@@ -53,7 +53,7 @@ func TestPodLifecycle(t *testing.T) {
 	kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test")
 
 	CreatePodFromKubectl(t, "vk-e2e-hpa", "fixtures/hpa.yml")
-	//QueryKubectlMetrics(t, "vk-e2e-hpa")
+	QueryKubectlMetrics(t, "vk-e2e-hpa")
 	CleanPodFromKubectl(t, "vk-e2e-hpa")
 }
 
@@ -61,6 +61,6 @@ func TestInitContainerPod(t *testing.T) {
 	kubectl("delete", "pod/vk-e2e-initcontainers", "--namespace=vk-test")
 
 	CreatePodFromKubectl(t, "vk-e2e-initcontainers", "fixtures/initcontainers_pod.yml")
-	//QueryKubectlMetrics(t, "vk-e2e-initcontainers")
+	QueryKubectlMetrics(t, "vk-e2e-initcontainers")
 	CleanPodFromKubectl(t, "vk-e2e-initcontainers")
 }
