@@ -14,7 +14,7 @@ import (
 
 var (
 	location      = "westus"
-	resourceGroup = "virtual-kubelet-tests"
+	resourceGroup = "virtual-node-test-rg"
 	testAuth      *azure.Authentication
 )
 
