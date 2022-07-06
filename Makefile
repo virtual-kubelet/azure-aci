@@ -1,9 +1,17 @@
-LINTER_BIN ?= golangci-lint
+TOOLS_DIR := hack/tools
+TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
+
+GOLANGCI_LINT_VER := v1.41.1
+GOLANGCI_LINT_BIN := golangci-lint
+GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
+
+# Scripts
+GO_INSTALL := ./hack/go-install.sh
 
 GO111MODULE := on
 export GO111MODULE
 
-TEST_CREDENTIALS_DIR ?= $(PWD)/.azure
+TEST_CREDENTIALS_DIR ?= $(abspath .azure)
 TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
@@ -13,6 +21,14 @@ OUTPUT_TYPE ?= docker
 BUILDPLATFORM ?= linux/amd64
 VERSION      := $(shell git describe --tags --always --dirty="-dev")
 IMG_TAG ?= $(VERSION)
+
+
+## --------------------------------------
+## Tooling Binaries
+## --------------------------------------
+
+$(GOLANGCI_LINT):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
 .PHONY: safebuild
 # docker build
@@ -39,15 +55,23 @@ clean:
 .PHONY: test
 test:
 	@echo running tests
-	@AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
 
 .PHONY: vet
 vet:
 	@go vet ./... #$(packages)
 
+## --------------------------------------
+## Linting
+## --------------------------------------
+
 .PHONY: lint
-lint:
-	@$(LINTER_BIN) run --skip-files "test.go" --new-from-rev "HEAD~$(git rev-list master.. --count)"  ./... --timeout 5m0s
+lint: $(GOLANGCI_LINT)
+	$(GOLANGCI_LINT) run -v
+
+.PHONY: lint-full
+lint-full: $(GOLANGCI_LINT) ## Run slower linters to detect possible issues
+	$(GOLANGCI_LINT) run -v --fast=false
 
 .PHONY: check-mod
 check-mod: # verifies that module changes for go.mod and go.sum are checked in
@@ -59,17 +83,17 @@ mod:
 	@go mod tidy
 
 .PHONY: testauth
-testauth: $(TEST_CREDENTIALS_JSON) $(TEST_LOGANALYTICS_JSON)
+testauth: TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
-$(TEST_CREDENTIALS_JSON):
+TEST_CREDENTIALS_JSON:
 	@echo Building test credentials
-	@chmod a+x hack/ci/create_credentials.sh
-	@hack/ci/create_credentials.sh
+	chmod a+x hack/ci/create_credentials.sh
+	hack/ci/create_credentials.sh
 
-$(TEST_LOGANALYTICS_JSON):
+TEST_LOGANALYTICS_JSON:
 	@echo Building log analytics credentials
-	@chmod a+x hack/ci/create_loganalytics_auth.sh
-	@hack/ci/create_loganalytics_auth.sh
+	chmod a+x hack/ci/create_loganalytics_auth.sh
+	hack/ci/create_loganalytics_auth.sh
 
 bin/virtual-kubelet: BUILD_VERSION          ?= $(shell git describe --tags --always --dirty="-dev")
 bin/virtual-kubelet: BUILD_DATE             ?= $(shell date -u '+%Y-%m-%d-%H:%M UTC')
