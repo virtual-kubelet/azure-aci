@@ -63,7 +63,7 @@ func TestPodLifecycle(t *testing.T) {
 	DeletePodFromKubectl(t, podName)
 }
 
-//e2e test for create a pod with init containers
+//e2e lifecycle test for a pod with init containers
 func TestInitContainerPod(t *testing.T) {
 	podName := "vk-e2e-initcontainers"
 	podDir := "fixtures/initcontainers_pod.yml"
