@@ -13,17 +13,17 @@ spec:
   - image: alpine
     name: init-container-01
     command: [ "/bin/sh" ]
-    args: [ "-c", "echo \"Hi from initcontainer 01\"; done" ]
+    args: [ "-c", "echo \"Hi\"" ]
   - image: alpine
     name: init-container-02
     command: [ "/bin/sh" ]
-    args: [ "-c", "echo \"Hi from initcontainer 02\"; done" ]
+    args: [ "-c", "echo \"Hi\"" ]
   containers:
   - image: alpine
     imagePullPolicy: Always
     name: container
     command: [ "/bin/sh" ]
-    args: [ "-c", "sTimeout=10; xMax=10; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"HOLA $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
+    args: [ "-c", "sTimeout=10; xMax=10; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Hi $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
     resources:
       requests:
         memory: 1G
