@@ -14,7 +14,10 @@
 vendor/
 .azure
 
+# binary output
 bin/
+hack/tools/bin/
 
 .DS_Store
 .vscode/
+.idea/

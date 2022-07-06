@@ -106,7 +106,7 @@ func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 	k8sPods := pt.rm.GetPods()
 	activePods, err := pt.handler.ListActivePods(ctx)
 	if err != nil {
-		log.G(ctx).WithError(err).Errorf("failed to retrive active container groups list")
+		log.G(ctx).WithError(err).Errorf("failed to retrieve active container groups list")
 		return
 	}
 
