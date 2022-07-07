@@ -7,10 +7,6 @@ on:
     branches: [master]
     paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   detect-noop:
     runs-on: ubuntu-latest
@@ -61,18 +57,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      - name: Install Azure CLI latest
-        run: |
-          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-          az version
-      - name: Run go vet
-        run: make vet
-      - uses: azure/login@v1.4.5
-        with:
-          client-id: ${{ env.CLIENTID }}
-          tenant-id: ${{ env.TENANT_ID }}
-          subscription-id: ${{ env.SUBSCRIPTIONID }}
 
       - name: Run unit tests & Generate coverage
         env:
