@@ -39,6 +39,7 @@ jobs:
       OMSWORKSPACEID: '4f211d5f-39a4-4a52-a3bb-b49cf4fc7017'
       CLIENTSECRET: ${{ secrets.CLIENT_SECRET }}
       WORKSPACEKEY: ${{ secrets.OMS_WORKSPACE_KEY }}
+
     runs-on: ubuntu-latest
     environment: test
     needs: detect-noop
@@ -84,14 +85,11 @@ jobs:
           sqlManagementEndpointUrl: ${{ env.SQLMANAGEMENTENDPOINTURL  }}
           galleryEndpointUrl: ${{ env.GALLERYENDPOINTURL  }}
           managementEndpointUrl: ${{ env.MANAGEMENTENDPOINTURL  }}
+          clientSecret: ${{ secrets.CLIENT_SECRET }}
           omsworkspaceID: ${{ env.OMSWORKSPACEID  }}
-          clientSecret: ${{ env.CLIENTSECRET }}
-          omsworkspaceKey: ${{ env.WORKSPACEKEY }}
+          omsworkspaceKey: ${{ secrets.OMS_WORKSPACE_KEY }}
         run: |
-          echo ${{ secrets.AZURE_CREDENTIALS }}
-          omsworkspaceKey=$(az monitor log-analytics workspace get-shared-keys --resource-group VK-loganalytics  --workspace-name vk-aci)
-          echo $omsworkspaceKey
-          omsworkspaceKey=$omsworkspaceKey make testauth test
+           make testauth test
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3
