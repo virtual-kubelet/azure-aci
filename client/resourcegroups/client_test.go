@@ -11,7 +11,7 @@ import (
 var (
 	client        *Client
 	location      = "eastus"
-	resourceGroup = "virtual-kubelet-tests"
+	resourceGroup = "virtual-node-test-rg"
 )
 
 var defaultRetryConfig = azure.HTTPRetryConfig{
