@@ -26,11 +26,17 @@ func (m *MockPodLister) List(selector labels.Selector) (ret []*v1.Pod, err error
 	m.ctrl.T.Helper()
 	mList := m.ctrl.Call(m, "List", labels.Everything())
 	mList0 := mList[0].([]*v1.Pod)
-	return mList0, nil
+	mList1, _ := mList[1].(error)
+	return mList0, mList1
 }
 
 func (m *MockPodLister) Pods(namespace string) corev1listers.PodNamespaceLister {
-	return nil
+return nil
+}
+
+func (m *MockPodListerMockRecorder) List(selector interface{})  *gomock.Call {
+	m.mock.ctrl.T.Helper()
+	return m.mock.ctrl.RecordCallWithMethodType(m.mock, "List", reflect.TypeOf((*MockPodLister)(nil).List), selector)
 }
 
 // MockPodListerMockRecorder is the mock recorder for MockPodLister.

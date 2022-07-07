@@ -13,7 +13,6 @@ import (
 	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -53,7 +52,7 @@ func TestGetStatsSummary(t *testing.T) {
 			mockedPodStatsGetter := NewMockpodStatsGetter(ctrl)
 			podMetricsProvider := NewACIPodMetricsProvider("node-1", "rg", podLister, nil, nil)
 			podMetricsProvider.podStatsGetter = mockedPodStatsGetter
-			podLister.EXPECT().mock.List(labels.Everything())
+			podLister.EXPECT().List(gomock.Any()).Return(fakePod(getMapKeys(test)), nil)
 			for podName, cpu := range test {
 				mockedPodStatsGetter.EXPECT().getPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
 			}
@@ -173,4 +172,14 @@ func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
 			UsageNanoCores: &cpu,
 		},
 	}
+}
+
+func getMapKeys(m map[string]uint64) []string {
+	keys := make([]string, len(m))
+	i := 0
+	for k := range m {
+		keys[i] = k
+		i++
+	}
+	return keys
 }
