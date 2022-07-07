@@ -25,7 +25,7 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
-  tests:
+  e2e-tests:
     env:
       CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
       SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
@@ -56,4 +56,4 @@ jobs:
 
       - name: Run e2e tests
         run: |
-          az login --identity && ./hack/e2e/aks.sh go test -v ./e2e
+          ./hack/e2e/aks.sh go test -v ./e2e
