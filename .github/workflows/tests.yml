@@ -3,7 +3,7 @@ name: azure-aci-test
 on:
   push:
     branches: [master]
-  pull_request:
+  pull_request_target:
     branches: [master]
     paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
 
@@ -37,7 +37,10 @@ jobs:
       GALLERYENDPOINTURL: 'https://gallery.azure.com/'
       MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
       OMSWORKSPACEID: '4f211d5f-39a4-4a52-a3bb-b49cf4fc7017'
+      CLIENTSECRET: ${{ secrets.CLIENT_SECRET }}
+      WORKSPACEKEY: ${{ secrets.OMS_WORKSPACE_KEY }}
     runs-on: ubuntu-latest
+    environment: test
     needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
     steps:
@@ -47,6 +50,13 @@ jobs:
           go-version: ${{ secrets.GO_VERSION  }}
 
       - name: Check out code into the Go module directory
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Checkout
+        if: github.event_name != 'pull_request_target'
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -75,10 +85,13 @@ jobs:
           galleryEndpointUrl: ${{ env.GALLERYENDPOINTURL  }}
           managementEndpointUrl: ${{ env.MANAGEMENTENDPOINTURL  }}
           omsworkspaceID: ${{ env.OMSWORKSPACEID  }}
+          clientSecret: ${{ env.CLIENTSECRET }}
+          omsworkspaceKey: ${{ env.WORKSPACEKEY }}
         run: |
-          clientSecret=$(az ad app credential reset --id $clientId --query password --output tsv)
+          echo ${{ secrets.AZURE_CREDENTIALS }}
           omsworkspaceKey=$(az monitor log-analytics workspace get-shared-keys --resource-group VK-loganalytics  --workspace-name vk-aci)
-          clientSecret=$clientSecret omsworkspaceKey=$omsworkspaceKey make testauth test
+          echo $omsworkspaceKey
+          omsworkspaceKey=$omsworkspaceKey make testauth test
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3
