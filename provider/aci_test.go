@@ -218,7 +218,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 		manifest := &aci.ResourceProviderManifest{
 			Metadata: &aci.ResourceProviderMetadata{
 				GPURegionalSKUs: []*aci.GPURegionalSKU{
-					&aci.GPURegionalSKU{
+					{
 						Location: fakeRegion,
 						SKUs:     []aci.GPUSKU{gpuSKU, aci.K80, aci.P100},
 					},
@@ -229,7 +229,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 		return http.StatusOK, manifest
 	}
 	
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create the test provider. %s", err.Error())
 		return
@@ -307,7 +307,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		return http.StatusOK, manifest
 	}
 	
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create the test provider. %s", err.Error())
 		return
@@ -800,7 +800,7 @@ func prepareMocks() (*AADMock, *ACIMock, *ACIProvider, error) {
 		return http.StatusOK, manifest
 	}
 	
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil, nil, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create the test provider %s", err.Error())
 	}
@@ -808,7 +808,7 @@ func prepareMocks() (*AADMock, *ACIMock, *ACIProvider, error) {
 	return aadServerMocker, aciServerMocker, provider, nil
 }
 
-func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*ACIProvider, error) {
+func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock, configMapMocker *MockConfigMapLister, secretMocker *MockSecretLister, podMocker *MockPodLister) (*ACIProvider, error) {
 	auth := azure.NewAuthentication(
 		azure.PublicCloud.Name,
 		fakeClientID,
@@ -838,7 +838,12 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock) (*AC
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
 	
-	cfg := nodeutil.ProviderConfig{}
+	cfg := nodeutil.ProviderConfig{
+		ConfigMaps: configMapMocker,
+		Secrets:    secretMocker,
+		Pods:       podMocker,
+	}
+	
 	cfg.Node = &v1.Node{}
 	cfg.Node.Name = fakeNodeName
 	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
@@ -1102,7 +1107,7 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		},
 	}, nil)
 	
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker)
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, configMapLister, nil, nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
@@ -1231,6 +1236,11 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		},
 	}, nil)
 	
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, mockConfigMapLister, mockSecretLister, nil)
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
+	
 	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fakeVolumeSecret,
@@ -1269,7 +1279,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			description:   "Secret is nil",
 			secretVolume:  nil,
 			volume:        fakePodVolume,
-			expectedError: fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", fakeSecret.Name, fakePodVolume.Name),
+			expectedError: fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", fakePodVolume.Name),
 		},
 		{
 			description:   "Volume has a secret with a valid value",
@@ -1324,10 +1334,6 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			provider, err := createTestProvider(aadServerMocker, aciServerMocker)
-			if err != nil {
-				t.Fatal("Unable to create test provider", err)
-			}
 			
 			pod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{

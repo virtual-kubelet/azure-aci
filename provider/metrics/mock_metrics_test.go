@@ -24,7 +24,7 @@ type MockPodLister struct {
 
 func (m *MockPodLister) List(selector labels.Selector) (ret []*v1.Pod, err error) {
 	m.ctrl.T.Helper()
-	mList := m.ctrl.Call(m, "List", labels.Everything())
+	mList := m.ctrl.Call(m, "List", selector)
 	mList0 := mList[0].([]*v1.Pod)
 	mList1, _ := mList[1].(error)
 	return mList0, mList1
