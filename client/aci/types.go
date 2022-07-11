@@ -66,6 +66,38 @@ type AzureFileVolume struct {
 	StorageAccountKey  string `json:"storageAccountKey,omitempty"`
 }
 
+// AKSClusterListResult is the aks cluster list response that contains cluster properties
+// ttps://management.azure.com/subscriptions/{subscription}/resourceGroups/{resouorce-groups}/providers/Microsoft.ContainerService/managedClusters/{clusterid}?api-version=2022-04-01
+type AKSClusterListResult struct {
+	api.ResponseMetadata `json:"-"`
+	Value                []AKSCluster			  `json:"value,omitempty"`
+	NextLink             string					  `json:"nextLink,omitempty"`
+}
+
+// AKS cluster object along with some properties
+type AKSCluster struct {
+	Id string `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	Properties AKSClusterPropertiesTruncated `json:"properties,omitempty"`
+}
+
+// truncated properties only include identity profile (kubelet identity)
+type AKSClusterPropertiesTruncated struct {
+	Fqdn string `json:"fqdn,omitempty"`
+	IdentityProfile AKSIdentityProfile `json:"identityProfile,omitempty"`
+}
+
+// AKS Identity profile definition
+type AKSIdentityProfile struct {
+	KubeletIdentity AzIdentity
+}
+
+// Azure managed identity definition
+type AzIdentity struct {
+	ResourceId string
+	ClientId string
+	ObjectId string
+}
 // Container is a container instance.
 type Container struct {
 	Name                string `json:"name,omitempty"`
@@ -81,6 +113,7 @@ type ContainerGroup struct {
 	Location                 string            `json:"location,omitempty"`
 	Tags                     map[string]string `json:"tags,omitempty"`
 	ContainerGroupProperties `json:"properties,omitempty"`
+	Identity *ACIContainerGroupIdentity `json:"identity,omitempty"`
 }
 
 // ContainerGroupProperties is
@@ -97,6 +130,14 @@ type ContainerGroupProperties struct {
 	SubnetIds           	 []*SubnetIdDefinition            `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
+}
+
+// container group identity object
+type ACIContainerGroupIdentity struct {
+	PrincipalId string `json:"principalid,omitempty"`
+	TenantId string `json:"tenantid,omitempty"`
+	Type string `json:"type,omitempty"`
+	UserAssignedIdentities map[string]map[string]string `json:"userassignedidentities,omitempty"`
 }
 
 // ContainerGroupPropertiesInstanceView is the instance view of the container group. Only valid in response.
@@ -183,6 +224,8 @@ type ImageRegistryCredential struct {
 	Server   string `json:"server,omitempty"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+	IdentityURL string `json:"identityurl,omitempty"`
+	Identity string `json:"identity,omitempty"`
 }
 
 // IPAddress is IP address for the container group.
