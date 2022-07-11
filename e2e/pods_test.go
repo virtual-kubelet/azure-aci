@@ -1,14 +1,12 @@
 package e2e
 
 import (
-	"bytes"
 	"testing"
-	"time"
 )
 
 func TestPodLifecycle(t *testing.T) {
 	// delete the pod first
-	kubectl("delete", "pod/vk-e2e-hpa")
+	/*kubectl("delete", "pod/vk-e2e-hpa")
 
 	spec, err := fixtures.ReadFile("fixtures/hpa.yml")
 	if err != nil {
@@ -52,5 +50,11 @@ func TestPodLifecycle(t *testing.T) {
 	cmd = kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
-	}
+	}*/
+}
+
+func TestDeployUsingSecrets(t *testing.T) {
+	cmd := kubectl("config", "current-context")
+	out, _ := cmd.CombinedOutput()
+	t.Log(string(out))
 }

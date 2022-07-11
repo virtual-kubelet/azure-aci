@@ -14,3 +14,9 @@ func kubectl(args ...string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	return cmd
 }
+
+func helm(args ...string) *exec.Cmd {
+	cmd := exec.Command("helm", args...)
+	cmd.Env = os.Environ()
+	return cmd
+}
