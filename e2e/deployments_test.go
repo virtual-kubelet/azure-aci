@@ -1,10 +1,15 @@
 package e2e
 
 import (
+	"encoding/json"
 	"testing"
 )
 
-func TestMIDeploymentUsingSecretsAndKubeletIdentity(t *testing.T) {
+type KeyVault struct {
+	Value string `json:"value"`
+}
+
+func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 	cmd := kubectl("config", "current-context")
 	previousCluster, _ := cmd.CombinedOutput()
 
@@ -13,7 +18,19 @@ func TestMIDeploymentUsingSecretsAndKubeletIdentity(t *testing.T) {
 	azureRG := "aci-virtual-node-test-rg"
 	azureClientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
 
-	azureClientSecret := ""
+	//get secret
+	vaultName := "aci-virtual-node-test-kv"
+	secretName := "aci-virtualnode-sp-dev-credential"
+	cmd = az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	var keyvault KeyVault
+	json.Unmarshal(out, &keyvault)
+	azureClientSecret := keyvault.Value
 
 	//managedIdentity := ""
 
@@ -33,7 +50,7 @@ func TestMIDeploymentUsingSecretsAndKubeletIdentity(t *testing.T) {
 		"–assign-identity "+managedIdentity,
 		"–assign-kubelet-identity "+managedIdentity,*/
 	)
-	out, err := cmd.CombinedOutput()
+	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
 	}
@@ -72,5 +89,5 @@ func TestMIDeploymentUsingSecretsAndKubeletIdentity(t *testing.T) {
 	t.Log("deleting cluster")
 
 	kubectl("config", "use-context", string(previousCluster))
-	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes", "--no-wait")
+	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
 }
