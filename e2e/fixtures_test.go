@@ -20,3 +20,9 @@ func helm(args ...string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	return cmd
 }
+
+func az(args ...string) *exec.Cmd {
+	cmd := exec.Command("az", args...)
+	cmd.Env = os.Environ()
+	return cmd
+}
