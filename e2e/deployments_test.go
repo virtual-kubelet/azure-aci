@@ -13,10 +13,14 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 	cmd := kubectl("config", "current-context")
 	previousCluster, _ := cmd.CombinedOutput()
 
+	subscriptionID := "076cd026-379c-4383-8bec-8835382efe90"
+	//tenantID := "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	//clientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
+
 	aksClusterName := "aksClusterE2E01"
 
 	azureRG := "aci-virtual-node-test-rg"
-	azureClientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
+	//azureClientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
 
 	//get secret
 	vaultName := "aci-virtual-node-test-kv"
@@ -30,9 +34,24 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 
 	var keyvault KeyVault
 	json.Unmarshal(out, &keyvault)
-	azureClientSecret := keyvault.Value
+	//azureClientSecret := keyvault.Value
 
-	//managedIdentity := ""
+	//create MI with role assignment
+	managedIdentity := "e2eDeployTestMI"
+
+	cmd = az("identity", "create", "--resource-group", azureRG, "--name", managedIdentity)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	spID, _ := az("identity", "show", "--resource-group", azureRG, "--name", managedIdentity,
+		"--query", "principalID", "--output", "tsv").CombinedOutput()
+
+	az("identity", "role", "assignment", "create", "--assignee", string(spID),
+		"--scope", "<registry-id>", "--role", "acrpull")
+
+	managedIdentityURI := "/subscriptions/" + subscriptionID + "/resourcegroups/" + azureRG + "/providers/Microsoft.ManagedIdentity/userAssignedIdentities/" + managedIdentity
 
 	//create cluster
 	cmd = az("aks", "create",
@@ -43,12 +62,9 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 		"--service-cidr", "10.0.0.0/16",
 		"--dns-service-ip", "10.0.0.10",
 		"--docker-bridge-address", "172.17.0.1/16",
-		"--service-principal", azureClientID,
-		"--client-secret", azureClientSecret,
-
-		/*"--enable-managed-identity",
-		"–assign-identity "+managedIdentity,
-		"–assign-kubelet-identity "+managedIdentity,*/
+		"--enable-managed-identity",
+		"--assign-identity", managedIdentityURI,
+		"--assign-kubelet-identity", managedIdentityURI,
 	)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -69,10 +85,10 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 
 	//create virtual node
 	/*helm("install \"$RELEASE_NAME\" \"$CHART_URL\"",
-	  		"--set provider=azure",aksClusterNamek=false",
-	  		"--set providers.azure.targetAKS=true",
-	  		"--set providers.azure.clientId=$AZURE_CLIENT_ID",
-	  		"--set providers.azure.clientKey=$AZURE_CLIENT_SECRET",
+	  		"--set", "provider=azure","aksClusterNamek=false",
+	  		"--set", "providers.azure.targetAKS=true",
+	  		"--set", "providers.azure.clientId=", clientID,
+	  		"--set", "providers.azure.clientKey=", azureClientSecret,
 	  		"--set providers.azure.masterUri=$MASTER_URI",
 	  		"--set providers.azure.aciResourceGroup=$AZURE_RG".
 			"--set providers.azure.aciRegion=$ACI_REGION",
@@ -86,8 +102,10 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 
 	//test pod lifecycle
 
-	t.Log("deleting cluster")
+	t.Log("deleting")
 
 	kubectl("config", "use-context", string(previousCluster))
-	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
+
+	/*az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
+	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")*/
 }
