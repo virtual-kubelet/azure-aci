@@ -64,7 +64,7 @@ test:
 
 .PHONY: e2e-test
 e2e-test:
-	IMG_URL=$(REGISTRY) $(AKS_E2E) go test -v ./e2e
+	IMG_URL=$(REGISTRY) IMG_TAG=$(IMG_TAG) $(AKS_E2E) go test -v ./e2e
 
 .PHONY: vet
 vet:
