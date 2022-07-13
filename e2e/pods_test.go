@@ -8,9 +8,15 @@ import (
 
 func TestPodLifecycle(t *testing.T) {
 	// delete the pod first
-	kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test")
+	kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
+	kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test", "--ignore-not-found")
 
-	cmd := kubectl("apply", "-f", "fixtures/hpa.yml")
+	// create namespace
+	cmd := kubectl("apply", "-f", "fixtures/namespace.yml")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+	cmd = kubectl("apply", "-f", "fixtures/hpa.yml", "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
@@ -51,12 +57,19 @@ func TestPodLifecycle(t *testing.T) {
 
 func TestPodWithCSIDriver(t *testing.T) {
 	// delete the pod first
-	kubectl("delete", "pod/vk-e2e-csi-driver")
+	kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
+	kubectl("delete", "pod/vk-e2e-csi-driver", "--namespace=vk-test", "--ignore-not-found")
 
 	testStorageAccount := os.Getenv("CSI_DRIVER_STORAGE_ACCOUNT_NAME")
 	testStorageKey := os.Getenv("CSI_DRIVER_STORAGE_ACCOUNT_KEY")
 
-	cmd := kubectl("create", "secret", "generic", "csidriversecret", "--from-literal", "azurestorageaccountname="+testStorageAccount, "--from-literal", "azurestorageaccountkey="+testStorageKey, "--namespace=vk-test")
+	// create namespace
+	cmd := kubectl("apply", "-f", "fixtures/namespace.yml")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+
+	cmd = kubectl("create", "secret", "generic", "csidriversecret", "--from-literal", "azurestorageaccountname="+testStorageAccount, "--from-literal", "azurestorageaccountkey="+testStorageKey, "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
