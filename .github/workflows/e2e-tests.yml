@@ -70,6 +70,14 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build image & Run e2e test
         run: |
-          OUTPUT_TYPE=docker REGISTRY=${{ env.REGISTRY}} make image e2e-test
+          OUTPUT_TYPE=docker REGISTRY=${{ env.REGISTRY}} make docker-build-image e2e-test

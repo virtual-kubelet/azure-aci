@@ -37,13 +37,27 @@ safebuild:
 	@echo "Building image..."
 	docker build -t $(DOCKER_IMAGE):$(VERSION) .
 
-.PHONY: image
-image:
+
+OUTPUT_TYPE ?= type=registry
+BUILDX_BUILDER_NAME ?= img-builder
+QEMU_VERSION ?= 5.2.0-2
+
+.PHONY: docker-buildx-builder
+docker-buildx-builder:
+	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
+		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		docker buildx create --name $(BUILDX_BUILDER_NAME) --use; \
+		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
+	fi
+
+.PHONY: docker-build-image
+docker-build: docker-buildx-builder
 	docker buildx build \
-		--platform="$(BUILDPLATFORM)" \
-		--tag $(IMG_REPO):$(IMG_TAG) \
-		--output=type=$(OUTPUT_TYPE) \
-		.
+		--file Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="$(BUILDPLATFORM)"
+		--pull \
+		--tag $(IMG_REPO):$(IMG_TAG) .
 
 .PHONY: build
 build: bin/virtual-kubelet
