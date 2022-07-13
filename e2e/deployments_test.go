@@ -10,23 +10,28 @@ type KeyVault struct {
 	Value string `json:"value"`
 }
 
-func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
-	cmd := kubectl("config", "current-context")
-	previousCluster, _ := cmd.CombinedOutput()
+func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
+	/*cmd := kubectl("config", "current-context")
+	previousCluster, _ := cmd.CombinedOutput()*/
 
 	subscriptionID := "076cd026-379c-4383-8bec-8835382efe90"
-	//tenantID := "72f988bf-86f1-41af-91ab-2d7cd011db47"
-	//clientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
+	tenantID := "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	clientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
 
-	aksClusterName := "aksClusterE2E01"
-
+	region := "westus"
 	azureRG := "aci-virtual-node-test-rg"
-	//azureClientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
 
-	//get secret
+	//aksClusterName := "aksClusterE2E05"
+	nodeName := "virtual-kubelet"
+	virtualNodeReleaseName := "virtual-kubelet-e2etest-aks"
+
+	vkRelease := "virtual-kubelet-latest"
+	chartURL := "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
+
+	//get client secret
 	vaultName := "aci-virtual-node-test-kv"
 	secretName := "aci-virtualnode-sp-dev-credential"
-	cmd = az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
+	cmd := az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -35,10 +40,12 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 
 	var keyvault KeyVault
 	json.Unmarshal(out, &keyvault)
-	//azureClientSecret := keyvault.Value
+	azureClientSecret := keyvault.Value
+
+	t.Log(azureClientSecret)
 
 	//create MI with role assignment
-	managedIdentity := "e2eDeployTestMI"
+	/*managedIdentity := "e2eDeployTestMI"
 
 	cmd = az("identity", "create", "--resource-group", azureRG, "--name", managedIdentity)
 	out, err = cmd.CombinedOutput()
@@ -82,7 +89,7 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(string(out))
 	}
-	t.Log("connected to cluster")
+	t.Log("connected to cluster")*/
 
 	//get master URI
 	cmd = kubectl("cluster-info")
@@ -93,32 +100,39 @@ func TestImagePullUsingSecretsAndKubeletIdentity(t *testing.T) {
 	}
 
 	clusterInfo := strings.Fields(string(out))
-	masterURI := clusterInfo[6]
-	t.Log(masterURI)
+	masterURI := clusterInfo[6] //the 7th string has the masterURI on the response of doing 'kubectl cluster-info'
 
 	//create virtual node
-	/*helm("install \"$RELEASE_NAME\" \"$CHART_URL\"",
-		"--set", "provider=azure","aksClusterNamek=false",
+	cmd = helm("install", virtualNodeReleaseName, chartURL,
+		"--set", "provider=azure",
+		"--set", "rbac.install=true",
+		"--set", "enableAuthenticationTokenWebhook=false",
 		"--set", "providers.azure.targetAKS=true",
-		"--set", "providers.azure.clientId=", clientID,
-		"--set", "providers.azure.clientKey=", azureClientSecret,
-		"--set", "providers.azure.masterUri=$MASTER_URI",
-		"--set providers.azure.aciResourceGroup=$AZURE_RG".
-		"--set providers.azure.aciRegion=$ACI_REGION",
-		"--set providers.azure.tenantId=$AZURE_TENANT_ID",
-		"--set providers.azure.subscriptionId=$AZURE_SUBSCRIPTION_ID",
-		"--set nodeName=$NODE_NAME",
-		"--set image.repository=docker.io",
-		"--set image.name=suselva/virtual-kubelet",
-		"--set image.tag=latest"
-	)*/
+		"--set", "providers.azure.clientId="+clientID,
+		"--set", "providers.azure.clientKey="+azureClientSecret,
+		"--set", "providers.azure.masterUri="+masterURI,
+		"--set", "providers.azure.aciResourceGroup="+azureRG,
+		"--set", "providers.azure.aciRegion="+region,
+		"--set", "providers.azure.tenantId="+tenantID,
+		"--set", "providers.azure.subscriptionId="+subscriptionID,
+		"--set", "nodeName="+nodeName,
+		"--set", "image.repository=docker.io",
+		"--set", "image.name=ysalazar/virtual-kubelet",
+		"--set", "image.tag=test",
+	)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	t.Log(string(out))
 
 	//test pod lifecycle
 
-	t.Log("deleting")
+	/*t.Log("deleting")
 
-	kubectl("config", "use-context", string(previousCluster))
+	kubectl("config", "use-context", string(previousCluster))*/
 
 	/*az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
-	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")*/
+	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
+	helm("uninstall", virtualNodeReleaseName)*/
 }
