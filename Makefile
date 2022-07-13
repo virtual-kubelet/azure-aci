@@ -7,6 +7,7 @@ GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT
 
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
+AKS_E2E := ./hack/e2e/aks.sh
 
 GO111MODULE := on
 export GO111MODULE
@@ -16,7 +17,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
-IMG_REPO ?= virtual-kubelet
+IMG_REPO ?= $(REGISTRY)/virtual-kubelet
 OUTPUT_TYPE ?= docker
 BUILDPLATFORM ?= linux/amd64
 VERSION      := $(shell git describe --tags --always --dirty="-dev")
@@ -52,10 +53,18 @@ clean: files := bin/virtual-kubelet bin/virtual-kubelet.tgz
 clean:
 	@rm -f $(files) &>/dev/null || exit 0
 
+## --------------------------------------
+## Tests
+## --------------------------------------
+
 .PHONY: test
 test:
 	@echo running tests
 	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+
+.PHONY: e2e-test
+e2e-test:
+	IMG_URL=$(REGISTRY) $(AKS_E2E) go test -v ./e2e
 
 .PHONY: vet
 vet:
