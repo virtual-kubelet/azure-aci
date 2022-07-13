@@ -46,6 +46,7 @@ fi
 TMPDIR=""
 
 cleanup() {
+    az acr repository delete --name "$IMG_URL" --image "$IMG_REPO":"$IMG_TAG"
     az group delete --name "$RESOURCE_GROUP" --yes --no-wait
     if [ -n "$TMPDIR" ]; then
         rm -rf "$TMPDIR"
