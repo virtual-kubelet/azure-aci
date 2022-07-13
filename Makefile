@@ -55,7 +55,7 @@ docker-build-image: docker-buildx-builder
 	docker buildx build \
 		--file Dockerfile \
 		--output=$(OUTPUT_TYPE) \
-		--platform="$(BUILDPLATFORM)"
+		--platform="$(BUILDPLATFORM)" \
 		--pull \
 		--tag $(IMG_REPO):$(IMG_TAG) .
 
