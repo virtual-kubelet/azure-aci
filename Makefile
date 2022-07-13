@@ -51,7 +51,7 @@ docker-buildx-builder:
 	fi
 
 .PHONY: docker-build-image
-docker-build: docker-buildx-builder
+docker-build-image: docker-buildx-builder
 	docker buildx build \
 		--file Dockerfile \
 		--output=$(OUTPUT_TYPE) \
