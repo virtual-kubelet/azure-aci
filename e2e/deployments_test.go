@@ -132,6 +132,9 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 
 	kubectl("config", "use-context", string(previousCluster))
 
+	kubectl("delete", "deployments", "--all")
+	kubectl("delete", "pods", "--all")
+	kubectl("delete", "node", nodeName)
 	az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
 	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
 	helm("uninstall", virtualNodeReleaseName)
