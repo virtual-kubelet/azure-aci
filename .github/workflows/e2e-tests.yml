@@ -64,12 +64,6 @@ jobs:
           client-id: ${{ env.CLIENTID }}
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTIONID }}
-      - name: Login to ghcr.io
-        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to ${{ env.REGISTRY }}
         uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
@@ -80,4 +74,6 @@ jobs:
 
       - name: Build image & Run e2e test
         run: |
-          OUTPUT_TYPE=docker REGISTRY=${{ env.REGISTRY}} make docker-build-image e2e-test
+          OUTPUT_TYPE=type=registry make docker-build-image e2e-test
+        env:
+          REGISTRY: ${{ env.REGISTRY}}

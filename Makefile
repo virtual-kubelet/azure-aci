@@ -17,11 +17,12 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
-IMG_REPO ?= $(REGISTRY)/virtual-kubelet
-OUTPUT_TYPE ?= docker
+IMG_NAME ?= virtual-kubelet
+IMG_REPO ?= $(REGISTRY)/$(IMG_NAME)
+OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
-VERSION      := $(shell git describe --tags --always --dirty="-dev")
-IMG_TAG ?= $(VERSION)
+VERSION      := $(shell git describe --abbrev=0 --tags)
+IMG_TAG ?= $(subst v,,$(VERSION))
 
 
 ## --------------------------------------
@@ -38,14 +39,13 @@ safebuild:
 	docker build -t $(DOCKER_IMAGE):$(VERSION) .
 
 
-OUTPUT_TYPE ?= type=registry
 BUILDX_BUILDER_NAME ?= img-builder
 QEMU_VERSION ?= 5.2.0-2
 
 .PHONY: docker-buildx-builder
 docker-buildx-builder:
 	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
-		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+  		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
 		docker buildx create --name $(BUILDX_BUILDER_NAME) --use; \
 		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
 	fi
@@ -78,7 +78,7 @@ test:
 
 .PHONY: e2e-test
 e2e-test:
-	IMG_URL=$(REGISTRY) IMG_TAG=$(IMG_TAG) $(AKS_E2E) go test -v ./e2e
+	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) $(AKS_E2E) go test -v ./e2e
 
 .PHONY: vet
 vet:
