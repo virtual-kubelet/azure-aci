@@ -74,11 +74,11 @@ jobs:
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
-          - uses: azure/login@v1.4.5
-            with:
-              client-id: ${{ env.CLIENTID }}
-              tenant-id: ${{ env.TENANT_ID }}
-              subscription-id: ${{ env.SUBSCRIPTIONID }}
+      - uses: azure/login@v1.4.5
+        with:
+          client-id: ${{ env.CLIENTID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTIONID }}
 
       - name: Run e2e test
         run: |
