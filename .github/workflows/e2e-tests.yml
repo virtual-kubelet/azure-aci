@@ -50,6 +50,7 @@ jobs:
       SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
       TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
+      IMG_VERSION: "dev"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -70,10 +71,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image version
+        run: |
+          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV      
+
       - name: Build image
         run: |
-          tag=${{ github.event.pull_request.head.ref }}
-          OUTPUT_TYPE=type=registry VERSION=$tag make docker-build-image
+          OUTPUT_TYPE=type=registry make docker-build-image
+        env:
+          VERSION: ${{ env.IMG_VERSION }}
 
       - name: Install Azure CLI latest
         run: |
@@ -96,4 +102,4 @@ jobs:
           owner: virtual-kubelet/azure-aci
           name: virtual-kubelet
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.event.pull_request.head.ref }}
+          tag: ${{ env.IMG_VERSION }}
