@@ -54,6 +54,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Install Azure CLI latest
         run: |
@@ -74,7 +76,7 @@ jobs:
 
       - name: Build image & Run e2e test
         run: |
-          tag=$(git describe --abbrev=0 --tags)
+          tag=$(git describe --abbrev=0 --tags --always)
           OUTPUT_TYPE=type=registry VERSION=$tag make docker-build-image e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
