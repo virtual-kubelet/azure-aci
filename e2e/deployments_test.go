@@ -22,12 +22,20 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	region := "westus"
 	azureRG := "aci-virtual-node-test-rg"
 
-	aksClusterName := "aksClusterE2E05"
+	aksClusterName := "aksClusterE2E06"
 	nodeName := "virtual-kubelet"
 	virtualNodeReleaseName := "virtual-kubelet-e2etest-aks"
 
 	vkRelease := "virtual-kubelet-latest"
 	chartURL := "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
+
+	dockerName := "ysalazar/virtual-kubelet"
+	dockerTag := "test"
+
+	managedIdentity := "aci-virtual-node-user-assigned-mi-2"
+	managedIdentityURI := "/subscriptions/" + subscriptionID + "/resourcegroups/" + azureRG + "/providers/Microsoft.ManagedIdentity/userAssignedIdentities/" + managedIdentity
+
+	//containerRegistry := "acivirtualnodetestregistry"
 
 	//get client secret
 	vaultName := "aci-virtual-node-test-kv"
@@ -42,23 +50,6 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	var keyvault KeyVault
 	json.Unmarshal(out, &keyvault)
 	azureClientSecret := keyvault.Value
-
-	//create MI with role assignment
-	managedIdentity := "e2eDeployTestMI"
-
-	cmd = az("identity", "create", "--resource-group", azureRG, "--name", managedIdentity)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
-
-	spID, _ := az("identity", "show", "--resource-group", azureRG, "--name", managedIdentity,
-		"--query", "principalID", "--output", "tsv").CombinedOutput()
-
-	az("identity", "role", "assignment", "create", "--assignee", string(spID),
-		"--scope", "<registry-id>", "--role", "acrpull")
-
-	managedIdentityURI := "/subscriptions/" + subscriptionID + "/resourcegroups/" + azureRG + "/providers/Microsoft.ManagedIdentity/userAssignedIdentities/" + managedIdentity
 
 	//create cluster
 	cmd = az("aks", "create",
@@ -98,8 +89,9 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 		t.Fatal(string(out))
 	}
 
-	clusterInfo := strings.Fields(string(out))[6]
-	re := regexp.MustCompile("\\x1B\\[[0-9;]*[a-zA-Z]") //delete invisible characters
+	clusterInfo := strings.Fields(string(out))[6] //this return the link with some invisible characters
+	//delete invisible characters and save masterURI
+	re := regexp.MustCompile("\\x1B\\[[0-9;]*[a-zA-Z]")
 	masterURI := re.ReplaceAllString(clusterInfo, "")
 
 	//create virtual node
@@ -117,8 +109,8 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 		"--set", "providers.azure.subscriptionId="+subscriptionID,
 		"--set", "nodeName="+nodeName,
 		"--set", "image.repository=docker.io",
-		"--set", "image.name=ysalazar/virtual-kubelet",
-		"--set", "image.tag=test",
+		"--set", "image.name="+dockerName,
+		"--set", "image.tag="+dockerTag,
 	)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
@@ -127,6 +119,8 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	t.Log(string(out))
 
 	//test pod lifecycle
+	CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml")
+	DeletePodFromKubectl(t, "mi-pull-image")
 
 	t.Log("deleting")
 
@@ -135,7 +129,8 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	kubectl("delete", "deployments", "--all")
 	kubectl("delete", "pods", "--all")
 	kubectl("delete", "node", nodeName)
-	az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
-	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
 	helm("uninstall", virtualNodeReleaseName)
+
+	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
+	kubectl("config", "delete-context", aksClusterName)
 }
