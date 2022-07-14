@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -11,8 +12,8 @@ type KeyVault struct {
 }
 
 func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
-	/*cmd := kubectl("config", "current-context")
-	previousCluster, _ := cmd.CombinedOutput()*/
+	cmd := kubectl("config", "current-context")
+	previousCluster, _ := cmd.CombinedOutput()
 
 	subscriptionID := "076cd026-379c-4383-8bec-8835382efe90"
 	tenantID := "72f988bf-86f1-41af-91ab-2d7cd011db47"
@@ -21,7 +22,7 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	region := "westus"
 	azureRG := "aci-virtual-node-test-rg"
 
-	//aksClusterName := "aksClusterE2E05"
+	aksClusterName := "aksClusterE2E05"
 	nodeName := "virtual-kubelet"
 	virtualNodeReleaseName := "virtual-kubelet-e2etest-aks"
 
@@ -31,7 +32,7 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	//get client secret
 	vaultName := "aci-virtual-node-test-kv"
 	secretName := "aci-virtualnode-sp-dev-credential"
-	cmd := az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
+	cmd = az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -42,10 +43,8 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	json.Unmarshal(out, &keyvault)
 	azureClientSecret := keyvault.Value
 
-	t.Log(azureClientSecret)
-
 	//create MI with role assignment
-	/*managedIdentity := "e2eDeployTestMI"
+	managedIdentity := "e2eDeployTestMI"
 
 	cmd = az("identity", "create", "--resource-group", azureRG, "--name", managedIdentity)
 	out, err = cmd.CombinedOutput()
@@ -89,7 +88,7 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(string(out))
 	}
-	t.Log("connected to cluster")*/
+	t.Log("connected to cluster")
 
 	//get master URI
 	cmd = kubectl("cluster-info")
@@ -99,8 +98,9 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 		t.Fatal(string(out))
 	}
 
-	clusterInfo := strings.Fields(string(out))
-	masterURI := clusterInfo[6] //the 7th string has the masterURI on the response of doing 'kubectl cluster-info'
+	clusterInfo := strings.Fields(string(out))[6]
+	re := regexp.MustCompile("\\x1B\\[[0-9;]*[a-zA-Z]") //delete invisible characters
+	masterURI := re.ReplaceAllString(clusterInfo, "")
 
 	//create virtual node
 	cmd = helm("install", virtualNodeReleaseName, chartURL,
@@ -128,11 +128,11 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 
 	//test pod lifecycle
 
-	/*t.Log("deleting")
+	t.Log("deleting")
 
-	kubectl("config", "use-context", string(previousCluster))*/
+	kubectl("config", "use-context", string(previousCluster))
 
-	/*az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
+	az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
 	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
-	helm("uninstall", virtualNodeReleaseName)*/
+	helm("uninstall", virtualNodeReleaseName)
 }
