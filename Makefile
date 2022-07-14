@@ -21,7 +21,7 @@ IMG_NAME ?= virtual-kubelet
 IMG_REPO ?= $(REGISTRY)/$(IMG_NAME)
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
-VERSION      := $(shell git describe --abbrev=0 --tags)
+VERSION      ?= $(shell git describe --abbrev=0 --tags)
 IMG_TAG ?= $(subst v,,$(VERSION))
 
 

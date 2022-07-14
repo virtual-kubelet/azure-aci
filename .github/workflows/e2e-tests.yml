@@ -74,6 +74,7 @@ jobs:
 
       - name: Build image & Run e2e test
         run: |
-          OUTPUT_TYPE=type=registry make docker-build-image e2e-test
+          tag=$(git describe --abbrev=0 --tags)
+          OUTPUT_TYPE=type=registry VERSION=$tag make docker-build-image e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
