@@ -46,7 +46,6 @@ fi
 TMPDIR=""
 
 cleanup() {
-    docker image rm "$IMG_URL"/"$IMG_REPO":"$IMG_TAG"
     az group delete --name "$RESOURCE_GROUP" --yes --no-wait
     if [ -n "$TMPDIR" ]; then
         rm -rf "$TMPDIR"

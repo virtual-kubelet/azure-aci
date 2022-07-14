@@ -72,7 +72,7 @@ jobs:
 
       - name: Build image
         run: |
-          tag=$(git describe --abbrev=0 --tags --always)
+          tag=${{ github.event.pull_request.head.ref }}
           OUTPUT_TYPE=type=registry VERSION=$tag make docker-build-image
 
       - name: Install Azure CLI latest
@@ -90,3 +90,10 @@ jobs:
           make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
+      - name: Delete image
+        uses: bots-house/ghcr-delete-image-action@v1.0.0
+        with:
+          owner: virtual-kubelet/azure-aci
+          name: virtual-kubelet
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.pull_request.head.ref }}
