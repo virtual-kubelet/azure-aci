@@ -7,12 +7,14 @@ import (
 )
 
 func TestPodLifecycle(t *testing.T) {
-	// delete the pod first
-	kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
-	kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test", "--ignore-not-found")
+	// delete the namespace first
+	cmd := kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
 
 	// create namespace
-	cmd := kubectl("apply", "-f", "fixtures/namespace.yml")
+	cmd = kubectl("apply", "-f", "fixtures/namespace.yml")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
@@ -49,7 +51,7 @@ func TestPodLifecycle(t *testing.T) {
 	}
 
 	t.Log("clean up pod")
-	cmd = kubectl("delete", "pod/vk-e2e-hpa", "--namespace=vk-test")
+	cmd = kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
@@ -57,14 +59,16 @@ func TestPodLifecycle(t *testing.T) {
 
 func TestPodWithCSIDriver(t *testing.T) {
 	// delete the pod first
-	kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
-	kubectl("delete", "pod/vk-e2e-csi-driver", "--namespace=vk-test", "--ignore-not-found")
+	cmd := kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
 
 	testStorageAccount := os.Getenv("CSI_DRIVER_STORAGE_ACCOUNT_NAME")
 	testStorageKey := os.Getenv("CSI_DRIVER_STORAGE_ACCOUNT_KEY")
 
 	// create namespace
-	cmd := kubectl("apply", "-f", "fixtures/namespace.yml")
+	cmd = kubectl("apply", "-f", "fixtures/namespace.yml")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
@@ -106,11 +110,7 @@ func TestPodWithCSIDriver(t *testing.T) {
 	}
 
 	t.Log("clean up pod")
-	cmd = kubectl("delete", "pod/vk-e2e-csi-driver", "--namespace=vk-test")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-	cmd = kubectl("delete", "secret", "csidriversecret", "--namespace=vk-test")
+	cmd = kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
