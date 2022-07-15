@@ -50,8 +50,8 @@ const (
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 	// Parameter names defined in azure file CSI driver, refer to
 	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
-	azureFileShareName  = "sharename"
-	azureFileSecretName = "secretname"
+	azureFileShareName  = "shareName"
+	azureFileSecretName = "secretName"
 	// AzureFileDriverName is the name of the CSI driver for Azure File
 	AzureFileDriverName         = "file.csi.azure.com"
 	azureFileStorageAccountName = "azurestorageaccountname"
@@ -1642,11 +1642,10 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*aci.ContainerProbe, e
 }
 
 func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.Volume, error) {
-	azureSource := &aci.AzureFileVolume{}
 	var secretName, shareName string
 	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
 		for k, v := range volume.CSI.VolumeAttributes {
-			switch strings.ToLower(k) {
+			switch k {
 			case azureFileSecretName:
 				secretName = v
 			case azureFileShareName:
@@ -1658,11 +1657,12 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 	}
 
 	if shareName == "" {
-		return nil, fmt.Errorf("secret share name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
+		return nil, fmt.Errorf("share name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
 	}
 
-	// Set shareName
-	azureSource.ShareName = shareName
+	if secretName == "" {
+		return nil, fmt.Errorf("secret name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
+	}
 
 	secret, err := p.resourceManager.GetSecret(secretName, namespace)
 
@@ -1670,17 +1670,13 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 		return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
 	}
 
-	if secret == nil {
-		return nil, fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", volume.Name)
-	}
-
-	// Set the storage account name and key
-	azureSource.StorageAccountName = strings.TrimSpace(string(secret.Data[azureFileStorageAccountName]))
-	azureSource.StorageAccountKey = strings.TrimSpace(string(secret.Data[azureFileStorageAccountKey]))
 	return &aci.Volume{
-		Name:      volume.Name,
-		AzureFile: azureSource,
-	}, nil
+		Name: volume.Name,
+		AzureFile: &aci.AzureFileVolume{
+			ShareName:          shareName,
+			StorageAccountName: string(secret.Data[azureFileStorageAccountName]),
+			StorageAccountKey:  string(secret.Data[azureFileStorageAccountKey]),
+		}}, nil
 }
 
 func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {

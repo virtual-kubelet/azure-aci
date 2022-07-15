@@ -38,7 +38,6 @@ spec:
     kubernetes.io/role: agent
     beta.kubernetes.io/os: linux
     type: virtual-kubelet
-    # kubernetes.io/hostname: minsha-vk
   tolerations:
   - key: virtual-kubelet.io/provider
     operator: Exists

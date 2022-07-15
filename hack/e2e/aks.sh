@@ -46,10 +46,10 @@ fi
 TMPDIR=""
 
 cleanup() {
-    az group delete --name "$RESOURCE_GROUP" --yes --no-wait
-    if [ -n "$TMPDIR" ]; then
-        rm -rf "$TMPDIR"
-    fi
+  az group delete --name "$RESOURCE_GROUP" --yes --no-wait
+  if [ -n "$TMPDIR" ]; then
+      rm -rf "$TMPDIR"
+  fi
 }
 trap 'cleanup' EXIT
 
