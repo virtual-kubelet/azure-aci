@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -20,6 +19,12 @@ const (
 	region = "westus"
 
 	containerRegistry = "acivirtualnodetestregistry"
+
+	nodeName               = "virtual-kubelet"
+	virtualNodeReleaseName = "virtual-kubelet-e2etest-aks"
+
+	vkRelease = "virtual-kubelet-latest"
+	chartURL  = "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
 )
 
 type KeyVault struct {
@@ -45,21 +50,13 @@ func GetCurrentClusterMasterURI(t *testing.T) string {
 		t.Fatal(string(out))
 	}
 
-	clusterInfo := strings.Fields(string(out))[6] //this return the link with some invisible characters
-	//delete invisible characters and save masterURI
-	re := regexp.MustCompile("\\x1B\\[[0-9;]*[a-zA-Z]")
-	masterURI := re.ReplaceAllString(clusterInfo, "")
+	clusterInfo := strings.Fields(string(out))[6]
+	masterURI := cleanString(clusterInfo)
 
 	return masterURI
 }
 
 func RunVirtualNodeLifeciyleUsingSecrets(t *testing.T, masterURI string) {
-	nodeName := "virtual-kubelet"
-	virtualNodeReleaseName := "virtual-kubelet-e2etest-aks"
-
-	vkRelease := "virtual-kubelet-latest"
-	chartURL := "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
-
 	//get client secret
 	vaultName := "aci-virtual-node-test-kv"
 	secretName := "aci-virtualnode-sp-dev-credential"
@@ -108,18 +105,23 @@ func RunVirtualNodeLifeciyleUsingSecrets(t *testing.T, masterURI string) {
 	helm("uninstall", virtualNodeReleaseName)
 }
 
-func TestImagePullUsingKubeletIdentity(t *testing.T) {
+func TestImagePullUsingKubeletIdentityInAKSCLuster(t *testing.T) {
 	cmd := kubectl("config", "current-context")
-	previousCluster, _ := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	clusterInfo := strings.Fields(string(out))[0]
+	previousCluster := cleanString(clusterInfo)
 
-	aksClusterName := "aksClusterE2E15"
-	managedIdentity := "e2eDeployTestMI15"
+	aksClusterName := "aksClusterE2E18"
+	managedIdentity := "e2eDeployTestMI18"
 
 	managedIdentityURI := "/subscriptions/" + subscriptionID + "/resourcegroups/" + azureRG + "/providers/Microsoft.ManagedIdentity/userAssignedIdentities/" + managedIdentity
 
 	//create MI with role assignment
 	cmd = az("identity", "create", "--resource-group", azureRG, "--name", managedIdentity)
-	out, err := cmd.CombinedOutput()
+	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
 	}
@@ -160,7 +162,19 @@ func TestImagePullUsingKubeletIdentity(t *testing.T) {
 
 	RunVirtualNodeLifeciyleUsingSecrets(t, masterURI)
 
-	kubectl("config", "use-context", string(previousCluster))
-	az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes")
-	kubectl("config", "delete-context", aksClusterName)
+	cmd = kubectl("config", "use-context", string(previousCluster))
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	cmd = az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes", "--no-wait")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	cmd = kubectl("config", "delete-context", aksClusterName)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
 }
