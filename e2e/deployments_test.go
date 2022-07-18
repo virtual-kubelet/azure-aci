@@ -7,6 +7,21 @@ import (
 	"testing"
 )
 
+const (
+	subscriptionID = "076cd026-379c-4383-8bec-8835382efe90"
+	tenantID       = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	clientID       = "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
+	azureRG        = "aci-virtual-node-test-rg"
+
+	imageRepository = "docker.io"
+	imageName       = "ysalazar/virtual-kubelet"
+	imageTag        = "test"
+
+	region = "westus"
+
+	containerRegistry = "acivirtualnodetestregistry"
+)
+
 type KeyVault struct {
 	Value string `json:"value"`
 }
@@ -15,27 +30,16 @@ func TestImagePullUsingKubeletIdentityAndSecrets(t *testing.T) {
 	cmd := kubectl("config", "current-context")
 	previousCluster, _ := cmd.CombinedOutput()
 
-	subscriptionID := "076cd026-379c-4383-8bec-8835382efe90"
-	tenantID := "72f988bf-86f1-41af-91ab-2d7cd011db47"
-	clientID := "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
-	azureRG := "aci-virtual-node-test-rg"
-
-	imageRepository := "docker.io"
-	imageName := "ysalazar/virtual-kubelet"
-	imageTag := "test"
-
-	region := "westus"
-
 	aksClusterName := "aksClusterE2E10"
+	managedIdentity := "e2eDeployTestMI10"
+
 	nodeName := "virtual-kubelet"
 	virtualNodeReleaseName := "virtual-kubelet-e2etest-aks"
 
 	vkRelease := "virtual-kubelet-latest"
 	chartURL := "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
 
-	managedIdentity := "e2eDeployTestMI10"
 	managedIdentityURI := "/subscriptions/" + subscriptionID + "/resourcegroups/" + azureRG + "/providers/Microsoft.ManagedIdentity/userAssignedIdentities/" + managedIdentity
-	containerRegistry := "acivirtualnodetestregistry"
 
 	//create MI with role assignment
 	cmd = az("identity", "create", "--resource-group", azureRG, "--name", managedIdentity)
