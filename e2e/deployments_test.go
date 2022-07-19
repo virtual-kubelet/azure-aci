@@ -222,3 +222,39 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		t.Fatal(string(out))
 	}
 }
+
+func TestAKSDeployment_attachACR(t *testing.T) {
+	//get client secret
+	vaultName := "aci-virtual-node-test-kv"
+	secretName := "aci-virtualnode-sp-dev-credential"
+	cmd := az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	var keyvault KeyVault
+	json.Unmarshal(out, &keyvault)
+	azureClientSecret := keyvault.Value
+
+	aksClusterName := "aksClusterE2E-attachACR"
+	//create cluster
+	cmd = az("aks", "create",
+		"--resource-group", azureRG,
+		"--name", aksClusterName,
+		"--node-count", "1",
+		"--network-plugin", "azure",
+		"--service-cidr", "10.0.0.0/16",
+		"--dns-service-ip", "10.0.0.10",
+		"--docker-bridge-address", "172.17.0.1/16",
+		"--service-principal", clientID,
+		"--client-secret", azureClientSecret,
+		"--enable-managed-identity",
+		"--attach-acr", containerRegistry,
+	)
+	_, err = cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("error expected")
+	}
+}
