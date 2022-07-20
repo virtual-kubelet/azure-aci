@@ -8,10 +8,9 @@ import (
 	"net/http"
 	"net/url"
 
-//	"bytes"
-
 	"github.com/virtual-kubelet/azure-aci/client/api"
 )
+
 // ListContainerGroups lists an Azure Container Instance Groups, if a resource
 // group is given it will list by resource group.
 // It optionally accepts a resource group name and will filter based off of it
@@ -124,12 +123,12 @@ func (c *Client) ListAKSClusters(ctx context.Context, resourceGroup string) (*AK
 
 func (c *Client) GetAKSCluster(ctx context.Context, resourceGroup string, clusterFqdn string) (*AKSCluster, error) {
 	clusters, err := c.ListAKSClusters(ctx, resourceGroup)
-	if err !=  nil {
+	if err != nil {
 		return nil, err
 	}
 
 	for _, cluster := range clusters.Value {
-		if cluster.Properties.Fqdn == clusterFqdn{
+		if cluster.Properties.Fqdn == clusterFqdn {
 			return &cluster, nil
 		}
 	}
