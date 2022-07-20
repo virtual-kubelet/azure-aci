@@ -21,7 +21,7 @@ const (
 	containerRegistry = "acivirtualnodetestregistry"
 
 	nodeName               = "virtual-kubelet"
-	virtualNodeReleaseName = "virtual-kubelet-e2etest-aks05"
+	virtualNodeReleaseName = "virtual-kubelet-e2etest-aks"
 
 	vkRelease = "virtual-kubelet-latest"
 	chartURL  = "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
@@ -65,7 +65,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	clusterInfo := strings.Fields(string(out))[0]
 	previousCluster := cleanString(clusterInfo)
 
-	testName := "ImagePull-KI10"
+	testName := "ImagePull-KI20"
 	aksClusterName := "aksClusterE2E-" + testName
 	managedIdentity := "e2eDeployTestMI-" + testName
 
@@ -83,15 +83,19 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		"--query", "id", "--output", "tsv").CombinedOutput()
 	managedIdentityURI := cleanString(strings.Fields(string(userID))[0])
 
-	miClientIDRaw, _ := az("identity", "show", "--resource-group", azureRG, "--name", managedIdentity,
-		"--query", "clientId", "--output", "tsv").CombinedOutput()
-	miClientID := cleanString(strings.Fields(string(miClientIDRaw))[0])
-
 	registryID, _ := az("acr", "show", "--resource-group", azureRG, "--name", containerRegistry, "--query",
 		"id", "--output", "tsv").CombinedOutput()
 
 	cmd = az("role", "assignment", "create", "--assignee-object-id", string(spID),
 		"--scope", string(registryID), "--role", "acrpull", "--assignee-principal-type", "ServicePrincipal")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	azureRGURI := "/subscriptions/" + subscriptionID + "/resourceGroups/" + azureRG
+	cmd = az("role", "assignment", "create", "--assignee-object-id", string(spID),
+		"--scope", azureRGURI, "--role", "Contributor", "--assignee-principal-type", "ServicePrincipal")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
@@ -117,7 +121,10 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 
 	ConnectToAKSCluster(t, aksClusterName)
 	masterURI := GetCurrentClusterMasterURI(t)
-	t.Run("virtual_Node_with_secrets", func(t *testing.T) {
+
+	/*t.Run("virtual_node_with_secrets", func(t *testing.T) {
+		releaseName := virtualNodeReleaseName + "01"
+
 		//get client secret
 		vaultName := "aci-virtual-node-test-kv"
 		secretName := "aci-virtualnode-sp-dev-credential"
@@ -133,7 +140,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		azureClientSecret := keyvault.Value
 
 		//create virtual node
-		cmd = helm("install", virtualNodeReleaseName, chartURL,
+		cmd = helm("install", releaseName, chartURL,
 			"--set", "provider=azure",
 			"--set", "rbac.install=true",
 			"--set", "enableAuthenticationTokenWebhook=false",
@@ -164,16 +171,15 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		kubectl("delete", "pods", "--all")
 		kubectl("delete", "node", nodeName)
 		helm("uninstall", virtualNodeReleaseName)
-	})
+	})*/
 
-	t.Run("virtual_node_with_managed_identity", func(t *testing.T) {
+	t.Run("virtual_node_with_no_secrets", func(t *testing.T) {
 		//create virtual node
 		cmd = helm("install", virtualNodeReleaseName, chartURL,
 			"--set", "provider=azure",
 			"--set", "rbac.install=true",
 			"--set", "enableAuthenticationTokenWebhook=false",
 			"--set", "providers.azure.targetAKS=true",
-			"--set", "providers.azure.managedIdentityID="+miClientID,
 			"--set", "providers.azure.masterUri="+masterURI,
 			"--set", "providers.azure.aciResourceGroup="+azureRG,
 			"--set", "providers.azure.aciRegion="+region,
@@ -200,8 +206,12 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		helm("uninstall", virtualNodeReleaseName)
 	})
 
-	t.Log("deleting")
 	cmd = kubectl("config", "use-context", string(previousCluster))
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	cmd = kubectl("config", "delete-context", aksClusterName)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
@@ -212,11 +222,6 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		t.Fatal(string(out))
 	}
 	cmd = az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
-	cmd = kubectl("config", "delete-context", aksClusterName)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
