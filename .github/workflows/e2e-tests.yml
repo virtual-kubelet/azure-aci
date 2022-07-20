@@ -1,6 +1,9 @@
 name: e2e-tests
 
 on:
+  pull_request_target:
+    branches: [master]
+    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
   push:
     branches: [master]
     paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
@@ -8,6 +11,10 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   detect-noop:
@@ -23,14 +30,28 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
+  export-registry:
+    runs-on: ubuntu-20.04
+    needs: detect-noop
+    if: needs.detect-noop.outputs.noop != 'true'
+    outputs:
+      registry: ${{ steps.export.outputs.registry }}
+    steps:
+      - id: export
+        run: |
+          # registry must be in lowercase
+          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
+
   e2e-tests:
+    needs: export-registry
+    environment: test
     env:
       CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
       SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
       TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
+      REGISTRY: ${{ needs.export-registry.outputs.registry }}
+      IMG_VERSION: "dev"
     runs-on: ubuntu-latest
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
     steps:
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -40,7 +61,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
+          submodules: true
           fetch-depth: 0
+
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image version
+        run: |
+          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV      
+
+      - name: Build image
+        run: |
+          OUTPUT_TYPE=type=registry make docker-build-image
+        env:
+          VERSION: ${{ env.IMG_VERSION }}
 
       - name: Install Azure CLI latest
         run: |
@@ -52,6 +91,15 @@ jobs:
           tenant-id: ${{ env.TENANT_ID }}
           subscription-id: ${{ env.SUBSCRIPTIONID }}
 
-      - name: Run e2e tests
+      - name: Run e2e test
         run: |
-          ./hack/e2e/aks.sh go test -v ./e2e
+          make e2e-test
+        env:
+          REGISTRY: ${{ env.REGISTRY}}
+      - name: Delete image
+        uses: bots-house/ghcr-delete-image-action@v1.0.0
+        with:
+          owner: virtual-kubelet/azure-aci
+          name: virtual-kubelet
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ env.IMG_VERSION }}

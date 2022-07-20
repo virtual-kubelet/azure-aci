@@ -7,6 +7,7 @@ GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT
 
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
+AKS_E2E := ./hack/e2e/aks.sh
 
 GO111MODULE := on
 export GO111MODULE
@@ -16,11 +17,12 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
-IMG_REPO ?= virtual-kubelet
-OUTPUT_TYPE ?= docker
+IMG_NAME ?= virtual-kubelet
+IMG_REPO ?= $(REGISTRY)/$(IMG_NAME)
+OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
-VERSION      := $(shell git describe --tags --always --dirty="-dev")
-IMG_TAG ?= $(VERSION)
+VERSION      ?= $(shell git describe --abbrev=0 --tags)
+IMG_TAG ?= $(subst v,,$(VERSION))
 
 
 ## --------------------------------------
@@ -36,13 +38,26 @@ safebuild:
 	@echo "Building image..."
 	docker build -t $(DOCKER_IMAGE):$(VERSION) .
 
-.PHONY: image
-image:
+
+BUILDX_BUILDER_NAME ?= img-builder
+QEMU_VERSION ?= 5.2.0-2
+
+.PHONY: docker-buildx-builder
+docker-buildx-builder:
+	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
+  		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+		docker buildx create --name $(BUILDX_BUILDER_NAME) --use; \
+		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
+	fi
+
+.PHONY: docker-build-image
+docker-build-image: docker-buildx-builder
 	docker buildx build \
+		--file Dockerfile \
+		--output=$(OUTPUT_TYPE) \
 		--platform="$(BUILDPLATFORM)" \
-		--tag $(IMG_REPO):$(IMG_TAG) \
-		--output=type=$(OUTPUT_TYPE) \
-		.
+		--pull \
+		--tag $(IMG_REPO):$(IMG_TAG) .
 
 .PHONY: build
 build: bin/virtual-kubelet
@@ -52,10 +67,18 @@ clean: files := bin/virtual-kubelet bin/virtual-kubelet.tgz
 clean:
 	@rm -f $(files) &>/dev/null || exit 0
 
+## --------------------------------------
+## Tests
+## --------------------------------------
+
 .PHONY: test
 test:
 	@echo running tests
 	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+
+.PHONY: e2e-test
+e2e-test:
+	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) $(AKS_E2E) go test -v ./e2e
 
 .PHONY: vet
 vet:
