@@ -41,6 +41,7 @@ const (
 	fakeNodeName      = "vk"
 	fakeRegion        = "eastus"
 	fakeUserIdentity  = "00000000-0000-0000-0000-000000000000"
+	fakeClusterURI	  = "https://fake.cluster.uri:000"
 )
 
 // Test make registry credential
@@ -837,6 +838,7 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock, reso
 	os.Setenv("AZURE_AUTH_LOCATION", file.Name())
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
+	os.Setenv("MASTER_URI", fakeClusterURI)
 
 	if resourceManager == nil {
 		resourceManager, err = manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
@@ -1397,5 +1399,109 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 				assert.NilError(t, tc.expectedError, err)
 			}
 		})
+	}
+}
+
+// Tests managed identity is assigned to ContainerGroup
+func TestCreatePodManagedIdentity(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Equal(1.0, cg.ContainerGroupProperties.Containers[0].Resources.Requests.CPU), "Request CPU is not expected")
+		assert.Check(t, is.Equal(1.5, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
+		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
+		assert.Check(t, cg.Identity != nil, "Container group identity should not be nil")
+		assert.Check(t, is.Equal(len(cg.Identity.UserAssignedIdentities), 1), "Container group identity should be set")
+		assert.Check(t, is.Equal(len(cg.ContainerGroupProperties.ImageRegistryCredentials), 0), "Image registry credentials should not be set for non acr registry")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
+	}
+}
+
+
+// Tests managed identity is assigned to ContainerGroup
+func TestCreatePodManagedIdentityWithServerName(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	serverName := "someregistry.azurecr.io"
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Equal(1.0, cg.ContainerGroupProperties.Containers[0].Resources.Requests.CPU), "Request CPU is not expected")
+		assert.Check(t, is.Equal(1.5, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
+		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
+		assert.Check(t, cg.Identity != nil, "Container group identity should not be nil")
+		assert.Check(t, is.Equal(len(cg.Identity.UserAssignedIdentities), 1), "Container group identity should be set")
+		assert.Check(t, is.Equal(len(cg.ContainerGroupProperties.ImageRegistryCredentials), 1), "Image registry credentials should be set")
+		assert.Check(t, is.Equal(cg.ContainerGroupProperties.ImageRegistryCredentials[0].Server, serverName), "Server name should be set correctly")
+		assert.Check(t, len(cg.ContainerGroupProperties.ImageRegistryCredentials[0].Identity) > 0, "Identity should be a non empty string")
+		assert.Check(t, len(cg.ContainerGroupProperties.ImageRegistryCredentials[0].Password) == 0, "Password should not be set")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+					Image: serverName + "/nginx",
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
 	}
 }
