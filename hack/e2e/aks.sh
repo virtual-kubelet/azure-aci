@@ -95,6 +95,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
+    --node-vm-size standard_d8_v3 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$aks_subnet_id" \
