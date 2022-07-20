@@ -13,7 +13,8 @@ if ! type go > /dev/null; then
   exit 1
 fi
 
-: "${RESOURCE_GROUP:=vk-aci-test-$(date +%s)}"
+: "${RANDOM_NUM:=$RANDOM}"
+: "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
 : "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
@@ -29,6 +30,9 @@ fi
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
 
+: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vncsidrivers$RANDOM_NUM}"
+: "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
+
 error() {
     echo "$@" >&2
     exit 1
@@ -42,10 +46,10 @@ fi
 TMPDIR=""
 
 cleanup() {
-    az group delete --name "$RESOURCE_GROUP" --yes --no-wait
-    if [ -n "$TMPDIR" ]; then
-        rm -rf "$TMPDIR"
-    fi
+  az group delete --name "$RESOURCE_GROUP" --yes --no-wait
+  if [ -n "$TMPDIR" ]; then
+      rm -rf "$TMPDIR"
+  fi
 }
 trap 'cleanup' EXIT
 
@@ -102,6 +106,7 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
+    --node-vm-size standard_d8_v3 \
     --generate-ssh-keys
 
 az role assignment create \
@@ -159,5 +164,15 @@ done
 kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
+
+## CSI Driver test
+az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
+export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -o tsv)
+
+az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string $AZURE_STORAGE_CONNECTION_STRING
+CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $CSI_DRIVER_STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv)
+
+export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
+export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
 
 $@

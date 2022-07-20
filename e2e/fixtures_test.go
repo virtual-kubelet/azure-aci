@@ -1,16 +1,12 @@
 package e2e
 
 import (
-	"embed"
 	"os"
 	"os/exec"
 	"regexp"
 	"testing"
 	"time"
 )
-
-//go:embed fixtures/*
-var fixtures embed.FS
 
 //delete invisible characters
 func cleanString(toClean string) string {
