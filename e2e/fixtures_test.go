@@ -48,7 +48,7 @@ func CreatePodFromKubectl(t *testing.T, podName string, podDir string) {
 	if !ok {
 		timeout = 300 * time.Second
 	}
-	cmd = kubectl("wait", "--for=condition=ready", "--timeout="+timeout.String(), "pod/"+podName, "--namespace=vk-test")
+	cmd = kubectl("wait", "--for=condition=ready", "--timeout="+timeout.String(), "pod/"+podName)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
@@ -59,7 +59,7 @@ func CreatePodFromKubectl(t *testing.T, podName string, podDir string) {
 //delete pod
 func DeletePodFromKubectl(t *testing.T, podName string) {
 	t.Log("clean up pod")
-	cmd := kubectl("delete", "pod/"+podName, "--namespace=vk-test")
+	cmd := kubectl("delete", "pod/"+podName)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}

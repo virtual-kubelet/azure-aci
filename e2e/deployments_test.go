@@ -65,7 +65,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	clusterInfo := strings.Fields(string(out))[0]
 	previousCluster := cleanString(clusterInfo)
 
-	testName := "ImagePull-KI20"
+	testName := "ImagePull-KI26"
 	aksClusterName := "aksClusterE2E-" + testName
 	managedIdentity := "e2eDeployTestMI-" + testName
 
@@ -122,9 +122,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	ConnectToAKSCluster(t, aksClusterName)
 	masterURI := GetCurrentClusterMasterURI(t)
 
-	/*t.Run("virtual_node_with_secrets", func(t *testing.T) {
-		releaseName := virtualNodeReleaseName + "01"
-
+	t.Run("virtual_node_with_secrets", func(t *testing.T) {
 		//get client secret
 		vaultName := "aci-virtual-node-test-kv"
 		secretName := "aci-virtualnode-sp-dev-credential"
@@ -140,7 +138,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		azureClientSecret := keyvault.Value
 
 		//create virtual node
-		cmd = helm("install", releaseName, chartURL,
+		cmd = helm("install", virtualNodeReleaseName, chartURL,
 			"--set", "provider=azure",
 			"--set", "rbac.install=true",
 			"--set", "enableAuthenticationTokenWebhook=false",
@@ -171,11 +169,12 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		kubectl("delete", "pods", "--all")
 		kubectl("delete", "node", nodeName)
 		helm("uninstall", virtualNodeReleaseName)
-	})*/
+	})
 
 	t.Run("virtual_node_with_no_secrets", func(t *testing.T) {
+		releaseName := virtualNodeReleaseName + "02"
 		//create virtual node
-		cmd = helm("install", virtualNodeReleaseName, chartURL,
+		cmd = helm("install", releaseName, chartURL,
 			"--set", "provider=azure",
 			"--set", "rbac.install=true",
 			"--set", "enableAuthenticationTokenWebhook=false",
@@ -203,7 +202,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		kubectl("delete", "deployments", "--all")
 		kubectl("delete", "pods", "--all")
 		kubectl("delete", "node", nodeName)
-		helm("uninstall", virtualNodeReleaseName)
+		helm("uninstall", releaseName)
 	})
 
 	cmd = kubectl("config", "use-context", string(previousCluster))
