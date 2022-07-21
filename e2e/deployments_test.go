@@ -20,9 +20,6 @@ const (
 
 	containerRegistry = "acivirtualnodetestregistry"
 
-	nodeName               = "virtual-kubelet"
-	virtualNodeReleaseName = "virtual-kubelet-e2etest-aks"
-
 	vkRelease = "virtual-kubelet-latest"
 	chartURL  = "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
 )
@@ -65,7 +62,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	clusterInfo := strings.Fields(string(out))[0]
 	previousCluster := cleanString(clusterInfo)
 
-	testName := "ImagePull-KI26"
+	testName := "ImagePull-KI33"
 	aksClusterName := "aksClusterE2E-" + testName
 	managedIdentity := "e2eDeployTestMI-" + testName
 
@@ -122,13 +119,18 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	ConnectToAKSCluster(t, aksClusterName)
 	masterURI := GetCurrentClusterMasterURI(t)
 
-	t.Run("virtual_node_with_secrets", func(t *testing.T) {
+	t.Run("virtual node with secrets", func(t *testing.T) {
+		nodeName := "virtual-kubelet-secrets"
+		virtualNodeReleaseName := "virtualkubelet-e2etest-aks-secrets"
+
+		namespace := "secrets"
+
 		//get client secret
 		vaultName := "aci-virtual-node-test-kv"
 		secretName := "aci-virtualnode-sp-dev-credential"
-		cmd = az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
+		cmd := az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
 
-		out, err = cmd.CombinedOutput()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatal(string(out))
 		}
@@ -136,6 +138,13 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		var keyvault KeyVault
 		json.Unmarshal(out, &keyvault)
 		azureClientSecret := keyvault.Value
+
+		//create namespace
+		cmd = kubectl("create", "namespace", namespace)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
 
 		//create virtual node
 		cmd = helm("install", virtualNodeReleaseName, chartURL,
@@ -154,6 +163,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 			"--set", "image.repository="+imageRepository,
 			"--set", "image.name="+imageName,
 			"--set", "image.tag="+imageTag,
+			"--namespace", namespace,
 		)
 		out, err = cmd.CombinedOutput()
 		if err != nil {
@@ -161,8 +171,8 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		}
 
 		//test pod lifecycle
-		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml")
-		DeletePodFromKubectl(t, "mi-pull-image")
+		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml", namespace)
+		DeletePodFromKubectl(t, "mi-pull-image", namespace)
 
 		//delete virtual node
 		kubectl("delete", "deployments", "--all")
@@ -171,10 +181,21 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		helm("uninstall", virtualNodeReleaseName)
 	})
 
-	t.Run("virtual_node_with_no_secrets", func(t *testing.T) {
-		releaseName := virtualNodeReleaseName + "02"
+	t.Run("virtual node with no secrets", func(t *testing.T) {
+		nodeName := "virtual-kubelet-nosecrets"
+		virtualNodeReleaseName := "virtualkubelet-e2etest-aks-nosecrets"
+
+		namespace := "nosecrets"
+
+		//create namespace
+		cmd = kubectl("create", "namespace", namespace)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
+
 		//create virtual node
-		cmd = helm("install", releaseName, chartURL,
+		cmd = helm("install", virtualNodeReleaseName, chartURL,
 			"--set", "provider=azure",
 			"--set", "rbac.install=true",
 			"--set", "enableAuthenticationTokenWebhook=false",
@@ -188,6 +209,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 			"--set", "image.repository="+imageRepository,
 			"--set", "image.name="+imageName,
 			"--set", "image.tag="+imageTag,
+			"--namespace", namespace,
 		)
 		out, err = cmd.CombinedOutput()
 		if err != nil {
@@ -195,14 +217,15 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		}
 
 		//test pod lifecycle
-		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml")
-		DeletePodFromKubectl(t, "mi-pull-image")
+		kubectl("create", "namespace", namespace)
+		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml", namespace)
+		DeletePodFromKubectl(t, "mi-pull-image", namespace)
 
 		//delete virtual node
 		kubectl("delete", "deployments", "--all")
 		kubectl("delete", "pods", "--all")
 		kubectl("delete", "node", nodeName)
-		helm("uninstall", releaseName)
+		helm("uninstall", virtualNodeReleaseName)
 	})
 
 	cmd = kubectl("config", "use-context", string(previousCluster))
