@@ -39,7 +39,6 @@ func CreatePodFromKubectl(t *testing.T, podName string, podDir string, namespace
 	if err != nil {
 		t.Fatal(string(out))
 	}
-	t.Log(string(out))
 
 	deadline, ok := t.Deadline()
 	timeout := time.Until(deadline)
@@ -50,12 +49,10 @@ func CreatePodFromKubectl(t *testing.T, podName string, podDir string, namespace
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
-	t.Log("success create pod")
 }
 
 //delete pod
 func DeletePodFromKubectl(t *testing.T, podName string, namespace string) {
-	t.Log("clean up pod")
 	cmd := kubectl("delete", "pod/"+podName, "--namespace="+namespace)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
