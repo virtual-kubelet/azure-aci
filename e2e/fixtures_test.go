@@ -10,7 +10,7 @@ import (
 
 //delete invisible characters
 func cleanString(toClean string) string {
-	re := regexp.MustCompile("\\x1B\\[[0-9;]*[a-zA-Z]")
+	re := regexp.MustCompile(`\x1B\[[0-9;]*[a-zA-Z]`)
 	return re.ReplaceAllString(toClean, "")
 }
 
