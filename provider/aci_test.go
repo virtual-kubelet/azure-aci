@@ -1287,7 +1287,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			description:   "Secret is nil",
 			secretVolume:  nil,
 			volume:        fakePodVolume,
-			expectedError: fmt.Errorf("getting secret for AzureFile CSI driver %s returned an empty secret", azureFileVolumeName),
+			expectedError: fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", fakeSecret.Name, fakePodVolume.Name),
 		},
 		{
 			description:   "Volume has a secret with a valid value",
@@ -1321,7 +1321,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 						},
 					},
 				}},
-			expectedError: fmt.Errorf("secret share name for AzureFile CSI driver %s cannot be empty or nil", azureFileVolumeName),
+			expectedError: fmt.Errorf("share name for AzureFile CSI driver %s cannot be empty or nil", fakePodVolume.Name),
 		},
 		{
 			description:  "Volume is Disk Driver",

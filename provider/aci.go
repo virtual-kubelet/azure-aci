@@ -1739,8 +1739,8 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 
 	secret, err := p.resourceManager.GetSecret(secretName, namespace)
 
-	if err != nil {
-		return nil, errors.Wrap(err, fmt.Sprintf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name))
+	if err != nil || secret == nil {
+		return nil, fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name)
 	}
 
 	return &aci.Volume{
