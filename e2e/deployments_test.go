@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -28,6 +29,34 @@ type KeyVault struct {
 	Value string `json:"value"`
 }
 
+//create the pod 'podName' with the pod specs on 'podDir'
+func CreatePodFromKubectl(t *testing.T, podName string, podDir string, namespace string) {
+	cmd := kubectl("apply", "-f", podDir, "--namespace="+namespace)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+
+	deadline, ok := t.Deadline()
+	timeout := time.Until(deadline)
+	if !ok {
+		timeout = 300 * time.Second
+	}
+	cmd = kubectl("wait", "--for=condition=ready", "--timeout="+timeout.String(), "pod/"+podName, "--namespace="+namespace)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+}
+
+//delete pod
+func DeletePodFromKubectl(t *testing.T, podName string, namespace string) {
+	cmd := kubectl("delete", "pod/"+podName, "--namespace="+namespace)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatal(string(out))
+	}
+}
+
+//connect to AKS cluster with: az aks get-credentials
 func ConnectToAKSCluster(t *testing.T, clusterName string) {
 	cmd := az("aks", "get-credentials",
 		"--resource-group", azureRG,
@@ -39,6 +68,7 @@ func ConnectToAKSCluster(t *testing.T, clusterName string) {
 	}
 }
 
+//get the MasterURI from the current context in kubectl
 func GetCurrentClusterMasterURI(t *testing.T) string {
 	cmd := kubectl("cluster-info")
 
@@ -53,6 +83,8 @@ func GetCurrentClusterMasterURI(t *testing.T) string {
 	return masterURI
 }
 
+//Test private image pull from virtual node in AKS cluster
+//the cluster have Kubelet identity tag
 func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	cmd := kubectl("config", "current-context")
 	out, err := cmd.CombinedOutput()
@@ -62,7 +94,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	clusterInfo := strings.Fields(string(out))[0]
 	previousCluster := cleanString(clusterInfo)
 
-	testName := "ImagePull-KI"
+	testName := "ImagePull-KI60"
 	aksClusterName := "aksClusterE2E-" + testName
 	managedIdentity := "e2eDeployTestMI-" + testName
 
@@ -273,6 +305,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	})
 }
 
+//Test deployment of AKS cluster with --attach-acr, error expected
 func TestAKSDeployment_attachACR(t *testing.T) {
 	//get client secret
 	vaultName := "aci-virtual-node-test-kv"
