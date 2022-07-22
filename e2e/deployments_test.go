@@ -20,9 +20,6 @@ const (
 
 	containerRegistry = "acivirtualnodetestregistry"
 
-	nodeName               = "virtual-kubelet"
-	virtualNodeReleaseName = "virtual-kubelet-e2etest-aks"
-
 	vkRelease = "virtual-kubelet-latest"
 	chartURL  = "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
 )
@@ -65,7 +62,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	clusterInfo := strings.Fields(string(out))[0]
 	previousCluster := cleanString(clusterInfo)
 
-	testName := "ImagePull-KI26"
+	testName := "ImagePull-KI"
 	aksClusterName := "aksClusterE2E-" + testName
 	managedIdentity := "e2eDeployTestMI-" + testName
 
@@ -122,13 +119,22 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	ConnectToAKSCluster(t, aksClusterName)
 	masterURI := GetCurrentClusterMasterURI(t)
 
-	t.Run("virtual_node_with_secrets", func(t *testing.T) {
+	tests_finished := 0
+
+	t.Run("virtual node with secrets", func(t *testing.T) {
+		t.Parallel()
+
+		nodeName := "virtual-kubelet-secrets"
+		virtualNodeReleaseName := "virtualkubelet-e2etest-aks-secrets"
+
+		namespace := "secrets"
+
 		//get client secret
 		vaultName := "aci-virtual-node-test-kv"
 		secretName := "aci-virtualnode-sp-dev-credential"
-		cmd = az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
+		cmd := az("keyvault", "secret", "show", "--name", secretName, "--vault-name", vaultName, "-o", "json")
 
-		out, err = cmd.CombinedOutput()
+		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatal(string(out))
 		}
@@ -136,6 +142,13 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		var keyvault KeyVault
 		json.Unmarshal(out, &keyvault)
 		azureClientSecret := keyvault.Value
+
+		//create namespace
+		cmd = kubectl("create", "namespace", namespace)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
 
 		//create virtual node
 		cmd = helm("install", virtualNodeReleaseName, chartURL,
@@ -154,6 +167,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 			"--set", "image.repository="+imageRepository,
 			"--set", "image.name="+imageName,
 			"--set", "image.tag="+imageTag,
+			"--namespace", namespace,
 		)
 		out, err = cmd.CombinedOutput()
 		if err != nil {
@@ -161,20 +175,35 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		}
 
 		//test pod lifecycle
-		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml")
-		DeletePodFromKubectl(t, "mi-pull-image")
+		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml", namespace)
+		DeletePodFromKubectl(t, "mi-pull-image", namespace)
 
 		//delete virtual node
-		kubectl("delete", "deployments", "--all")
-		kubectl("delete", "pods", "--all")
-		kubectl("delete", "node", nodeName)
+		kubectl("delete", "deployments", "--all", "--namespace="+namespace)
+		kubectl("delete", "pods", "--all", "--namespace="+namespace)
+		kubectl("delete", "node", nodeName, "--namespace="+namespace)
 		helm("uninstall", virtualNodeReleaseName)
+
+		tests_finished += 1
 	})
 
-	t.Run("virtual_node_with_no_secrets", func(t *testing.T) {
-		releaseName := virtualNodeReleaseName + "02"
+	t.Run("virtual node with no secrets", func(t *testing.T) {
+		t.Parallel()
+
+		nodeName := "virtual-kubelet-nosecrets"
+		virtualNodeReleaseName := "virtualkubelet-e2etest-aks-nosecrets"
+
+		namespace := "nosecrets"
+
+		//create namespace
+		cmd := kubectl("create", "namespace", namespace)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
+
 		//create virtual node
-		cmd = helm("install", releaseName, chartURL,
+		cmd = helm("install", virtualNodeReleaseName, chartURL,
 			"--set", "provider=azure",
 			"--set", "rbac.install=true",
 			"--set", "enableAuthenticationTokenWebhook=false",
@@ -188,6 +217,7 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 			"--set", "image.repository="+imageRepository,
 			"--set", "image.name="+imageName,
 			"--set", "image.tag="+imageTag,
+			"--namespace", namespace,
 		)
 		out, err = cmd.CombinedOutput()
 		if err != nil {
@@ -195,36 +225,52 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 		}
 
 		//test pod lifecycle
-		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml")
-		DeletePodFromKubectl(t, "mi-pull-image")
+		kubectl("create", "namespace", namespace)
+		CreatePodFromKubectl(t, "mi-pull-image", "fixtures/mi-pull-image.yaml", namespace)
+		DeletePodFromKubectl(t, "mi-pull-image", namespace)
 
 		//delete virtual node
-		kubectl("delete", "deployments", "--all")
-		kubectl("delete", "pods", "--all")
-		kubectl("delete", "node", nodeName)
-		helm("uninstall", releaseName)
+		kubectl("delete", "deployments", "--all", "--namespace="+namespace)
+		kubectl("delete", "pods", "--all", "--namespace="+namespace)
+		kubectl("delete", "node", nodeName, "--namespace="+namespace)
+		helm("uninstall", virtualNodeReleaseName)
+
+		tests_finished += 1
 	})
 
-	cmd = kubectl("config", "use-context", string(previousCluster))
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
-	cmd = kubectl("config", "delete-context", aksClusterName)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
-	cmd = az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes", "--no-wait")
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
-	cmd = az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
+	t.Run("delete cluster", func(t *testing.T) {
+		t.Parallel()
+
+		for tests_finished < 2 {
+			//wait for
+			//virtual node with secrets
+			//and
+			//virtual node with no secrets
+			//finish
+		}
+
+		// delete cluster when tests are finished
+		cmd := kubectl("config", "use-context", string(previousCluster))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
+		cmd = kubectl("config", "delete-context", aksClusterName)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
+		cmd = az("aks", "delete", "--name", aksClusterName, "--resource-group", azureRG, "--yes", "--no-wait")
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
+		cmd = az("identity", "delete", "--resource-group", azureRG, "--name", managedIdentity)
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatal(string(out))
+		}
+	})
 }
 
 func TestAKSDeployment_attachACR(t *testing.T) {
