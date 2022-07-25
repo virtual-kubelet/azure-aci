@@ -4,8 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"testing"
-	"time"
 )
 
 //delete invisible characters
@@ -14,47 +12,23 @@ func cleanString(toClean string) string {
 	return re.ReplaceAllString(toClean, "")
 }
 
+//execute kubectl command in terminal
 func kubectl(args ...string) *exec.Cmd {
 	cmd := exec.Command("kubectl", args...)
 	cmd.Env = os.Environ()
 	return cmd
 }
 
+//execute helm command in terminal
 func helm(args ...string) *exec.Cmd {
 	cmd := exec.Command("helm", args...)
 	cmd.Env = os.Environ()
 	return cmd
 }
 
+//execute az command in terminal
 func az(args ...string) *exec.Cmd {
 	cmd := exec.Command("az", args...)
 	cmd.Env = os.Environ()
 	return cmd
-}
-
-//create the pod 'podName' with the pod specs on 'podDir'
-func CreatePodFromKubectl(t *testing.T, podName string, podDir string, namespace string) {
-	cmd := kubectl("apply", "-f", podDir, "--namespace="+namespace)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatal(string(out))
-	}
-
-	deadline, ok := t.Deadline()
-	timeout := time.Until(deadline)
-	if !ok {
-		timeout = 300 * time.Second
-	}
-	cmd = kubectl("wait", "--for=condition=ready", "--timeout="+timeout.String(), "pod/"+podName, "--namespace="+namespace)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
-}
-
-//delete pod
-func DeletePodFromKubectl(t *testing.T, podName string, namespace string) {
-	cmd := kubectl("delete", "pod/"+podName, "--namespace="+namespace)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatal(string(out))
-	}
 }
