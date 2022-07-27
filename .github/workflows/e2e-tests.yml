@@ -97,7 +97,7 @@ jobs:
         env:
           REGISTRY: ${{ env.REGISTRY}}
       - name: Delete image
-        uses: bots-house/ghcr-delete-image-action@v1.0.0
+        uses: bots-house/ghcr-delete-image-action@v1.0.1
         with:
           owner: virtual-kubelet/azure-aci
           name: virtual-kubelet
