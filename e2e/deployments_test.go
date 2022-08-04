@@ -2,6 +2,8 @@ package e2e
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -19,11 +21,12 @@ const (
 
 	region = "westus"
 
-	containerRegistry = "acivirtualnodetestregistry"
+	containerRegistry     = "acivirtualnodetestregistry"
+	alpinePrivateImageURL = "acivirtualnodetestregistry.azurecr.io/alpine"
 
 	vkRelease = "virtual-kubelet-latest"
 	chartURL  = "https://github.com/virtual-kubelet/azure-aci/raw/master/charts/" + vkRelease + ".tgz"
-)
+) //change this with variable := os.Getenv("NAME_ON_ENV") <- we need to use variables in aks.sh
 
 type KeyVault struct {
 	Value string `json:"value"`
@@ -284,13 +287,25 @@ func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 			//finish to construct nodes
 		}
 
-		cmd := kubectl("apply", "-f", "fixtures/mi-pull-image.yaml")
-		out, err := cmd.CombinedOutput()
+		out, err := ioutil.ReadFile("fixtures/mi-pull-image.yaml")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		podspecs := string(out)
+		podspecs = strings.ReplaceAll(podspecs, "$CONTAINER_IMAGE", alpinePrivateImageURL)
+
+		ioutil.WriteFile("temporary_pod_specs.yaml", []byte(podspecs), 0777)
+
+		cmd := kubectl("apply", "-f", "temporary_pod_specs.yaml")
+		out, err = cmd.CombinedOutput()
 		if err != nil {
 			t.Fatal(string(out))
 		}
-		pods_created = true
 
+		os.Remove("temporary_pod_specs.yaml")
+
+		pods_created = true
 		for tests_finished < 2 {
 			//wait for subtests
 			//virtual node with secrets
