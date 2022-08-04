@@ -6,7 +6,7 @@ metadata:
 spec:
   nodeName: secrets-virtual-kubelet
   containers:
-  - image: acivirtualnodetestregistry.azurecr.io/alpine
+  - image: $CONTAINER_IMAGE
     imagePullPolicy: Always
     name: e2etest-acr-test-mi-container
     command: [ "/bin/sh" ]
@@ -24,7 +24,7 @@ metadata:
 spec:
   nodeName: nosecrets-virtual-kubelet
   containers:
-  - image: acivirtualnodetestregistry.azurecr.io/alpine
+  - image: $CONTAINER_IMAGE
     imagePullPolicy: Always
     name: e2etest-acr-test-mi-container
     command: [ "/bin/sh" ]
