@@ -795,8 +795,10 @@ func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *aci.DNSConfig {
 	nameServers := make([]string, 0)
 	searchDomains := []string{}
 
+	AzureDNSIP := "168.63.129.16"
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
 		nameServers = append(nameServers, p.kubeDNSIP)
+		nameServers = append(nameServers, AzureDNSIP)
 		searchDomains = p.generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod)
 	}
 
