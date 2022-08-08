@@ -73,6 +73,12 @@ const (
 )
 
 const (
+	accCCEPolicyAnnotation = "virtual-kubelet.io/acc/cce-policy"
+	accIsolationTypeAnnotation = "virtual-kubelet.io/acc/isolation-type"
+	accIsolationTypeString = "SevSnp"
+)
+
+const (
 	statusReasonPodDeleted            = "NotFound"
 	statusMessagePodDeleted           = "The pod may have been deleted from the provider"
 	containerExitCodePodDeleted int32 = 0
@@ -712,6 +718,12 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.ContainerGroupProperties.ImageRegistryCredentials = creds
 	containerGroup.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
 
+	accProperties, err := p.getConfidentialComputeProperties(pod)
+	if err != nil {
+		return err
+	}
+
+	containerGroup.ContainerGroupProperties.ConfidentialComputeProperties = accProperties
 	filterServiceAccountSecretVolume(p.operatingSystem, &containerGroup)
 
 	// create ipaddress if containerPort is used
@@ -910,6 +922,25 @@ func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *aci.ContainerGroupDiagnostics
 		return &d
 	}
 	return p.diagnostics
+}
+
+func (p *ACIProvider) getConfidentialComputeProperties(pod *v1.Pod) (*aci.ConfidentialComputeProperties, error) {
+	if pod.Annotations != nil {
+		ccePolicy, ccePolicyExists := pod.Annotations[accCCEPolicyAnnotation]
+		isolationType, isolationTypeExists := pod.Annotations[accIsolationTypeAnnotation]
+		if ccePolicyExists && isolationTypeExists {
+			if strings.EqualFold(strings.ToLower(isolationType), strings.ToLower(accIsolationTypeString)) {
+				return &aci.ConfidentialComputeProperties{
+					CCEPolicy: ccePolicy,
+					IsolationType: accIsolationTypeString,
+				}, nil
+			}
+			return nil, fmt.Errorf("ConfidentialComputeProperties not set : Isolation Type \"%s\" not recognized", isolationType)
+		}
+		return nil, fmt.Errorf("ConfidentialComputeProperties not set: Both isolationType and ccePolicy should be specified for confidential containers")
+	}
+
+	return nil, nil
 }
 
 func containerGroupName(podNS, podName string) string {

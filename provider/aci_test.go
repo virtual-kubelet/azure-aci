@@ -1505,3 +1505,58 @@ func TestCreatePodManagedIdentityWithServerName(t *testing.T) {
 		t.Fatal("Failed to create pod", err)
 	}
 }
+
+
+// Tests confidential confidential compute properties are set 
+func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
+	_, aciServerMocker, provider, err := prepareMocks()
+
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks", err)
+	}
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	policyString := "eyJhbGxvd19hbGwiOiB0cnVlLCAiY29udGFpbmVycyI6IHsibGVuZ3RoIjogMCwgImVsZW1lbnRzIjogbnVsbH19" 
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Equal(1.0, cg.ContainerGroupProperties.Containers[0].Resources.Requests.CPU), "Request CPU is not expected")
+		assert.Check(t, is.Equal(1.5, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
+		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
+		assert.Check(t, cg.ContainerGroupProperties.ConfidentialComputeProperties != nil, "Confidential Compute Properties must be set")
+		assert.Check(t, is.Equal(cg.ContainerGroupProperties.ConfidentialComputeProperties.IsolationType, accIsolationTypeString), "Isolation Type should be SevSnp")
+		assert.Check(t, is.Equal(cg.ContainerGroupProperties.ConfidentialComputeProperties.CCEPolicy, policyString), "cce policy should be set correctly")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+			Annotations: map[string]string{
+				accCCEPolicyAnnotation: policyString,
+				accIsolationTypeAnnotation: accIsolationTypeString,
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
+	}
+}

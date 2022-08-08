@@ -130,6 +130,7 @@ type ContainerGroupProperties struct {
 	SubnetIds           	 []*SubnetIdDefinition            `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
+	ConfidentialComputeProperties *ConfidentialComputeProperties  `json:"confidentialComputeProperties,omitempty"`
 }
 
 // container group identity object
@@ -528,6 +529,12 @@ type DNSConfig struct {
 	NameServers   []string `json:"nameServers"`
 	SearchDomains string   `json:"searchDomains,omitempty"`
 	Options       string   `json:"options,omitempty"`
+}
+
+//ConfidentialComputeProperrties sets the isolation type and cce policy for the confidential containergroup
+type ConfidentialComputeProperties struct {
+	IsolationType string `json:"isolationType,omitempty"`
+	CCEPolicy string `json:"ccePolicy,omitempty"`
 }
 
 // LogAnalyticsLogType is an enum type for defining supported log analytics log types
