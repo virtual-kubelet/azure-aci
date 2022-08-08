@@ -70,20 +70,20 @@ type AzureFileVolume struct {
 // ttps://management.azure.com/subscriptions/{subscription}/resourceGroups/{resouorce-groups}/providers/Microsoft.ContainerService/managedClusters/{clusterid}?api-version=2022-04-01
 type AKSClusterListResult struct {
 	api.ResponseMetadata `json:"-"`
-	Value                []AKSCluster			  `json:"value,omitempty"`
-	NextLink             string					  `json:"nextLink,omitempty"`
+	Value                []AKSCluster `json:"value,omitempty"`
+	NextLink             string       `json:"nextLink,omitempty"`
 }
 
 // AKS cluster object along with some properties
 type AKSCluster struct {
-	Id string `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
+	Id         string                        `json:"id,omitempty"`
+	Name       string                        `json:"name,omitempty"`
 	Properties AKSClusterPropertiesTruncated `json:"properties,omitempty"`
 }
 
 // truncated properties only include identity profile (kubelet identity)
 type AKSClusterPropertiesTruncated struct {
-	Fqdn string `json:"fqdn,omitempty"`
+	Fqdn            string             `json:"fqdn,omitempty"`
 	IdentityProfile AKSIdentityProfile `json:"identityProfile,omitempty"`
 }
 
@@ -95,9 +95,10 @@ type AKSIdentityProfile struct {
 // Azure managed identity definition
 type AzIdentity struct {
 	ResourceId string
-	ClientId string
-	ObjectId string
+	ClientId   string
+	ObjectId   string
 }
+
 // Container is a container instance.
 type Container struct {
 	Name                string `json:"name,omitempty"`
@@ -113,7 +114,7 @@ type ContainerGroup struct {
 	Location                 string            `json:"location,omitempty"`
 	Tags                     map[string]string `json:"tags,omitempty"`
 	ContainerGroupProperties `json:"properties,omitempty"`
-	Identity *ACIContainerGroupIdentity `json:"identity,omitempty"`
+	Identity                 *ACIContainerGroupIdentity `json:"identity,omitempty"`
 }
 
 // ContainerGroupProperties is
@@ -127,16 +128,16 @@ type ContainerGroupProperties struct {
 	Volumes                  []Volume                             `json:"volumes,omitempty"`
 	InstanceView             ContainerGroupPropertiesInstanceView `json:"instanceView,omitempty"`
 	Diagnostics              *ContainerGroupDiagnostics           `json:"diagnostics,omitempty"`
-	SubnetIds           	 []*SubnetIdDefinition            `json:"subnetIds,omitempty"`
+	SubnetIds                []*SubnetIdDefinition                `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
 }
 
 // container group identity object
 type ACIContainerGroupIdentity struct {
-	PrincipalId string `json:"principalid,omitempty"`
-	TenantId string `json:"tenantid,omitempty"`
-	Type string `json:"type,omitempty"`
+	PrincipalId            string                       `json:"principalid,omitempty"`
+	TenantId               string                       `json:"tenantid,omitempty"`
+	Type                   string                       `json:"type,omitempty"`
 	UserAssignedIdentities map[string]map[string]string `json:"userassignedidentities,omitempty"`
 }
 
@@ -146,7 +147,7 @@ type ContainerGroupPropertiesInstanceView struct {
 	State  string  `json:"state,omitempty"`
 }
 
-// SubnetIdDefinition is the subnet ID, the format should be 
+// SubnetIdDefinition is the subnet ID, the format should be
 // /subscriptions/{subscriptionID}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/{VNET}/subnets/{Subnet}
 type SubnetIdDefinition struct {
 	ID string `json:"id,omitempty"`
@@ -221,11 +222,11 @@ type GitRepoVolume struct {
 
 // ImageRegistryCredential is image registry credential.
 type ImageRegistryCredential struct {
-	Server   string `json:"server,omitempty"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	Server      string `json:"server,omitempty"`
+	Username    string `json:"username,omitempty"`
+	Password    string `json:"password,omitempty"`
 	IdentityURL string `json:"identityurl,omitempty"`
-	Identity string `json:"identity,omitempty"`
+	Identity    string `json:"identity,omitempty"`
 }
 
 // IPAddress is IP address for the container group.
@@ -285,7 +286,7 @@ type GPUSKU string
 
 const (
 	// K80 specifies the K80 GPU SKU
-	K80  GPUSKU = "K80"
+	K80 GPUSKU = "K80"
 	// P100 specifies the P100 GPU SKU
 	P100 GPUSKU = "P100"
 	// V100 specifies the V100 GPU SKU
@@ -503,7 +504,7 @@ type ExtensionType string
 
 // Supported extension types
 const (
-	ExtensionTypeKubeProxy ExtensionType = "kube-proxy"
+	ExtensionTypeKubeProxy       ExtensionType = "kube-proxy"
 	ExtensionTypeRealtimeMetrics ExtensionType = "realtime-metrics"
 )
 
