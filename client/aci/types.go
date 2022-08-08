@@ -138,7 +138,16 @@ type ACIContainerGroupIdentity struct {
 	TenantId string `json:"tenantid,omitempty"`
 	Type string `json:"type,omitempty"`
 	UserAssignedIdentities map[string]map[string]string `json:"userassignedidentities,omitempty"`
+	DelegatedIdentities map[string]map[string]string `json:"delegatedIdentities,omitempty"`
+	//DelegatedIdentities []*DelegatedIdentitySpec `json:"delegatedIdentities,omitempty"`
 }
+
+// delegated identity specification
+//type DelegatedIDentitySpec struct {
+//	SourceResourceInternalId string `json:"sourceResourceInternalId,omitempty"`
+//	ResourceId string `json:"resourceId,omitempty"`
+//	TenantId string ``
+//}
 
 // ContainerGroupPropertiesInstanceView is the instance view of the container group. Only valid in response.
 type ContainerGroupPropertiesInstanceView struct {

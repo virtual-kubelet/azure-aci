@@ -73,6 +73,10 @@ const (
 )
 
 const (
+	delegatedIdentitiesAnnotation = "virtual-kubelet.io/delegated-identities"
+)
+
+const (
 	statusReasonPodDeleted            = "NotFound"
 	statusMessagePodDeleted           = "The pod may have been deleted from the provider"
 	containerExitCodePodDeleted int32 = 0
@@ -697,9 +701,15 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if len(creds) == 0 {
 		// get Managed Identity based creds
 		creds = p.getImagePullManagedIdentitySecrets(pod, &cluster.Properties.IdentityProfile.KubeletIdentity, &containerGroup)
-		//set containerGroupIdentity
-		p.setContainerGroupIdentity(ctx, &cluster.Properties.IdentityProfile.KubeletIdentity, "UserAssigned", &containerGroup)
 	}
+
+	//get array of delegated identities from annotations
+	delegatedIdentityString := pod.Annotations[delegatedIdentitiesAnnotation]
+	re := regexp.MustCompile(`,`)
+	delegatedIdentities := re.Split(delegatedIdentityString, -1)
+
+	//set containerGroupIdentity
+	p.setContainerGroupIdentity(ctx, &cluster.Properties.IdentityProfile.KubeletIdentity, delegatedIdentities, "SystemAssigned,UserAssigned,DelegatedResourceIdentity", &containerGroup)
 
 	// get volumes
 	volumes, err := p.getVolumes(pod)
@@ -1406,15 +1416,22 @@ func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *
 }
 
 // sets Identity as User Assigned ContainerGroup Identity
-func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, identityType string, containerGroup *aci.ContainerGroup) {
+func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, delegatedIdentities []string, identityType string, containerGroup *aci.ContainerGroup) {
 	if identity == nil {
 		return
 	}
 	identityList := map[string]map[string]string{}
 	identityList[identity.ResourceId] = map[string]string{}
+	delegatedIdentityList := map[string]map[string]string{}
+
+	for _, delegatedId := range delegatedIdentities {
+		delegatedIdentityList[delegatedId] = map[string]string{}
+	}
+
 	cgIdentity := aci.ACIContainerGroupIdentity{
 		Type: identityType,
 		UserAssignedIdentities: identityList,
+		DelegatedIdentities: delegatedIdentityList,
 	}
 	containerGroup.Identity = &cgIdentity
 }
