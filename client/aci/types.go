@@ -138,7 +138,7 @@ type ACIContainerGroupIdentity struct {
 	TenantId string `json:"tenantid,omitempty"`
 	Type string `json:"type,omitempty"`
 	UserAssignedIdentities map[string]map[string]string `json:"userassignedidentities,omitempty"`
-	DelegatedIdentities map[string]map[string]string `json:"delegatedIdentities,omitempty"`
+	DelegatedResources map[string]map[string]string `json:"delegatedResources,omitempty"`
 	//DelegatedIdentities []*DelegatedIdentitySpec `json:"delegatedIdentities,omitempty"`
 }
 

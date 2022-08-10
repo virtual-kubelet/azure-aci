@@ -1529,8 +1529,8 @@ func TestCreatePodWithDelegatedIdentity(t *testing.T) {
 		assert.Check(t, is.Equal(1.5, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
 		assert.Check(t, cg.Identity != nil, "Container group identity should not be nil")
-		assert.Check(t, cg.Identity.DelegatedIdentities != nil, "delegated identities should be specified in request")
-		assert.Check(t, is.Equal(len(cg.Identity.DelegatedIdentities), 2), "two delegated identities should be set for this test")
+		assert.Check(t, cg.Identity.DelegatedResources!= nil, "delegated identities should be specified in request")
+		assert.Check(t, is.Equal(len(cg.Identity.DelegatedResources), 2), "two delegated identities should be set for this test")
 
 		return http.StatusOK, cg
 	}

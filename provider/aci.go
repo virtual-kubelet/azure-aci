@@ -1431,7 +1431,7 @@ func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *a
 	cgIdentity := aci.ACIContainerGroupIdentity{
 		Type: identityType,
 		UserAssignedIdentities: identityList,
-		DelegatedIdentities: delegatedIdentityList,
+		DelegatedResources: delegatedIdentityList,
 	}
 	containerGroup.Identity = &cgIdentity
 }
