@@ -1535,12 +1535,28 @@ func TestCreatePodWithDelegatedIdentity(t *testing.T) {
 		return http.StatusOK, cg
 	}
 
+	delegatedResourceJson :=
+	`{ "some/delegated/id/uri" : {
+		"resourceId": "testResourceId",
+		"tenantId": "testTenantId",
+		"referralResource": "testReferralResource",
+		"location": "testLocation"
+		},
+		"some/delegated/id/uri2": {
+		"resourceId": "testResourceId2",
+		"tenantId": "testTenantId2",
+		"referralResource": "testReferralResource2",
+		"location": "testLocation2"
+		}
+	}`
+	base64EncodedJson := base64.StdEncoding.EncodeToString([]byte(delegatedResourceJson))
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 			Annotations: map[string]string{
-				delegatedIdentitiesAnnotation: "some/delegated/identity/uri1,some/delegated/identity/uri2",
+				//delegatedIdentitiesAnnotation: "some/delegated/identity/uri1,some/delegated/identity/uri2",
+				delegatedIdentitiesAnnotation: base64EncodedJson,
 			},
 		},
 		Spec: v1.PodSpec{

@@ -73,7 +73,7 @@ const (
 )
 
 const (
-	delegatedIdentitiesAnnotation = "virtual-kubelet.io/delegated-identities"
+	delegatedIdentitiesAnnotation = "virtual-kubelet.io/delegated-resources"
 )
 
 const (
@@ -704,12 +704,15 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	//get array of delegated identities from annotations
-	delegatedIdentityString := pod.Annotations[delegatedIdentitiesAnnotation]
-	re := regexp.MustCompile(`,`)
-	delegatedIdentities := re.Split(delegatedIdentityString, -1)
+	//delegatedIdentityString := pod.Annotations[delegatedIdentitiesAnnotation]
+	//re := regexp.MustCompile(`,`)
+	//delegatedIdentities := re.Split(delegatedIdentityString, -1)
 
 	//set containerGroupIdentity
-	p.setContainerGroupIdentity(ctx, &cluster.Properties.IdentityProfile.KubeletIdentity, delegatedIdentities, "SystemAssigned,UserAssigned,DelegatedResourceIdentity", &containerGroup)
+	err = p.setContainerGroupIdentity(ctx, &cluster.Properties.IdentityProfile.KubeletIdentity, pod.Annotations[delegatedIdentitiesAnnotation], "UserAssigned", &containerGroup)
+	if err != nil {
+		return err
+	}
 
 	// get volumes
 	volumes, err := p.getVolumes(pod)
@@ -1416,24 +1419,30 @@ func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *
 }
 
 // sets Identity as User Assigned ContainerGroup Identity
-func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, delegatedIdentities []string, identityType string, containerGroup *aci.ContainerGroup) {
+func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, delegatedIdentityStringBase64 string, identityType string, containerGroup *aci.ContainerGroup) (error) {
 	if identity == nil {
-		return
+		return nil
 	}
 	identityList := map[string]map[string]string{}
 	identityList[identity.ResourceId] = map[string]string{}
-	delegatedIdentityList := map[string]map[string]string{}
+	delegatedIdentityObject := map[string]aci.DelegatedIdentitySpec{}
 
-	for _, delegatedId := range delegatedIdentities {
-		delegatedIdentityList[delegatedId] = map[string]string{}
+	if len(delegatedIdentityStringBase64) > 0{
+		decodedString, err := base64.StdEncoding.DecodeString(delegatedIdentityStringBase64)
+		err = json.Unmarshal([]byte(decodedString), &delegatedIdentityObject)
+
+		if err != nil {
+			return fmt.Errorf("Could not parse Base64 Encoded DelegatedIdentity JSON \n %v", err)
+		}
 	}
 
 	cgIdentity := aci.ACIContainerGroupIdentity{
 		Type: identityType,
 		UserAssignedIdentities: identityList,
-		DelegatedResources: delegatedIdentityList,
+		DelegatedResources: delegatedIdentityObject,
 	}
 	containerGroup.Identity = &cgIdentity
+	return nil
 }
 
 func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageRegistryCredential, error) {
