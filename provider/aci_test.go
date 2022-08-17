@@ -1456,7 +1456,7 @@ func TestCreatePodManagedIdentity(t *testing.T) {
 func TestCreatePodManagedIdentityWithServerName(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
 
-	serverName := "someregistry.azurecr.io"
+	serverName := "someregistry2022.azurecr.io"
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
