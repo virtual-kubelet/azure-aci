@@ -49,6 +49,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Install the [Azure CLI](#install-the-azure-cli).
 * Install the [Kubernetes CLI](#install-the-kubernetes-cli).
 * Install the [Helm CLI](#install-the-helm-cli).
+* Authenticating id (Service Principal or MI) should have contributor access to the resource group you are deploying to in order to fetch cluster details
 
 You may also use [Azure cloud shell](https://docs.microsoft.com/azure/cloud-shell/overview) which has the above tools already installed.
 
@@ -539,6 +540,31 @@ Notice that Virtual-Kubelet nodes are tainted by default to avoid unexpected pod
 ```
 
 ### Private registry
+
+#### Pulling images using user assigned managed identity
+If your image is on a private reigstry, you can use a managed Identity to access the image.
+
+First you will need to create a new User Assigned Managed Identity, and add it as a kubelet identity on the aks cluster.
+This step is optional, and can be skipped if you want to use the default kubelet identity instead of creating a new one.
+```bash
+az identity create -g <RESOURCE GROUP> -n <USER ASSIGNED IDENTITY NAME>
+az aks update -g <RESOURCE GROUP> -n <CLUSER NAME> --assign-kubelet-identity <USER ASSIGNED IDENTITY URI>
+```
+
+Attach the private acr registry to the cluster. This will give the managed identity  AcrPull access.
+```bash
+az aks update -g <RESOURCE GROUP> -n <CLUSTER NAME> --attach-acr <ACR NAME>
+```
+
+Create a new pod that pulls an image from the private registry, for example
+```yaml
+spec:
+  containers:
+  - image: <ACR NAME>.azurecr.io/<IMAGE NAME>:<IMAGE TAG>
+    name: test-container
+```
+
+#### Pulling image using username and password
 
 If your image is on a private registry, you need to [add a kubernetes secret to your cluster](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/#create-a-secret-by-providing-credentials-on-the-command-line) and reference it in the pod spec.
 
