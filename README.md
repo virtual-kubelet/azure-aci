@@ -22,7 +22,7 @@ This document details configuring the Virtual Kubelet ACI provider.
 
 Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Container Instances provide. Please check the Azure documentation accurate details on region availability, pricing and new features. The list here attempts to give an accurate reference for the features we support in ACI and the ACI provider within Virtual Kubelet.
 
-### features
+### Features
 
 * Volumes: empty dir, github repo, Azure Files
 * Secure env variables, config maps
@@ -31,10 +31,11 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Basic Azure Networking support within AKS virtual node
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
 * Azure Monitor integration or formally known as OMS
+* Using service principal credentials to pull ACR images ([see workaround](#Private-registry))
+* Pull ACR image using managed identity ([acr image pull](#Pulling-images-using-user-assigned-managed-identity))
 
 ### Limitations
 
-* Using service principal credentials to pull ACR images ([see workaround](#Private-registry))
 * Liveness and readiness probes
 * [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet
 * VNet peering
