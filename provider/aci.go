@@ -678,7 +678,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 	cluster, err := p.aciClient.GetAKSCluster(ctx, p.resourceGroup, clusterFqdn)
 	if err != nil {
-		return err
+		log.G(ctx).Infof("Error getting cluster details \n Can't use kubelet identity for contianer %v", err)
 	}
 
 	// get containers
@@ -694,7 +694,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	// use MI (kubelet identity) for image pull when image pull secrets are not present
-	if len(creds) == 0 {
+	if len(creds) == 0 && cluster != nil {
 		// get Managed Identity based creds
 		creds = p.getImagePullManagedIdentitySecrets(pod, &cluster.Properties.IdentityProfile.KubeletIdentity, &containerGroup)
 		//set containerGroupIdentity
@@ -795,6 +795,9 @@ func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *aci.DNSConfig {
 	nameServers := make([]string, 0)
 	searchDomains := []string{}
 
+	// Adding default Azure dns name explicitly
+	// if any other dns names are provided by the user ACI will use those instead of azure dns
+	// which may cause issues while looking up other Azure resources
 	AzureDNSIP := "168.63.129.16"
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
 		nameServers = append(nameServers, p.kubeDNSIP)
