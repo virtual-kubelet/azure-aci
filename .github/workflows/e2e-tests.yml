@@ -72,7 +72,9 @@ jobs:
       - name: Set image version
         run: |
           echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV   
-          echo "IMG_TAG=$(subst v,,$(IMG_VERSION)" >> $GITHUB_ENV   
+
+      - run: |
+          echo "IMG_TAG=$(subst v,,${{ env.IMG_VERSION}})" >> $GITHUB_ENV   
 
       - name: Build image
         run: |
