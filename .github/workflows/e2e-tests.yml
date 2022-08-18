@@ -46,9 +46,6 @@ jobs:
     needs: export-registry
     environment: test
     env:
-      CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
-      SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
-      TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       IMG_VERSION: "dev"
     runs-on: ubuntu-latest
@@ -87,9 +84,9 @@ jobs:
           az version
       - uses: azure/login@v1.4.5
         with:
-          client-id: ${{ env.CLIENTID }}
-          tenant-id: ${{ env.TENANT_ID }}
-          subscription-id: ${{ env.SUBSCRIPTIONID }}
+          client-id: ${{ secrets.CLIENTID }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          subscription-id: ${{ secrets.SUBSCRIPTIONID }}
 
       - name: Run e2e test
         run: |
