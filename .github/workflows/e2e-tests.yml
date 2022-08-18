@@ -48,6 +48,7 @@ jobs:
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       IMG_VERSION: "dev"
+      IMG_TAG: "dev"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -70,7 +71,8 @@ jobs:
 
       - name: Set image version
         run: |
-          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV      
+          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV   
+          echo "IMG_TAG=$(subst v,,$(IMG_VERSION)" >> $GITHUB_ENV   
 
       - name: Build image
         run: |
@@ -99,4 +101,4 @@ jobs:
           owner: virtual-kubelet/azure-aci
           name: virtual-kubelet
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ env.IMG_VERSION }}
+          tag: ${{ env.IMG_TAG }}
