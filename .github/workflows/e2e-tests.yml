@@ -46,11 +46,9 @@ jobs:
     needs: export-registry
     environment: test
     env:
-      CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
-      SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
-      TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       IMG_VERSION: "dev"
+      IMG_TAG: "dev"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -73,7 +71,12 @@ jobs:
 
       - name: Set image version
         run: |
-          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV      
+          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV   
+
+      - name: Set Image tag
+        run: |
+          ver=${{ env.IMG_VERSION}}
+          echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV   
 
       - name: Build image
         run: |
@@ -87,19 +90,20 @@ jobs:
           az version
       - uses: azure/login@v1.4.5
         with:
-          client-id: ${{ env.CLIENTID }}
-          tenant-id: ${{ env.TENANT_ID }}
-          subscription-id: ${{ env.SUBSCRIPTIONID }}
+          client-id: ${{ secrets.CLIENTID }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          subscription-id: ${{ secrets.SUBSCRIPTIONID }}
 
       - name: Run e2e test
         run: |
           make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
-      - name: Delete image
-        uses: bots-house/ghcr-delete-image-action@v1.0.1
+
+      - uses: actions/delete-package-versions@v3
         with:
-          owner: virtual-kubelet/azure-aci
-          name: virtual-kubelet
+          owner: 'virtual-kubelet'
+          repo: 'azure-aci'
+          package-name: 'virtual-kubelet'
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ env.IMG_VERSION }}
+          num-old-versions-to-delete: 1

@@ -24,16 +24,12 @@ jobs:
 
   tests:
     env:
-      CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
-      SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
-      TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
       ACTIVEDIRECTORYENDPOINTURL: 'https://login.microsoftonline.com'
       RESOURCEMANAGERENDPOINTURL: 'https://management.azure.com/'
       ACTIVEDIRECTORYGRAPHRESOURCEID: 'https://login.microsoftonline.com'
       SQLMANAGEMENTENDPOINTURL: 'https://management.core.windows.net:8443/'
       GALLERYENDPOINTURL: 'https://gallery.azure.com/'
       MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
-      OMSWORKSPACEID: '4f211d5f-39a4-4a52-a3bb-b49cf4fc7017'
       CLIENTSECRET: ${{ secrets.CLIENT_SECRET }}
       WORKSPACEKEY: ${{ secrets.OMS_WORKSPACE_KEY }}
 
@@ -61,9 +57,9 @@ jobs:
 
       - name: Run unit tests & Generate coverage
         env:
-          clientId: ${{ env.CLIENTID  }}
-          subscriptionId: ${{ env.SUBSCRIPTIONID  }}
-          tenantId: ${{ env.TENANT_ID }}
+          clientId: ${{ secrets.CLIENTID  }}
+          subscriptionId: ${{ secrets.SUBSCRIPTIONID  }}
+          tenantId: ${{ secrets.TENANT_ID }}
           activeDirectoryEndpointUrl: ${{ env.ACTIVEDIRECTORYENDPOINTURL  }}
           resourceManagerEndpointUrl: ${{ env.RESOURCEMANAGERENDPOINTURL  }}
           activeDirectoryGraphResourceId: ${{ env.ACTIVEDIRECTORYGRAPHRESOURCEID  }}
@@ -71,7 +67,7 @@ jobs:
           galleryEndpointUrl: ${{ env.GALLERYENDPOINTURL  }}
           managementEndpointUrl: ${{ env.MANAGEMENTENDPOINTURL  }}
           clientSecret: ${{ secrets.CLIENT_SECRET }}
-          omsworkspaceID: ${{ env.OMSWORKSPACEID  }}
+          omsworkspaceID: ${{ secrets.OMSWORKSPACEID  }}
           omsworkspaceKey: ${{ secrets.OMS_WORKSPACE_KEY }}
         run: |
            make testauth test
