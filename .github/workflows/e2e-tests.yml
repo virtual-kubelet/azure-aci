@@ -75,7 +75,8 @@ jobs:
 
       - name: Set Image tag
         run: |
-          echo "IMG_TAG=${${{ env.IMG_VERSION}}#"v"}" >> $GITHUB_ENV   
+          ver=${{ env.IMG_VERSION}}
+          echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV   
 
       - name: Build image
         run: |
