@@ -99,10 +99,11 @@ jobs:
           make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
-      - name: Delete image
-        uses: bots-house/ghcr-delete-image-action@v1.0.1
+
+      - uses: actions/delete-package-versions@v3
         with:
-          owner: virtual-kubelet/azure-aci
-          name: virtual-kubelet
+          owner: 'virtual-kubelet'
+          repo: 'azure-aci'
+          package-name: 'virtual-kubelet'
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ env.IMG_TAG }}
+          num-old-versions-to-delete: 1
