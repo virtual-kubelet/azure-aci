@@ -1,0 +1,24 @@
+name: create_release
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Goreleaser
+        uses: goreleaser/goreleaser-action@v2.9.1
+        with:
+          version: latest
+          args: release --rm-dist --timeout 60m --debug
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
