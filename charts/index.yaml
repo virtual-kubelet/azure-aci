@@ -18,38 +18,6 @@ entries:
     - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.4.0.tgz
     version: 1.4.0
   - apiVersion: v1
-    created: "2022-08-22T19:32:18.070318397Z"
-    description: a Helm chart to install virtual kubelet with Azure provider in an
-      AKS or AKS-engine cluster.
-    digest: ab55fbb110f1f467c550e8218a296b1839d8b0d368358ce5499d88c709e22fbf
-    maintainers:
-    - email: guwe@microsoft.com
-      name: Guoxun Wei
-    - email: peni@microsoft.com
-      name: Pengfei Ni
-    name: virtual-kubelet-aci-for-aks
-    sources:
-    - https://github.com/virtual-kubelet/azure-aci
-    urls:
-    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.4.2.tgz
-    version: 1.4.0
-  - apiVersion: v1
-    created: "2022-08-22T19:32:18.071938803Z"
-    description: a Helm chart to install virtual kubelet with Azure provider in an
-      AKS or AKS-engine cluster.
-    digest: ab55fbb110f1f467c550e8218a296b1839d8b0d368358ce5499d88c709e22fbf
-    maintainers:
-    - email: guwe@microsoft.com
-      name: Guoxun Wei
-    - email: peni@microsoft.com
-      name: Pengfei Ni
-    name: virtual-kubelet-aci-for-aks
-    sources:
-    - https://github.com/virtual-kubelet/azure-aci
-    urls:
-    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-latest.tgz
-    version: 1.4.0
-  - apiVersion: v1
     created: "2022-08-22T19:32:18.069244093Z"
     description: a Helm chart to install virtual kubelet with Azure provider in an
       AKS or AKS-engine cluster.
@@ -145,10 +113,10 @@ entries:
     version: 1.3.0
   virtual-kubelet-azure-aci:
   - apiVersion: v2
-    created: "2022-08-22T19:32:18.0709986Z"
+    created: "2022-08-22T20:57:19.908608064Z"
     description: a Helm chart to install virtual kubelet with Azure provider in an
       AKS cluster.
-    digest: 9ecc1f76c3f07545979e0c4be9e2229d0080f6936ef8e159f4647f7e0b2562e3
+    digest: 28d914e7b373801bc255759bd808e57feb176d7a52103bea495e7f04b59b7fcc
     maintainers:
     - email: guofei@microsoft.com
       name: Fei Guo
@@ -160,4 +128,4 @@ entries:
     urls:
     - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-azure-aci-1.4.3.tgz
     version: 1.4.3
-generated: "2022-08-22T19:32:18.064067372Z"
+generated: "2022-08-22T20:57:19.906991254Z"
