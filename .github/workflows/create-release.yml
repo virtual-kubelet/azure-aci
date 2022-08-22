@@ -1,11 +1,15 @@
 name: create_release
 on:
-  push:
-    tags:
-      - 'v*'
+  create:
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
 
 permissions:
   contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   create-release:
@@ -22,3 +26,41 @@ jobs:
           args: release --rm-dist --timeout 60m --debug
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  export-registry:
+    runs-on: ubuntu-20.04
+    outputs:
+      registry: ${{ steps.export.outputs.registry }}
+    steps:
+      - id: export
+        run: |
+          # registry must be in lowercase
+          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
+
+  publish-images:
+    needs: export-registry
+    env:
+      REGISTRY: ${{ needs.export-registry.outputs.registry }}
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+      - name: Login to ghcr.io
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set env
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Set Image tag
+        run: |
+          ver=${{ env.RELEASE_VERSION}}
+          echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
+      - name: Build image
+        run: |
+          OUTPUT_TYPE=type=registry make docker-build-image
+        env:
+          VERSION: ${{ env.IMG_TAG }}
