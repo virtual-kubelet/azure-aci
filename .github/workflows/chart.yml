@@ -6,7 +6,7 @@ on:
       - master
     paths:
       - ".github/workflows/chart.yaml"
-      - "helm/**"
+      - "charts/**"
   create:
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
