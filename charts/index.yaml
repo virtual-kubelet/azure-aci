@@ -1,0 +1,163 @@
+apiVersion: v1
+entries:
+  virtual-kubelet-aci-for-aks:
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.069774895Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: b3dda33733a5f5d2298c16eac655b121ef88789bcdfb62cb0893b8b5c6735744
+    maintainers:
+    - email: guwe@microsoft.com
+      name: Guoxun Wei
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.4.0.tgz
+    version: 1.4.0
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.070318397Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: ab55fbb110f1f467c550e8218a296b1839d8b0d368358ce5499d88c709e22fbf
+    maintainers:
+    - email: guwe@microsoft.com
+      name: Guoxun Wei
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.4.2.tgz
+    version: 1.4.0
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.071938803Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: ab55fbb110f1f467c550e8218a296b1839d8b0d368358ce5499d88c709e22fbf
+    maintainers:
+    - email: guwe@microsoft.com
+      name: Guoxun Wei
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-latest.tgz
+    version: 1.4.0
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.069244093Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: 0a84933e2a649582fa98f7054f97fc47894410d6250c82a74b0fbe30ad7fab4e
+    maintainers:
+    - email: guwe@microsoft.com
+      name: Guoxun Wei
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.3.6.tgz
+    version: 1.3.6
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.06869369Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: 1947e0b2a5ed1a9a4c7d0a92cc86990193c26f22851792c7495f40fb502ceb10
+    maintainers:
+    - email: guwe@microsoft.com
+      name: Guoxun Wei
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.3.5.tgz
+    version: 1.3.5
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.068159588Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: b1d37d926038125bd2d0a9cef920e6f50616e8625cca193d0b912be20e7ffbc2
+    maintainers:
+    - email: Mingqi.Shao@microsoft.com
+      name: Mingqi Shao
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.3.3.tgz
+    version: 1.3.3
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.067618686Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: 3d49250661996f23d63a5aef68ca7ff7c58b78ea30ce11811e3fa53de66ea73d
+    maintainers:
+    - email: Mingqi.Shao@microsoft.com
+      name: Mingqi Shao
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.3.2.tgz
+    version: 1.3.2
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.067034884Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: 1281cf688aa59d3918daf2fc0b72e0db7b09c6044d26d5375ad1f9af28a18fb1
+    maintainers:
+    - email: Mingqi.Shao@microsoft.com
+      name: Mingqi Shao
+    - email: peni@microsoft.com
+      name: Pengfei Ni
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.3.1.tgz
+    version: 1.3.1
+  - apiVersion: v1
+    created: "2022-08-22T19:32:18.066236881Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS or AKS-engine cluster.
+    digest: f9c6d81b6d5f6307798638a3c96e0c8c9b17200ed0639ecf06965873c15552db
+    maintainers:
+    - email: Mingqi.Shao@microsoft.com
+      name: Mingqi Shao
+    name: virtual-kubelet-aci-for-aks
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-1.3.0.tgz
+    version: 1.3.0
+  virtual-kubelet-azure-aci:
+  - apiVersion: v2
+    created: "2022-08-22T19:32:18.0709986Z"
+    description: a Helm chart to install virtual kubelet with Azure provider in an
+      AKS cluster.
+    digest: 9ecc1f76c3f07545979e0c4be9e2229d0080f6936ef8e159f4647f7e0b2562e3
+    maintainers:
+    - email: guofei@microsoft.com
+      name: Fei Guo
+    - email: heba.elayoty@microsoft.com
+      name: Heba Elayoty
+    name: virtual-kubelet-azure-aci
+    sources:
+    - https://github.com/virtual-kubelet/azure-aci
+    urls:
+    - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-azure-aci-1.4.3.tgz
+    version: 1.4.3
+generated: "2022-08-22T19:32:18.064067372Z"
