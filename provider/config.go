@@ -4,21 +4,24 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
-
+	
 	"github.com/BurntSushi/toml"
-	"github.com/virtual-kubelet/node-cli/provider"
 )
 
 type providerConfig struct {
-	ResourceGroup      string
-	Region             string
-	OperatingSystem    string
-	CPU                string
-	Memory             string
-	Pods               string
-	SubnetName         string
-	SubnetCIDR         string
+	ResourceGroup   string
+	Region          string
+	OperatingSystem string
+	CPU             string
+	Memory          string
+	Pods            string
+	SubnetName      string
+	SubnetCIDR      string
+}
+
+var validOS = map[string]bool{
+	"Linux":   true,
+	"Windows": true,
 }
 
 func (p *ACIProvider) loadConfig(r io.Reader) error {
@@ -28,7 +31,7 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 	}
 	p.region = config.Region
 	p.resourceGroup = config.ResourceGroup
-
+	
 	// Default to 20 mcpu
 	p.cpu = "20"
 	if config.CPU != "" {
@@ -44,18 +47,18 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 	if config.Pods != "" {
 		p.pods = config.Pods
 	}
-
+	
 	// Default to Linux if the operating system was not defined in the config.
 	if config.OperatingSystem == "" {
-		config.OperatingSystem = provider.OperatingSystemLinux
+		config.OperatingSystem = "Linux"
 	} else {
 		// Validate operating system from config.
-		ok := provider.ValidOperatingSystems[config.OperatingSystem]
+		ok := validOS[config.OperatingSystem]
 		if !ok {
-			return fmt.Errorf("%q is not a valid operating system, try one of the following instead: %s", config.OperatingSystem, strings.Join(provider.ValidOperatingSystems.Names(), " | "))
+			return fmt.Errorf("%q is not a valid operating system", config.OperatingSystem)
 		}
 	}
-
+	
 	// default subnet name
 	if config.SubnetName != "" {
 		p.subnetName = config.SubnetName
@@ -68,7 +71,7 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 			return fmt.Errorf("error parsing provided subnet CIDR: %v", err)
 		}
 	}
-
+	
 	p.operatingSystem = config.OperatingSystem
 	return nil
 }
