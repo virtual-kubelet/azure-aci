@@ -62,6 +62,11 @@ jobs:
           submodules: true
           fetch-depth: 0
 
+      - name: Set e2e Cluster Name
+        run: |
+            rand=$RANDOM
+            echo "CLUSTER_NAME=vk-aci-test-${rand}" >> $GITHUB_ENV
+     
       - name: Login to ${{ env.REGISTRY }}
         uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
         with:
@@ -99,8 +104,17 @@ jobs:
           make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
+          E2E_REGION: ${{ secrets.E2E_REGION}}
+          CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
+
+      - name: Cleanup e2e resources
+        if: ${{ always() }}
+        run: |
+          set +e
+          az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
 
       - uses: actions/delete-package-versions@v3
+        if: ${{ always() }}
         with:
           owner: 'virtual-kubelet'
           repo: 'azure-aci'

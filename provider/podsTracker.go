@@ -3,13 +3,14 @@ package provider
 import (
 	"context"
 	"time"
-
-	"github.com/virtual-kubelet/node-cli/manager"
+	
 	errdef "github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 )
 
 const (
@@ -17,7 +18,7 @@ const (
 	statusReasonNotFound                = "NotFound"
 	statusMessageNotFound               = "The pod may have been deleted from the provider"
 	containerExitCodeNotFound     int32 = -137
-
+	
 	statusUpdatesInterval = 5 * time.Second
 	cleanupInterval       = 5 * time.Minute
 )
@@ -34,7 +35,7 @@ type PodsTrackerHandler interface {
 }
 
 type PodsTracker struct {
-	rm       *manager.ResourceManager
+	pods     corev1listers.PodLister
 	updateCb func(*v1.Pod)
 	handler  PodsTrackerHandler
 }
@@ -43,15 +44,15 @@ type PodsTracker struct {
 func (pt *PodsTracker) StartTracking(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.StartTracking")
 	defer span.End()
-
+	
 	statusUpdatesTimer := time.NewTimer(statusUpdatesInterval)
 	cleanupTimer := time.NewTimer(cleanupInterval)
 	defer statusUpdatesTimer.Stop()
 	defer cleanupTimer.Stop()
-
+	
 	for {
 		log.G(ctx).Debug("Pod status updates & cleanup loop start")
-
+		
 		select {
 		case <-ctx.Done():
 			log.G(ctx).WithError(ctx.Err()).Debug("Pod status update loop exiting")
@@ -68,18 +69,21 @@ func (pt *PodsTracker) StartTracking(ctx context.Context) {
 
 // UpdatePodStatus updates the status of a pod, by posting to update callback.
 func (pt *PodsTracker) UpdatePodStatus(ns, name string, updateHandler func(*v1.PodStatus), forceUpdate bool) error {
-	k8sPods := pt.rm.GetPods()
+	k8sPods, err := pt.pods.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 	pod := getPodFromList(k8sPods, ns, name)
-
+	
 	if pod == nil {
 		return errdef.NotFound("pod not found")
 	}
-
+	
 	updatedPod := pod.DeepCopy()
 	if forceUpdate {
 		updatedPod.ResourceVersion = ""
 	}
-
+	
 	updateHandler(&updatedPod.Status)
 	pt.updateCb(updatedPod)
 	return nil
@@ -88,8 +92,11 @@ func (pt *PodsTracker) UpdatePodStatus(ns, name string, updateHandler func(*v1.P
 func (pt *PodsTracker) updatePodsLoop(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.updatePods")
 	defer span.End()
-
-	k8sPods := pt.rm.GetPods()
+	
+	k8sPods, err := pt.pods.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 	for _, pod := range k8sPods {
 		updatedPod := pod.DeepCopy()
 		ok := pt.processPodUpdates(ctx, updatedPod)
@@ -102,23 +109,26 @@ func (pt *PodsTracker) updatePodsLoop(ctx context.Context) {
 func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.cleanupDanglingPods")
 	defer span.End()
-
-	k8sPods := pt.rm.GetPods()
+	
+	k8sPods, err := pt.pods.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 	activePods, err := pt.handler.ListActivePods(ctx)
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("failed to retrieve active container groups list")
 		return
 	}
-
+	
 	if len(activePods) > 0 {
 		for i := range activePods {
 			pod := getPodFromList(k8sPods, activePods[i].namespace, activePods[i].name)
 			if pod != nil {
 				continue
 			}
-
+			
 			log.G(ctx).Errorf("cleaning up dangling pod %v", activePods[i].name)
-
+			
 			err := pt.handler.CleanupPod(ctx, activePods[i].namespace, activePods[i].name)
 			if err != nil && !errdef.IsNotFound(err) {
 				log.G(ctx).WithError(err).Errorf("failed to cleanup pod %v", activePods[i].name)
@@ -130,17 +140,17 @@ func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.processPodUpdates")
 	defer span.End()
-
+	
 	if pt.shouldSkipPodStatusUpdate(pod) {
 		return false
 	}
-
+	
 	podStatusFromProvider, err := pt.handler.FetchPodStatus(ctx, pod.Namespace, pod.Name)
 	if err == nil && podStatusFromProvider != nil {
 		podStatusFromProvider.DeepCopyInto(&pod.Status)
 		return true
 	}
-
+	
 	if errdef.IsNotFound(err) || (err == nil && podStatusFromProvider == nil) {
 		// Only change the status when the pod was already up
 		if pod.Status.Phase == v1.PodRunning {
@@ -153,7 +163,7 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 				if pod.Status.ContainerStatuses[i].State.Running == nil {
 					continue
 				}
-
+				
 				pod.Status.ContainerStatuses[i].State.Terminated = &v1.ContainerStateTerminated{
 					ExitCode:    containerExitCodeNotFound,
 					Reason:      statusReasonNotFound,
@@ -164,17 +174,17 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 				}
 				pod.Status.ContainerStatuses[i].State.Running = nil
 			}
-
+			
 			return true
 		}
-
+		
 		return false
 	}
-
+	
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("failed to retrieve pod %v status from provider", pod.Name)
 	}
-
+	
 	return false
 }
 
@@ -191,6 +201,6 @@ func getPodFromList(list []*v1.Pod, ns, name string) *v1.Pod {
 			return pod
 		}
 	}
-
+	
 	return nil
 }

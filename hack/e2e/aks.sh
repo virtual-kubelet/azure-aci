@@ -15,7 +15,7 @@ fi
 
 : "${RANDOM_NUM:=$RANDOM}"
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=westus2}"
+: "${LOCATION:=eastus2euap}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -30,7 +30,7 @@ fi
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
 
-: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vncsidrivers$RANDOM_NUM}"
+: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 
 error() {
@@ -46,7 +46,7 @@ fi
 TMPDIR=""
 
 cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait
+  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
   if [ -n "$TMPDIR" ]; then
       rm -rf "$TMPDIR"
   fi
@@ -160,9 +160,9 @@ helm install \
     --set "providers.azure.aciResourceGroup=$RESOURCE_GROUP" \
     --set "providers.azure.aciRegion=$LOCATION" \
     "$CHART_NAME" \
-    ./helm
+    ./charts/virtual-kubelet
 
-kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-aci-for-aks" --timeout=300s
+kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-azure-aci" --timeout=300s
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break
