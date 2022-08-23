@@ -30,7 +30,7 @@ fi
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
 
-: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vncsidrivers$RANDOM_NUM}"
+: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 
 error() {
@@ -46,7 +46,7 @@ fi
 TMPDIR=""
 
 cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait
+  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
   if [ -n "$TMPDIR" ]; then
       rm -rf "$TMPDIR"
   fi
