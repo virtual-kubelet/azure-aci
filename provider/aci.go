@@ -678,7 +678,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 	cluster, err := p.aciClient.GetAKSCluster(ctx, p.resourceGroup, clusterFqdn)
 	if err != nil {
-		log.G(ctx).Infof("Error getting cluster details \n Can't use kubelet identity for contianer %v", err)
+		log.G(ctx).Infof("Error getting cluster details \n Can't use kubelet identity for container %v", err)
 	}
 
 	// get containers

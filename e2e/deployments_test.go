@@ -61,8 +61,8 @@ func GetCurrentClusterMasterURI(t *testing.T) string {
 
 //Test private image pull from virtual node in AKS cluster,
 //the cluster have Kubelet identity tag.
-//Please don't use t.Paralell() inside this method (only in the subtests)
-//runing this test in paralell with others can have conflicts
+//Please don't use t.Parallel() inside this method (only in the subtests)
+//runing this test in parallel with others can have conflicts
 //as this method changes the kubectl current-context when running
 func TestImagePull_KubeletIdentityInAKSCLuster(t *testing.T) {
 	cmd := kubectl("config", "current-context")
