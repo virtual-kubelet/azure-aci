@@ -7,7 +7,7 @@ GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT
 
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
-AKS_E2E := ./hack/e2e/aks.sh
+AKS_E2E_SCRIPT := ./hack/e2e/aks.sh
 
 GO111MODULE := on
 export GO111MODULE
@@ -19,6 +19,8 @@ export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
 IMG_NAME ?= virtual-kubelet
 IMG_REPO ?= $(REGISTRY)/$(IMG_NAME)
+LOCATION := $(E2E_REGION)
+
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 VERSION      ?= $(shell git describe --abbrev=0 --tags)
@@ -78,7 +80,7 @@ test:
 
 .PHONY: e2e-test
 e2e-test:
-	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) $(AKS_E2E) go test -timeout 30m -v ./e2e
+	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 
 .PHONY: vet
 vet:

@@ -99,6 +99,7 @@ jobs:
           make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
+          E2E_REGION: ${{ secrets.E2E_REGION}}
 
       - uses: actions/delete-package-versions@v3
         with:
