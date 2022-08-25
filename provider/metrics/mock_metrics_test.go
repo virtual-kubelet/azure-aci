@@ -31,10 +31,10 @@ func (m *MockPodLister) List(selector labels.Selector) (ret []*v1.Pod, err error
 }
 
 func (m *MockPodLister) Pods(namespace string) corev1listers.PodNamespaceLister {
-return nil
+	return nil
 }
 
-func (m *MockPodListerMockRecorder) List(selector interface{})  *gomock.Call {
+func (m *MockPodListerMockRecorder) List(selector interface{}) *gomock.Call {
 	m.mock.ctrl.T.Helper()
 	return m.mock.ctrl.RecordCallWithMethodType(m.mock, "List", reflect.TypeOf((*MockPodLister)(nil).List), selector)
 }
@@ -44,7 +44,7 @@ type MockPodListerMockRecorder struct {
 	mock *MockPodLister
 }
 
-// NewMockPodGetter creates a new mock instance.
+// NewMockPodLister creates a new mock instance.
 func NewMockPodLister(ctrl *gomock.Controller) *MockPodLister {
 	mock := &MockPodLister{ctrl: ctrl}
 	mock.recorder = &MockPodListerMockRecorder{mock}
@@ -133,7 +133,7 @@ func (mr *MockContainerGroupGetterMockRecorder) GetContainerGroup(ctx, resourceG
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerGroup", reflect.TypeOf((*MockContainerGroupGetter)(nil).GetContainerGroup), ctx, resourceGroup, containerGroupName)
 }
 
-// MockpodStatsGetter is a mock of podStatsGetter interface.
+// MockpodStatsGetter is a mock of PodStatsGetter interface.
 type MockpodStatsGetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockpodStatsGetterMockRecorder
@@ -157,16 +157,16 @@ func (m *MockpodStatsGetter) EXPECT() *MockpodStatsGetterMockRecorder {
 }
 
 // getPodStats mocks base method.
-func (m *MockpodStatsGetter) getPodStats(ctx context.Context, pod *v1.Pod) (*statsv1alpha1.PodStats, error) {
+func (m *MockpodStatsGetter) GetPodStats(ctx context.Context, pod *v1.Pod) (*statsv1alpha1.PodStats, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getPodStats", ctx, pod)
+	ret := m.ctrl.Call(m, "GetPodStats", ctx, pod)
 	ret0, _ := ret[0].(*statsv1alpha1.PodStats)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getPodStats indicates an expected call of getPodStats.
-func (mr *MockpodStatsGetterMockRecorder) getPodStats(ctx, pod interface{}) *gomock.Call {
+// GetPodStats indicates an expected call of GetPodStats.
+func (mr *MockpodStatsGetterMockRecorder) GetPodStats(ctx, pod interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getPodStats", reflect.TypeOf((*MockpodStatsGetter)(nil).getPodStats), ctx, pod)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPodStats", reflect.TypeOf((*MockpodStatsGetter)(nil).GetPodStats), ctx, pod)
 }

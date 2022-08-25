@@ -22,13 +22,13 @@ type cachePodStatsGetter struct {
 	cache         *cache.Cache
 }
 
-func (cacheGetter *cachePodStatsGetter) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (cacheGetter *cachePodStatsGetter) GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	cacheKey := string(pod.UID)
 	cachedPodStats, found := cacheGetter.cache.Get(cacheKey)
 	if found {
 		return cachedPodStats.(*stats.PodStats), nil
 	}
-	stats, err := cacheGetter.wrappedGetter.getPodStats(ctx, pod)
+	stats, err := cacheGetter.wrappedGetter.GetPodStats(ctx, pod)
 	if err != nil {
 		return nil, err
 	}

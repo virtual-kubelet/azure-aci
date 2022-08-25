@@ -97,7 +97,7 @@ func NewRealTimeMetrics() *realTimeMetrics {
 }
 
 // the implementation of podStatsGetter interface base on ACI's Real-Time Metrics Extension
-func (realTime *realTimeMetrics) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (realTime *realTimeMetrics) GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	realtimeExtensionPodStats, err := getRealTimeExtensionPodStats(ctx, pod)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error fetching pod '%s' statsistics from Real Time Extension", pod.Name)

@@ -44,7 +44,7 @@ func NewContainerInsightsMetricsProvider(metricsGetter MetricsGetter, resourceGr
 	}
 }
 
-func (g *insightsGetter) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (g *insightsGetter) GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	logger := log.G(ctx).WithFields(log.Fields{
 		"UID":       string(pod.UID),
 		"Name":      pod.Name,

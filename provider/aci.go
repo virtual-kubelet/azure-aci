@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
+	"golang.org/x/sync/errgroup"
 	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/cpuguy83/dockercfg"
@@ -173,8 +175,8 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(config string, pCfg nodeutil.ProviderConfig, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
-	var p ACIProvider
+func NewACIProvider(config string, pCfg nodeutil.ProviderConfig, operatingSystem, nodeName, internalIP, clusterDomain string, daemonEndpointPort int32) (*ACIProvider, error) {
+	p := &ACIProvider{}
 	var err error
 
 	p.configL = pCfg.ConfigMaps
@@ -330,7 +332,7 @@ func NewACIProvider(config string, pCfg nodeutil.ProviderConfig, internalIP stri
 			p.diagnostics.LogAnalytics.LogType = aci.LogAnlyticsLogTypeContainerInsights
 			p.diagnostics.LogAnalytics.Metadata = map[string]string{
 				aci.LogAnalyticsMetadataKeyClusterResourceID: clusterResourceID,
-				aci.LogAnalyticsMetadataKeyNodeName:          pCfg.Node.Name,
+				aci.LogAnalyticsMetadataKeyNodeName:          nodeName,
 			}
 		}
 	}
@@ -359,8 +361,8 @@ func NewACIProvider(config string, pCfg nodeutil.ProviderConfig, internalIP stri
 		return nil, err
 	}
 
-	p.operatingSystem = strings.Title(pCfg.Node.Status.NodeInfo.OperatingSystem)
-	p.nodeName = pCfg.Node.Name
+	p.operatingSystem = operatingSystem
+	p.nodeName = nodeName
 	p.internalIP = internalIP
 	p.daemonEndpointPort = daemonEndpointPort
 
@@ -420,8 +422,9 @@ func NewACIProvider(config string, pCfg nodeutil.ProviderConfig, internalIP stri
 		}
 	}
 
-	p.ACIPodMetricsProvider = *metrics.NewACIPodMetricsProvider(p.nodeName, p.resourceGroup, p.podsL, p.aciClient, p.aciClient)
-	return &p, err
+	p.ACIPodMetricsProvider = *metrics.
+		NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.podsL, p.aciClient, p.aciClient)
+	return p, err
 }
 
 func (p *ACIProvider) setupCapacity(ctx context.Context) error {
@@ -976,6 +979,11 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 	return containerGroupToPod(cg)
 }
 
+// GetPodFullName as defined in the provider context
+func (p *ACIProvider) GetPodFullName(namespace string, pod string) string {
+	return fmt.Sprintf("%s-%s", namespace, pod)
+}
+
 // GetContainerLogs returns the logs of a pod by name that is running inside ACI.
 func (p *ACIProvider) GetContainerLogs(ctx context.Context, namespace, podName, containerName string, opts api.ContainerLogOpts) (io.ReadCloser, error) {
 	ctx, span := trace.StartSpan(ctx, "aci.GetContainerLogs")
@@ -1002,11 +1010,6 @@ func (p *ACIProvider) GetContainerLogs(ctx context.Context, namespace, podName, 
 		}
 	}
 	return ioutil.NopCloser(strings.NewReader(logContent)), err
-}
-
-// GetPodFullName as defined in the provider context
-func (p *ACIProvider) GetPodFullName(namespace string, pod string) string {
-	return fmt.Sprintf("%s-%s", namespace, pod)
 }
 
 // RunInContainer executes a command in a container in the pod, copying data
@@ -1101,14 +1104,96 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	return ctx.Err()
 }
 
+// GetStatsSummary returns the stats summary for pods running on ACI
+func (p *ACIProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {
+	//return p.ACIPodMetricsProvider.GetStatsSummary(ctx)
+	ctx, span := trace.StartSpan(ctx, "GetSummaryStats")
+	defer span.End()
+
+	p.ACIPodMetricsProvider.MetricsSync.Lock()
+	defer p.ACIPodMetricsProvider.MetricsSync.Unlock()
+
+	log.G(ctx).Debug("acquired metrics mutex")
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	pods, err := p.podsL.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
+
+	var errGroup errgroup.Group
+	chResult := make(chan stats.PodStats, len(pods))
+
+	sema := make(chan struct{}, 10)
+	for _, pod := range pods {
+		if pod.Status.Phase != v1.PodRunning {
+			continue
+		}
+		pod := pod
+		errGroup.Go(func() error {
+			ctx, span := trace.StartSpan(ctx, "getPodMetrics")
+			defer span.End()
+			logger := log.G(ctx).WithFields(log.Fields{
+				"UID":       string(pod.UID),
+				"Name":      pod.Name,
+				"Namespace": pod.Namespace,
+			})
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case sema <- struct{}{}:
+			}
+			defer func() {
+				<-sema
+			}()
+
+			logger.Debug("Acquired semaphore")
+
+			podMetrics, err := p.ACIPodMetricsProvider.PodStatsGetter.GetPodStats(ctx, pod)
+			if err != nil {
+				span.SetStatus(err)
+				return errors.Wrapf(err, "error fetching metrics for pods '%s'", pod.Name)
+			}
+
+			chResult <- *podMetrics
+			return nil
+		})
+	}
+
+	if err := errGroup.Wait(); err != nil {
+		span.SetStatus(err)
+		return nil, errors.Wrap(err, "error in request to fetch container group metrics")
+	}
+	close(chResult)
+	log.G(ctx).Debugf("Collected status from azure for %d pods", len(pods))
+
+	var s stats.Summary
+	s.Node = stats.NodeStats{
+		NodeName: p.nodeName,
+	}
+	s.Pods = make([]stats.PodStats, 0, len(chResult))
+
+	for stat := range chResult {
+		s.Pods = append(s.Pods, stat)
+	}
+
+	return &s, nil
+}
+
 // ConfigureNode enables a provider to configure the node object that
 // will be used for Kubernetes.
 func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
-	node.Status.Capacity = p.capacity()
-	node.Status.Allocatable = p.capacity()
-	node.Status.Conditions = p.nodeConditions()
-	node.Status.Addresses = p.nodeAddresses()
-	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
+	node.Status.Capacity = p.Capacity()
+	node.Status.Allocatable = p.Capacity()
+	node.Status.Conditions = p.NodeConditions()
+	node.Status.Addresses = p.NodeAddresses()
+	node.Status.DaemonEndpoints = p.NodeDaemonEndpoints()
 	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
 	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
 	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
@@ -1214,8 +1299,13 @@ func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
 // implement NodeProvider
 
 // Ping checks if the node is still active/ready.
-func (p *ACIProvider) Ping(ctx context.Context) error {
+func (p *ACIProvider) Ping(context.Context) error {
 	return nil
+}
+
+// NotifyNodeStatus is used to asynchronously monitor the node.
+func (p *ACIProvider) NotifyNodeStatus(ctx context.Context, cb func(*v1.Node)) {
+
 }
 
 // getContainerGroup returns a container group from ACI.
@@ -1235,8 +1325,8 @@ func (p *ACIProvider) getContainerGroup(ctx context.Context, namespace, name str
 	return cg, nil
 }
 
-// capacity returns a resource list containing the capacity limits set for ACI.
-func (p *ACIProvider) capacity() v1.ResourceList {
+// Capacity returns a resource list containing the capacity limits set for ACI.
+func (p *ACIProvider) Capacity() v1.ResourceList {
 	resourceList := v1.ResourceList{
 		v1.ResourceCPU:    resource.MustParse(p.cpu),
 		v1.ResourceMemory: resource.MustParse(p.memory),
@@ -1250,9 +1340,9 @@ func (p *ACIProvider) capacity() v1.ResourceList {
 	return resourceList
 }
 
-// nodeConditions returns a list of conditions (Ready, OutOfDisk, etc), for updates to the node status
+// NodeConditions returns a list of conditions (Ready, OutOfDisk, etc), for updates to the node status
 // within Kubernetes.
-func (p *ACIProvider) nodeConditions() []v1.NodeCondition {
+func (p *ACIProvider) NodeConditions() []v1.NodeCondition {
 	// TODO: Make these dynamic and augment with custom ACI specific conditions of interest
 	return []v1.NodeCondition{
 		{
@@ -1298,9 +1388,8 @@ func (p *ACIProvider) nodeConditions() []v1.NodeCondition {
 	}
 }
 
-// nodeAddresses returns a list of addresses for the node status
-// within Kubernetes.
-func (p *ACIProvider) nodeAddresses() []v1.NodeAddress {
+// NodeAddresses returns a list of addresses for the node status within Kubernetes.
+func (p *ACIProvider) NodeAddresses() []v1.NodeAddress {
 	// TODO: Make these dynamic and augment with custom ACI specific conditions of interest
 	return []v1.NodeAddress{
 		{
@@ -1310,9 +1399,8 @@ func (p *ACIProvider) nodeAddresses() []v1.NodeAddress {
 	}
 }
 
-// nodeDaemonEndpoints returns NodeDaemonEndpoints for the node status
-// within Kubernetes.
-func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
+// NodeDaemonEndpoints returns NodeDaemonEndpoints for the node status within Kubernetes.
+func (p *ACIProvider) NodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 	return v1.NodeDaemonEndpoints{
 		KubeletEndpoint: v1.DaemonEndpoint{
 			Port: p.daemonEndpointPort,

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
-	
+
 	gomock "github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
@@ -29,7 +29,7 @@ func (m podNameMatcher) String() string {
 	return fmt.Sprintf("pod name is equal to %v (%T)", m.podName, m.podName)
 }
 func podNameEq(podName string) gomock.Matcher {
-	
+
 	return podNameMatcher{
 		podName: podName,
 	}
@@ -42,19 +42,19 @@ func TestGetStatsSummary(t *testing.T) {
 			"pod2": uint64(2000),
 		},
 	}
-	
+
 	for testName, test := range testCases {
 		t.Run(testName, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
-			
+
 			podLister := NewMockPodLister(ctrl)
 			mockedPodStatsGetter := NewMockpodStatsGetter(ctrl)
 			podMetricsProvider := NewACIPodMetricsProvider("node-1", "rg", podLister, nil, nil)
-			podMetricsProvider.podStatsGetter = mockedPodStatsGetter
+			podMetricsProvider.PodStatsGetter = mockedPodStatsGetter
 			podLister.EXPECT().List(gomock.Any()).Return(fakePod(getMapKeys(test)), nil)
 			for podName, cpu := range test {
-				mockedPodStatsGetter.EXPECT().getPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
+				mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
 			}
 			ctx := context.Background()
 			actuallyStatsSummary, err := podMetricsProvider.GetStatsSummary(ctx)
@@ -70,10 +70,10 @@ func TestPodStatsGetterDecider(t *testing.T) {
 	t.Run("useContainerInsightAndContainerGroupCacheNotTakeEffective", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		
+
 		mockedAciCgGetter := NewMockContainerGroupGetter(ctrl)
 		httpStatus := 200
-		
+
 		// Times(2) because we expect the Container Group not be cached
 		mockedAciCgGetter.EXPECT().GetContainerGroup(
 			gomock.Any(), gomock.Any(), gomock.Any()).Return(&aci.ContainerGroup{
@@ -88,29 +88,29 @@ func TestPodStatsGetterDecider(t *testing.T) {
 				},
 			},
 		}, &httpStatus, nil).Times(2)
-		
+
 		mockedContainerInsights := NewMockpodStatsGetter(ctrl)
-		mockedContainerInsights.EXPECT().getPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(2)
-		
+		mockedContainerInsights.EXPECT().GetPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(2)
+
 		decider := NewPodStatsGetterDecider(mockedContainerInsights, nil, "rg", mockedAciCgGetter)
 		ctx := context.Background()
 		pod1 := fakePod([]string{"pod-1"})[0]
 		pod2 := fakePod([]string{"pod-1"})[0]
-		decider.getPodStats(ctx, pod1)
-		
+		decider.GetPodStats(ctx, pod1)
+
 		/* this time use a pod with new UID but same name.
 		we expect the Container Group will not be cached
 		*/
-		decider.getPodStats(ctx, pod2)
+		decider.GetPodStats(ctx, pod2)
 	})
-	
+
 	t.Run("useRealtimeMetricsAndContainerGroupCacheTakeEffective", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		
+
 		mockedAciCgGetter := NewMockContainerGroupGetter(ctrl)
 		httpStatus := 200
-		
+
 		// Times(1) here because we expect the Container Group be cached
 		mockedAciCgGetter.EXPECT().GetContainerGroup(
 			gomock.Any(), gomock.Any(), gomock.Any()).Return(&aci.ContainerGroup{
@@ -131,16 +131,16 @@ func TestPodStatsGetterDecider(t *testing.T) {
 				},
 			},
 		}, &httpStatus, nil).Times(1)
-		
+
 		mockedRealtime := NewMockpodStatsGetter(ctrl)
-		mockedRealtime.EXPECT().getPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(1)
-		mockedRealtime.EXPECT().getPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(1)
-		
+		mockedRealtime.EXPECT().GetPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(1)
+		mockedRealtime.EXPECT().GetPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(1)
+
 		decider := NewPodStatsGetterDecider(nil, mockedRealtime, "rg", mockedAciCgGetter)
 		ctx := context.Background()
 		pod := fakePod([]string{"pod-1"})[0]
-		decider.getPodStats(ctx, pod)
-		decider.getPodStats(ctx, pod)
+		decider.GetPodStats(ctx, pod)
+		decider.GetPodStats(ctx, pod)
 	})
 }
 

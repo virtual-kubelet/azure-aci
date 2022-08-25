@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 	"time"
-	
+
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
@@ -43,16 +43,16 @@ there are difference implementation of query Pod's statistics.
 this interface is for mocking in unit test
 */
 type podStatsGetter interface {
-	getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error)
+	GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error)
 }
 
 type ACIPodMetricsProvider struct {
 	nodeName           string
-	metricsSync        sync.Mutex
+	MetricsSync        sync.Mutex
 	podLister          corev1listers.PodLister
 	aciCGGetter        ContainerGroupGetter
 	aciCGMetricsGetter MetricsGetter
-	podStatsGetter     podStatsGetter
+	PodStatsGetter     podStatsGetter
 }
 
 func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podLister corev1listers.PodLister, aciCGGetter ContainerGroupGetter, aciCGMetricsGetter MetricsGetter) *ACIPodMetricsProvider {
@@ -62,14 +62,14 @@ func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podLister corev
 		aciCGGetter:        aciCGGetter,
 		aciCGMetricsGetter: aciCGMetricsGetter,
 	}
-	
+
 	containerInsightGetter := WrapCachedPodStatsGetter(
 		30,
 		NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
 	realTimeGetter := WrapCachedPodStatsGetter(
 		5,
 		NewRealTimeMetrics())
-	provider.podStatsGetter = NewPodStatsGetterDecider(containerInsightGetter, realTimeGetter, aciResourcegroup, aciCGGetter)
+	provider.PodStatsGetter = NewPodStatsGetterDecider(containerInsightGetter, realTimeGetter, aciResourcegroup, aciCGGetter)
 	return &provider
 }
 
@@ -77,26 +77,26 @@ func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podLister corev
 func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *stats.Summary, err error) {
 	ctx, span := trace.StartSpan(ctx, "GetSummaryStats")
 	defer span.End()
-	
-	p.metricsSync.Lock()
-	defer p.metricsSync.Unlock()
-	
+
+	p.MetricsSync.Lock()
+	defer p.MetricsSync.Unlock()
+
 	log.G(ctx).Debug("acquired metrics mutex")
-	
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
 	}
-	
+
 	pods, err := p.podLister.List(labels.Everything())
 	if err != nil {
 		log.L.WithError(err).Errorf("failed to retrieve pods list")
 	}
-	
+
 	var errGroup errgroup.Group
 	chResult := make(chan stats.PodStats, len(pods))
-	
+
 	sema := make(chan struct{}, 10)
 	for _, pod := range pods {
 		if pod.Status.Phase != v1.PodRunning {
@@ -111,7 +111,7 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 				"Name":      pod.Name,
 				"Namespace": pod.Namespace,
 			})
-			
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -120,37 +120,37 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 			defer func() {
 				<-sema
 			}()
-			
+
 			logger.Debug("Acquired semaphore")
-			
-			podMetrics, err := p.podStatsGetter.getPodStats(ctx, pod)
+
+			podMetrics, err := p.PodStatsGetter.GetPodStats(ctx, pod)
 			if err != nil {
 				span.SetStatus(err)
 				return errors.Wrapf(err, "error fetching metrics for pods '%s'", pod.Name)
 			}
-			
+
 			chResult <- *podMetrics
 			return nil
 		})
 	}
-	
+
 	if err := errGroup.Wait(); err != nil {
 		span.SetStatus(err)
 		return nil, errors.Wrap(err, "error in request to fetch container group metrics")
 	}
 	close(chResult)
 	log.G(ctx).Debugf("Collected status from azure for %d pods", len(pods))
-	
+
 	var s stats.Summary
 	s.Node = stats.NodeStats{
 		NodeName: p.nodeName,
 	}
 	s.Pods = make([]stats.PodStats, 0, len(chResult))
-	
+
 	for stat := range chResult {
 		s.Pods = append(s.Pods, stat)
 	}
-	
+
 	return &s, nil
 }
 
@@ -173,7 +173,7 @@ func NewPodStatsGetterDecider(containerInsightsGetter podStatsGetter, realTimeGe
 	return decider
 }
 
-func (decider *podStatsGetterDecider) getPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
+func (decider *podStatsGetterDecider) GetPodStats(ctx context.Context, pod *v1.Pod) (*stats.PodStats, error) {
 	logger := log.G(ctx).WithFields(log.Fields{
 		"UID":       string(pod.UID),
 		"Name":      pod.Name,
@@ -181,7 +181,7 @@ func (decider *podStatsGetterDecider) getPodStats(ctx context.Context, pod *v1.P
 	})
 	aciCG, err := decider.getContainerGroup(ctx, pod)
 	if err != nil {
-		logger.Errorf("faile to query Container Group %s", err)
+		logger.Errorf("failed to query Container Group %s", err)
 		return nil, errors.Wrapf(err, "failed to query Container Group")
 	}
 	useRealTime := false
@@ -192,10 +192,10 @@ func (decider *podStatsGetterDecider) getPodStats(ctx context.Context, pod *v1.P
 	}
 	if useRealTime {
 		logger.Infof("use Real-Time Metrics Extension for pod '%s'", pod.Name)
-		return decider.realTimeGetter.getPodStats(ctx, pod)
+		return decider.realTimeGetter.GetPodStats(ctx, pod)
 	} else {
 		logger.Infof("use Container Insights metrics for pod '%s'", pod.Name)
-		return decider.containerInsightsGetter.getPodStats(ctx, pod)
+		return decider.containerInsightsGetter.GetPodStats(ctx, pod)
 	}
 }
 
@@ -216,11 +216,9 @@ func (decider *podStatsGetterDecider) getContainerGroup(ctx context.Context, pod
 	decider.cache.Set(cacheKey, aciCG, cache.DefaultExpiration)
 	return aciCG, nil
 }
-
 func containerGroupName(podNS, podName string) string {
 	return fmt.Sprintf("%s-%s", podNS, podName)
 }
-
 func newUInt64Pointer(value int) *uint64 {
 	var u = uint64(value)
 	return &u

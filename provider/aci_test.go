@@ -15,19 +15,19 @@ import (
 	"os"
 	"strings"
 	"testing"
-	
+
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"gotest.tools/assert"
-	
+
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	
+
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 )
@@ -49,7 +49,7 @@ func TestMakeRegistryCredential(t *testing.T) {
 	username := "user-" + uuid.New().String()
 	password := "pass-" + uuid.New().String()
 	auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
-	
+
 	tt := []struct {
 		name        string
 		authConfig  AuthConfig
@@ -87,17 +87,17 @@ func TestMakeRegistryCredential(t *testing.T) {
 			"malformed auth for server",
 		},
 	}
-	
+
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			cred, err := makeRegistryCredential(server, tc.authConfig)
-			
+
 			if tc.shouldFail {
 				assert.Check(t, err != nil, "conversion should fail")
 				assert.Check(t, strings.Contains(err.Error(), tc.failMessage), "failed message is not expected")
 				return
 			}
-			
+
 			assert.Check(t, err, "conversion should not fail")
 			assert.Check(t, cred != nil, "credential should not be nil")
 			assert.Check(t, is.Equal(server, cred.Server), "server doesn't match")
@@ -110,14 +110,14 @@ func TestMakeRegistryCredential(t *testing.T) {
 // Tests create pod without resource spec
 func TestCreatePodWithoutResourceSpec(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -130,10 +130,10 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 		assert.Check(t, is.Equal(1.0, cg.ContainerGroupProperties.Containers[0].Resources.Requests.CPU), "Request CPU is not expected")
 		assert.Check(t, is.Equal(1.5, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -147,7 +147,7 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -156,14 +156,14 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 // Tests create pod with resource request only
 func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -176,10 +176,10 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 		assert.Check(t, is.Equal(1.98, cg.ContainerGroupProperties.Containers[0].Resources.Requests.CPU), "Request CPU is not expected")
 		assert.Check(t, is.Equal(3.4, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, is.Nil(cg.ContainerGroupProperties.Containers[0].Resources.Limits), "Limits should be nil")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -199,7 +199,7 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -209,11 +209,11 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 func TestCreatePodWithGPU(t *testing.T) {
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	gpuSKU := aci.GPUSKU("sku-" + uuid.New().String())
-	
+
 	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
 		manifest := &aci.ResourceProviderManifest{
 			Metadata: &aci.ResourceProviderMetadata{
@@ -225,16 +225,16 @@ func TestCreatePodWithGPU(t *testing.T) {
 				},
 			},
 		}
-		
+
 		return http.StatusOK, manifest
 	}
-	
+
 	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create the test provider. %s", err.Error())
 		return
 	}
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -251,10 +251,10 @@ func TestCreatePodWithGPU(t *testing.T) {
 		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU != nil, "Limits GPU is not expected")
 		assert.Check(t, is.Equal(int32(10), cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.Count), "Requests GPU Count is not expected")
 		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.SKU), "Requests GPU SKU is not expected")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -277,7 +277,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -287,11 +287,11 @@ func TestCreatePodWithGPU(t *testing.T) {
 func TestCreatePodWithGPUSKU(t *testing.T) {
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	gpuSKU := aci.GPUSKU("sku-" + uuid.New().String())
-	
+
 	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
 		manifest := &aci.ResourceProviderManifest{
 			Metadata: &aci.ResourceProviderMetadata{
@@ -303,16 +303,16 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 				},
 			},
 		}
-		
+
 		return http.StatusOK, manifest
 	}
-	
+
 	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create the test provider. %s", err.Error())
 		return
 	}
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -330,10 +330,10 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU != nil, "Limits GPU is not expected")
 		assert.Check(t, is.Equal(int32(1), cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.Count), "Requests GPU Count is not expected")
 		assert.Check(t, is.Equal(gpuSKU, cg.ContainerGroupProperties.Containers[0].Resources.Limits.GPU.SKU), "Requests GPU SKU is not expected")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -359,7 +359,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -368,14 +368,14 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 // Tests create pod with both resource request and limit.
 func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -389,10 +389,10 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 		assert.Check(t, is.Equal(3.4, cg.ContainerGroupProperties.Containers[0].Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, is.Equal(3.999, cg.ContainerGroupProperties.Containers[0].Resources.Limits.CPU), "Limit CPU is not expected")
 		assert.Check(t, is.Equal(8.0, cg.ContainerGroupProperties.Containers[0].Resources.Limits.MemoryInGB), "Limit Memory is not expected")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -416,7 +416,7 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -425,25 +425,25 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 // Tests get pods with empty list.
 func TestGetPodsWithEmptyList(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	aciServerMocker.OnGetContainerGroups = func(subscription, resourceGroup string) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
-		
+
 		return http.StatusOK, aci.ContainerGroupListResult{
 			Value: []aci.ContainerGroup{},
 		}
 	}
-	
+
 	pods, err := provider.GetPods(context.Background())
 	if err != nil {
 		t.Fatal("Failed to get pods", err)
 	}
-	
+
 	assert.Check(t, pods != nil, "Response pods should not be nil")
 	assert.Check(t, is.Equal(0, len(pods)), "No pod should be returned")
 }
@@ -451,15 +451,15 @@ func TestGetPodsWithEmptyList(t *testing.T) {
 // Tests get pods without requests limit.
 func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	aciServerMocker.OnGetContainerGroups = func(subscription, resourceGroup string) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
-		
+
 		var cg = aci.ContainerGroup{
 			Name: "default-nginx",
 			Tags: map[string]string{
@@ -490,22 +490,22 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 				},
 			},
 		}
-		
+
 		return http.StatusOK, aci.ContainerGroupListResult{
 			Value: []aci.ContainerGroup{cg},
 		}
 	}
-	
+
 	pods, err := provider.GetPods(context.Background())
 	if err != nil {
 		t.Fatal("Failed to get pods", err)
 	}
-	
+
 	assert.Check(t, pods != nil, "Response pods should not be nil")
 	assert.Check(t, is.Equal(1, len(pods)), "No pod should be returned")
-	
+
 	pod := pods[0]
-	
+
 	assert.Check(t, pod != nil, "Response pod should not be nil")
 	assert.Check(t, pod.Spec.Containers != nil, "Containers should not be nil")
 	assert.Check(t, is.Nil(pod.Spec.Containers[0].Resources.Limits), "Containers[0].Resources.Limits should be nil")
@@ -519,19 +519,19 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 // Tests get pod without requests limit.
 func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnGetContainerGroup = func(subscription, resourceGroup, containerGroup string) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
 		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
-		
+
 		return http.StatusOK, aci.ContainerGroup{
 			Tags: map[string]string{
 				"NodeName": fakeNodeName,
@@ -562,12 +562,12 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 			},
 		}
 	}
-	
+
 	pod, err := provider.GetPod(context.Background(), podNamespace, podName)
 	if err != nil {
 		t.Fatal("Failed to get pod", err)
 	}
-	
+
 	assert.Check(t, pod != nil, "Response pod should not be nil")
 	assert.Check(t, pod.Spec.Containers != nil, "Containers should not be nil")
 	assert.Check(t, is.Nil(pod.Spec.Containers[0].Resources.Limits), "Containers[0].Resources.Limits should be nil")
@@ -581,19 +581,19 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 // Tests get pod with GPU.
 func TestGetPodWithGPU(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnGetContainerGroup = func(subscription, resourceGroup, containerGroup string) (int, interface{}) {
 		assert.Equal(t, fakeSubscription, subscription, "Subscription doesn't match")
 		assert.Equal(t, fakeResourceGroup, resourceGroup, "Resource group doesn't match")
 		assert.Equal(t, podNamespace+"-"+podName, containerGroup, "Container group name is not expected")
-		
+
 		return http.StatusOK, aci.ContainerGroup{
 			Tags: map[string]string{
 				"NodeName": fakeNodeName,
@@ -634,12 +634,12 @@ func TestGetPodWithGPU(t *testing.T) {
 			},
 		}
 	}
-	
+
 	pod, err := provider.GetPod(context.Background(), podNamespace, podName)
 	if err != nil {
 		t.Fatal("Failed to get pod", err)
 	}
-	
+
 	assert.Check(t, pod != nil, "Response pod should not be nil")
 	assert.Check(t, pod.Spec.Containers != nil, "Containers should not be nil")
 	assert.Check(t, pod.Spec.Containers[0].Resources.Requests != nil, "Containers[0].Resources.Requests should not be nil")
@@ -668,23 +668,23 @@ func TestGetPodWithGPU(t *testing.T) {
 
 func TestGetPodWithContainerID(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	containerName := "c-" + uuid.New().String()
 	containerImage := "ci-" + uuid.New().String()
-	
+
 	cgID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerInstance/containerGroups/%s-%s", fakeSubscription, fakeResourceGroup, podNamespace, podName)
-	
+
 	aciServerMocker.OnGetContainerGroup = func(subscription, resourceGroup, containerGroup string) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
 		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
-		
+
 		return http.StatusOK, aci.ContainerGroup{
 			ID: cgID,
 			Tags: map[string]string{
@@ -716,12 +716,12 @@ func TestGetPodWithContainerID(t *testing.T) {
 			},
 		}
 	}
-	
+
 	pod, err := provider.GetPod(context.Background(), podNamespace, podName)
 	if err != nil {
 		t.Fatal("Failed to get pod", err)
 	}
-	
+
 	assert.Check(t, pod != nil, "Response pod should not be nil")
 	assert.Check(t, is.Equal(1, len(pod.Status.ContainerStatuses)), "1 container status is expected")
 	assert.Check(t, is.Equal(containerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
@@ -730,10 +730,10 @@ func TestGetPodWithContainerID(t *testing.T) {
 }
 
 func TestPodToACISecretEnvVar(t *testing.T) {
-	
+
 	testKey := "testVar"
 	testVal := "testVal"
-	
+
 	e := v1.EnvVar{
 		Name:  testKey,
 		Value: testVal,
@@ -742,40 +742,40 @@ func TestPodToACISecretEnvVar(t *testing.T) {
 		},
 	}
 	aciEnvVar := getACIEnvVar(e)
-	
+
 	if aciEnvVar.Value != "" {
 		t.Fatalf("ACI Env Variable Value should be empty for a secret")
 	}
-	
+
 	if aciEnvVar.Name != testKey {
 		t.Fatalf("ACI Env Variable Name does not match expected Name")
 	}
-	
+
 	if aciEnvVar.SecureValue != testVal {
 		t.Fatalf("ACI Env Variable Secure Value does not match expected value")
 	}
 }
 
 func TestPodToACIEnvVar(t *testing.T) {
-	
+
 	testKey := "testVar"
 	testVal := "testVal"
-	
+
 	e := v1.EnvVar{
 		Name:      testKey,
 		Value:     testVal,
 		ValueFrom: &v1.EnvVarSource{},
 	}
 	aciEnvVar := getACIEnvVar(e)
-	
+
 	if aciEnvVar.SecureValue != "" {
 		t.Fatalf("ACI Env Variable Secure Value should be empty for non-secret variables")
 	}
-	
+
 	if aciEnvVar.Name != testKey {
 		t.Fatalf("ACI Env Variable Name does not match expected Name")
 	}
-	
+
 	if aciEnvVar.Value != testVal {
 		t.Fatalf("ACI Env Variable Value does not match expected value")
 	}
@@ -784,7 +784,7 @@ func TestPodToACIEnvVar(t *testing.T) {
 func prepareMocks() (*AADMock, *ACIMock, *ACIProvider, error) {
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
-	
+
 	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
 		manifest := &aci.ResourceProviderManifest{
 			Metadata: &aci.ResourceProviderMetadata{
@@ -796,15 +796,15 @@ func prepareMocks() (*AADMock, *ACIMock, *ACIProvider, error) {
 				},
 			},
 		}
-		
+
 		return http.StatusOK, manifest
 	}
-	
+
 	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil, nil, nil)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to create the test provider %s", err.Error())
 	}
-	
+
 	return aadServerMocker, aciServerMocker, provider, nil
 }
 
@@ -816,43 +816,43 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock, conf
 		fakeSubscription,
 		fakeTenantID,
 		fakeUserIdentity)
-	
+
 	auth.ActiveDirectoryEndpoint = aadServerMocker.GetServerURL()
 	auth.ResourceManagerEndpoint = aciServerMocker.GetServerURL()
-	
+
 	file, err := ioutil.TempFile("", "auth.json")
 	if err != nil {
 		return nil, err
 	}
-	
+
 	defer os.Remove(file.Name())
-	
+
 	b := new(bytes.Buffer)
 	json.NewEncoder(b).Encode(auth)
-	
+
 	if _, err := file.Write(b.Bytes()); err != nil {
 		return nil, err
 	}
-	
+
 	os.Setenv("AZURE_AUTH_LOCATION", file.Name())
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
-	
+
 	cfg := nodeutil.ProviderConfig{
 		ConfigMaps: configMapMocker,
 		Secrets:    secretMocker,
 		Pods:       podMocker,
 	}
-	
+
 	cfg.Node = &v1.Node{}
 	cfg.Node.Name = fakeNodeName
 	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
-	
-	provider, err := NewACIProvider("example.toml", cfg, "0.0.0.0", 10250, "cluster.local")
+
+	provider, err := NewACIProvider("example.toml", cfg, "Linux", fakeNodeName, "0.0.0.0", "cluster.local", 10250)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return provider, nil
 }
 
@@ -865,7 +865,7 @@ func TestConfigureNode(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	node := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "virtual-kubelet",
@@ -891,14 +891,14 @@ func TestConfigureNode(t *testing.T) {
 
 func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, cg.Containers[0].LivenessProbe != nil, "Liveness probe expected")
 		assert.Check(t, is.Equal(10, cg.Containers[0].LivenessProbe.InitialDelaySeconds), "Initial Probe Delay doesn't match")
@@ -940,25 +940,25 @@ func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 				},
 			},
 		}
-		
+
 		if err := provider.CreatePod(context.Background(), pod); err != nil {
 			t.Fatal("Failed to create pod", err)
 		}
-		
+
 		return http.StatusOK, cg
 	}
 }
 
 func TestCreatePodWithLivenessProbe(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -974,10 +974,10 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 		assert.Check(t, is.Equal(int32(3), cg.Containers[0].LivenessProbe.SuccessThreshold), "Probe Success Threshold doesn't match")
 		assert.Check(t, is.Equal(int32(5), cg.Containers[0].LivenessProbe.FailureThreshold), "Probe Failure Threshold doesn't match")
 		assert.Check(t, cg.Containers[0].LivenessProbe.HTTPGet != nil, "Expected an HTTP Get Probe")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -1004,7 +1004,7 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -1012,14 +1012,14 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 
 func TestCreatePodWithReadinessProbe(t *testing.T) {
 	_, aciServerMocker, provider, err := prepareMocks()
-	
+
 	if err != nil {
 		t.Fatal("Unable to prepare the mocks", err)
 	}
-	
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -1035,10 +1035,10 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 		assert.Check(t, is.Equal(int32(3), cg.Containers[0].ReadinessProbe.SuccessThreshold), "Probe Success Threshold doesn't match")
 		assert.Check(t, is.Equal(int32(5), cg.Containers[0].ReadinessProbe.FailureThreshold), "Probe Failure Threshold doesn't match")
 		assert.Check(t, cg.Containers[0].ReadinessProbe.HTTPGet != nil, "Expected an HTTP Get Probe")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -1065,7 +1065,7 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -1074,10 +1074,10 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 func TestCreatePodWithProjectedVolume(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	
+
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
-	
+
 	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
 		manifest := &aci.ResourceProviderManifest{
 			Metadata: &aci.ResourceProviderMetadata{
@@ -1089,10 +1089,10 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 				},
 			},
 		}
-		
+
 		return http.StatusOK, manifest
 	}
-	
+
 	mockCtrl := gomock.NewController(GinkgoT())
 	configMapLister := NewMockConfigMapLister(mockCtrl)
 	configMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
@@ -1106,12 +1106,12 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 			"foo":    "bar",
 		},
 	}, nil)
-	
+
 	provider, err := createTestProvider(aadServerMocker, aciServerMocker, configMapLister, nil, nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -1123,10 +1123,10 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
 		assert.Check(t, is.Equal("projectedvolume", cg.Volumes[0].Name), "volume name doesn't match")
 		assert.Check(t, is.Equal(base64.StdEncoding.EncodeToString([]byte("fake-ca-data")), cg.Volumes[0].Secret["ca.crt"]), "configmap data doesn't match")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -1177,7 +1177,7 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 			},
 		},
 	}
-	
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -1189,14 +1189,14 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	fakeShareName := "aksshare"
 	azureFileVolumeName := "azure"
-	
+
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
 	mockCtrl := gomock.NewController(GinkgoT())
 	mockSecretLister := NewMockSecretLister(mockCtrl)
 	mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 	mockConfigMapLister := NewMockConfigMapLister(mockCtrl)
-	
+
 	aciServerMocker.OnGetRPManifest = func() (int, interface{}) {
 		manifest := &aci.ResourceProviderManifest{
 			Metadata: &aci.ResourceProviderMetadata{
@@ -1210,7 +1210,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		}
 		return http.StatusOK, manifest
 	}
-	
+
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
@@ -1220,10 +1220,10 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
 		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
-		
+
 		return http.StatusOK, cg
 	}
-	
+
 	configMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 	mockConfigMapLister.EXPECT().ConfigMaps(podNamespace).Return(configMapNamespaceLister)
 	configMapNamespaceLister.EXPECT().Get("kube-root-ca.crt").Return(&v1.ConfigMap{
@@ -1235,12 +1235,12 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			"foo":    "bar",
 		},
 	}, nil)
-	
+
 	provider, err := createTestProvider(aadServerMocker, aciServerMocker, mockConfigMapLister, mockSecretLister, nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
-	
+
 	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fakeVolumeSecret,
@@ -1250,12 +1250,12 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			azureFileStorageAccountName: []byte("azure storage account name"),
 			azureFileStorageAccountKey:  []byte("azure storage account key")},
 	}
-	
+
 	fakeVolumeMount := v1.VolumeMount{
 		Name:      azureFileVolumeName,
 		MountPath: "/mnt/azure",
 	}
-	
+
 	fakePodVolume := v1.Volume{
 		Name: azureFileVolumeName,
 		VolumeSource: v1.VolumeSource{
@@ -1268,7 +1268,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			},
 		},
 	}
-	
+
 	cases := []struct {
 		description   string
 		secretVolume  *v1.Secret
@@ -1334,7 +1334,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			
+
 			pod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      podName,
@@ -1361,18 +1361,18 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 					},
 				},
 			}
-			
+
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)
-			
+
 			if tc.volume.CSI.VolumeAttributes != nil && len(tc.volume.CSI.VolumeAttributes) != 0 {
 				mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
 				mockSecretNamespaceLister.EXPECT().Get(tc.volume.CSI.VolumeAttributes[azureFileSecretName]).Return(tc.secretVolume, nil)
 			}
-			
+
 			pod.Spec.Volumes = append(pod.Spec.Volumes, tc.volume)
-			
+
 			err = provider.CreatePod(context.Background(), pod)
-			
+
 			if tc.expectedError != nil {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			} else {

@@ -15,7 +15,7 @@ fi
 
 : "${RANDOM_NUM:=$RANDOM}"
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -46,10 +46,10 @@ fi
 TMPDIR=""
 
 cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
-  if [ -n "$TMPDIR" ]; then
-      rm -rf "$TMPDIR"
-  fi
+ az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+ if [ -n "$TMPDIR" ]; then
+     rm -rf "$TMPDIR"
+ fi
 }
 trap 'cleanup' EXIT
 

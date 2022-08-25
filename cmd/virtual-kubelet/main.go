@@ -17,11 +17,15 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -31,12 +35,11 @@ import (
 	"github.com/spf13/cobra"
 	azprovider "github.com/virtual-kubelet/azure-aci/provider"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
+	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	"github.com/virtual-kubelet/virtual-kubelet/node"
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	v1 "k8s.io/api/core/v1"
-
-	"github.com/virtual-kubelet/virtual-kubelet/log"
-	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	"k8s.io/klog"
 )
 
@@ -46,6 +49,9 @@ var (
 )
 
 func main() {
+	klogFlags := flag.NewFlagSet("klog", flag.ContinueOnError)
+	klog.InitFlags(klogFlags)
+
 	prog := filepath.Base(os.Args[0])
 	desc := prog + " implements a node on a Kubernetes cluster using Azure Container Instances to run pods."
 
@@ -58,14 +64,14 @@ func main() {
 		traceSampleRate string
 
 		// for aci
-		kubeconfigPath  = os.Getenv("KUBECONFIG")
-		cfgPath         string
-		clusterDomain   = "cluster.local"
-		startupTimeout  time.Duration
-		disableTaint    bool
-		operatingSystem = "Linux"
-		numberOfWorkers = 50
-		resync          time.Duration
+		kubeconfigPath     = os.Getenv("KUBECONFIG")
+		ProviderConfigPath string
+		clusterDomain      = "cluster.local"
+		startupTimeout     time.Duration
+		disableTaint       bool
+		operatingSystem    = "Linux"
+		numberOfWorkers    = 50
+		resync             time.Duration
 
 		certPath       = os.Getenv("APISERVER_CERT_LOCATION")
 		keyPath        = os.Getenv("APISERVER_KEY_LOCATION")
@@ -87,10 +93,37 @@ func main() {
 	)
 
 	if kubeconfigPath == "" {
-		home, _ := homedir.Dir()
-		if home != "" {
-			kubeconfigPath = filepath.Join(home, ".kube", "config")
+		home, err := homedir.Dir()
+		if err != nil || home == "" {
+			return
 		}
+		kubeconfigPath = filepath.Join(home, ".kube", "config")
+	}
+
+	if kPort := os.Getenv("KUBELET_PORT"); kPort != "" {
+		var err error
+		listenPort, err = strconv.Atoi(kPort)
+		if err != nil {
+			return
+		}
+	}
+
+	mux := http.NewServeMux()
+
+	withProvider := func(cfg nodeutil.ProviderConfig) (nodeutil.Provider, node.NodeProvider, error) {
+		p, err := azprovider.NewACIProvider(ProviderConfigPath, cfg, operatingSystem, nodeName, os.Getenv("VKUBELET_POD_IP"), clusterDomain, int32(listenPort))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		cfg.Node.Status.Capacity = p.Capacity()
+		cfg.Node.Status.Allocatable = p.Capacity()
+		cfg.Node.Status.Conditions = p.NodeConditions()
+		cfg.Node.Status.Addresses = p.NodeAddresses()
+		cfg.Node.Status.DaemonEndpoints = p.NodeDaemonEndpoints()
+		cfg.Node.Status.NodeInfo.KubeletVersion = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
+
+		return p, p, err
 	}
 
 	withTaint := func(cfg *nodeutil.NodeConfig) error {
@@ -115,48 +148,34 @@ func main() {
 		cfg.NodeSpec.Spec.Taints = append(cfg.NodeSpec.Spec.Taints, taint)
 		return nil
 	}
-	withVersion := func(cfg *nodeutil.NodeConfig) error {
-		cfg.NodeSpec.Status.NodeInfo.KubeletVersion = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
-		return nil
-	}
 
 	withWebhookAuth := func(cfg *nodeutil.NodeConfig) error {
 		if !webhookAuth {
 			return nil
 		}
-		auth, err := nodeutil.WebhookAuth(cfg.Client, cfg.NodeSpec.Name, func(cfg *nodeutil.WebhookAuthConfig) error {
-			if webhookAuthnCacheTTL > 0 {
-				cfg.AuthnConfig.CacheTTL = webhookAuthnCacheTTL
-			}
-			if webhookAuthzAuthedCacheTTL > 0 {
-				cfg.AuthzConfig.AllowCacheTTL = webhookAuthzAuthedCacheTTL
-			}
-			if webhookAuthzUnauthedCacheTTL > 0 {
-				cfg.AuthzConfig.AllowCacheTTL = webhookAuthzUnauthedCacheTTL
-			}
-			return nil
-		})
+		auth, err := nodeutil.WebhookAuth(cfg.Client, nodeName,
+			func(cfg *nodeutil.WebhookAuthConfig) error {
+				if webhookAuthnCacheTTL > 0 {
+					cfg.AuthnConfig.CacheTTL = webhookAuthnCacheTTL
+				}
+				if webhookAuthzAuthedCacheTTL > 0 {
+					cfg.AuthzConfig.AllowCacheTTL = webhookAuthzAuthedCacheTTL
+				}
+				if webhookAuthzUnauthedCacheTTL > 0 {
+					cfg.AuthzConfig.AllowCacheTTL = webhookAuthzUnauthedCacheTTL
+				}
+				return nil
+			})
 		if err != nil {
 			return err
 		}
-		cfg.TLSConfig.ClientAuth = tls.RequestClientCert
-		cfg.Handler = nodeutil.WithAuth(auth, cfg.Handler)
+		cfg.Handler = nodeutil.WithAuth(auth, mux)
+
 		return nil
 	}
 
-	withCA := func(cfg *tls.Config) error {
-		if clientCACert == "" {
-			return nil
-		}
-		if err := nodeutil.WithCAFromPath(clientCACert)(cfg); err != nil {
-			return fmt.Errorf("error getting CA from path: %w", err)
-		}
-		if clientNoVerify {
-			cfg.ClientAuth = tls.NoClientCert
-		}
-		return nil
-	}
 	withClient := func(cfg *nodeutil.NodeConfig) error {
+		cfg.Handler = mux
 		client, err := nodeutil.ClientsetFromEnv(kubeconfigPath)
 		if err != nil {
 			return err
@@ -164,51 +183,102 @@ func main() {
 		return nodeutil.WithClient(client)(cfg)
 	}
 
-	run := func(ctx context.Context) error {
-		if err := configureTracing(nodeName, traceSampleRate); err != nil {
-			return err
+	withAzNodeConfig := func(cfg *nodeutil.NodeConfig) error {
+		cfg.KubeconfigPath = kubeconfigPath
+		cfg.InformerResyncPeriod = resync
+		cfg.NodeSpec.Status.NodeInfo.Architecture = runtime.GOARCH
+
+		cfg.NodeSpec.Status.NodeInfo.OperatingSystem = operatingSystem
+		cfg.NodeSpec.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
+		cfg.NodeSpec.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
+
+		// Virtual node would be skipped for cloud provider operations (e.g. CP should not add route).
+		cfg.NodeSpec.ObjectMeta.Labels["kubernetes.azure.com/managed"] = "false"
+		cfg.NumWorkers = numberOfWorkers
+		cfg.HTTPListenAddr = fmt.Sprintf(":%d", listenPort)
+		cfg.DebugHTTP = true
+
+		return nil
+	}
+
+	withTLSConfig := func(cfg *nodeutil.NodeConfig) error {
+		var (
+			caPool     *x509.CertPool
+			clientAuth = tls.RequestClientCert
+		)
+		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+		if err != nil {
+			return fmt.Errorf("error loading tls certs : %w", err)
 		}
-		node, err := nodeutil.NewNode(nodeName, func(cfg nodeutil.ProviderConfig) (nodeutil.Provider, node.NodeProvider, error) {
-			if p := os.Getenv("KUBELET_PORT"); p != "" {
-				var err error
-				listenPort, err = strconv.Atoi(p)
-				if err != nil {
-					return nil, nil, err
-				}
+
+		if clientCACert != "" {
+			caPool = x509.NewCertPool()
+			pem, err := ioutil.ReadFile(clientCACert)
+			if err != nil {
+				return fmt.Errorf("error reading ca cert pem: %w", err)
 			}
-			p, err := azprovider.NewACIProvider(cfgPath, cfg, os.Getenv("VKUBELET_POD_IP"), int32(listenPort), clusterDomain)
-			return p, nil, err
-		},
+
+			if !caPool.AppendCertsFromPEM(pem) {
+				return fmt.Errorf("error appending ca cert to certificate pool")
+			}
+		}
+
+		cfg.TLSConfig = &tls.Config{
+			Certificates:             []tls.Certificate{cert},
+			MinVersion:               tls.VersionTLS12,
+			PreferServerCipherSuites: true,
+			CipherSuites:             nodeutil.DefaultServerCiphers(),
+			ClientAuth:               clientAuth,
+			ClientCAs:                caPool,
+		}
+		return nil
+	}
+	run := func(ctx context.Context) error {
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		node, err := nodeutil.NewNode(nodeName,
+			withProvider,
 			withClient,
 			withTaint,
-			withVersion,
-			nodeutil.WithTLSConfig(nodeutil.WithKeyPairFromPath(certPath, keyPath), withCA),
+			withAzNodeConfig,
+			withTLSConfig,
 			withWebhookAuth,
-			func(cfg *nodeutil.NodeConfig) error {
-				cfg.InformerResyncPeriod = resync
-				cfg.NumWorkers = numberOfWorkers
-				cfg.HTTPListenAddr = fmt.Sprintf(":%d", listenPort)
-				return nil
-			},
+			nodeutil.AttachProviderRoutes(mux),
 		)
 		if err != nil {
 			return err
 		}
 
-		go func() error {
-			err = node.Run(ctx)
-			if err != nil {
-				return fmt.Errorf("error running the node: %w", err)
-			}
-			return nil
+		if err := configureTracing(nodeName, traceSampleRate); err != nil {
+			return err
+		}
+		ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{
+			"provider":        provider,
+			"operatingSystem": operatingSystem,
+			"node":            nodeName,
+		}))
+
+		go node.Run(ctx)
+
+		defer func() {
+			log.G(ctx).Debug("Waiting for node to be done")
+			cancel()
+			<-node.Done()
 		}()
 
 		if err := node.WaitReady(ctx, startupTimeout); err != nil {
 			return fmt.Errorf("error waiting for node to be ready: %w", err)
 		}
 
-		<-node.Done()
-		return node.Err()
+		log.G(ctx).Info("Node is ready")
+
+		select {
+		case <-ctx.Done():
+		case <-node.Done():
+			return node.Err()
+		}
+		return nil
 	}
 
 	cmd := &cobra.Command{
@@ -235,22 +305,19 @@ func main() {
 	}
 
 	flags := cmd.Flags()
-
-	klogFlags := flag.NewFlagSet("klog", flag.ContinueOnError)
-	klog.InitFlags(klogFlags)
 	klogFlags.VisitAll(func(f *flag.Flag) {
 		f.Name = "klog." + f.Name
 		flags.AddGoFlag(f)
 	})
 
 	flags.StringVar(&nodeName, "nodename", nodeName, "kubernetes node name")
-	flags.StringVar(&cfgPath, "provider-config", cfgPath, "cloud provider configuration file")
+	flags.StringVar(&ProviderConfigPath, "provider-config", ProviderConfigPath, "cloud provider configuration file")
 	flags.StringVar(&clusterDomain, "cluster-domain", clusterDomain, "kubernetes cluster-domain")
-	flag.DurationVar(&startupTimeout, "startup-timeout", startupTimeout, "How long to wait for the virtual-kubelet to start")
 	flags.BoolVar(&disableTaint, "disable-taint", disableTaint, "disable the node taint")
-	flag.StringVar(&operatingSystem, "os", operatingSystem, "Operating System (Linux/Windows)")
+	flags.StringVar(&operatingSystem, "os", operatingSystem, "Operating System (Linux/Windows)")
 	flags.IntVar(&numberOfWorkers, "pod-sync-workers", numberOfWorkers, `set the number of pod synchronization workers`)
 	flags.DurationVar(&resync, "full-resync-period", resync, "how often to perform a full resync of pods between kubernetes and the provider")
+	flags.StringVar(&logLevel, "log-level", logLevel, "log level")
 
 	flags.StringVar(&clientCACert, "client-verify-ca", clientCACert, "CA cert to use to verify client requests")
 	flags.BoolVar(&clientNoVerify, "no-verify-clients", clientNoVerify, "Do not require client certificate validation")
