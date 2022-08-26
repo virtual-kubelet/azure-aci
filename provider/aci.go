@@ -1354,7 +1354,7 @@ func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
 	// using map to avoid duplicates
 	serverNamesMap := map[string]int{}
-	acrRegexp := "[a-z]+\\.azurecr\\.io"
+	acrRegexp := "[a-z0-9]+\\.azurecr\\.io"
 	for _, container := range pod.Spec.Containers {
 		img := container.Image
 		re := regexp.MustCompile(`/`)
