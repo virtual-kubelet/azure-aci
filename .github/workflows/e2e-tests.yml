@@ -47,6 +47,7 @@ jobs:
     environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
+      E2E_IMG_TAG:  ${{ github.event.number }}
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -74,8 +75,9 @@ jobs:
 
       - name: Build image
         run: |
-          OUTPUT_TYPE=type=registry VERSION=${{ github.event.pull_request.number}}  make docker-build-image
-
+          OUTPUT_TYPE=type=registry make docker-build-image
+        env:
+          VERSION: ${{ env.E2E_IMG_TAG}}
       - name: Install Azure CLI latest
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
