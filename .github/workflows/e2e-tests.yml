@@ -57,9 +57,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          submodules: true
-          fetch-depth: 0
 
       - name: Set e2e Cluster Name
         run: |
@@ -78,6 +75,7 @@ jobs:
           OUTPUT_TYPE=type=registry make docker-build-image
         env:
           VERSION: ${{ env.E2E_IMG_TAG}}
+
       - name: Install Azure CLI latest
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
@@ -95,6 +93,7 @@ jobs:
           REGISTRY: ${{ env.REGISTRY}}
           E2E_REGION: ${{ secrets.E2E_REGION}}
           CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
+          VERSION: ${{ env.E2E_IMG_TAG}}
 
       - name: Cleanup e2e resources
         if: ${{ always() }}
@@ -105,8 +104,5 @@ jobs:
       - uses: actions/delete-package-versions@v3
         if: ${{ always() }}
         with:
-          owner: 'virtual-kubelet'
-          repo: 'azure-aci'
           package-name: 'virtual-kubelet'
           token: ${{ secrets.GITHUB_TOKEN }}
-          num-old-versions-to-delete: 1

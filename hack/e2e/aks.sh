@@ -106,7 +106,6 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
-    --node-vm-size standard_d8_v3 \
     --generate-ssh-keys
 
 az role assignment create \
