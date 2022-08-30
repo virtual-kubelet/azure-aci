@@ -15,7 +15,7 @@ fi
 
 : "${RANDOM_NUM:=$RANDOM}"
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
