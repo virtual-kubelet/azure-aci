@@ -74,7 +74,7 @@ jobs:
 
       - name: Build image
         run: |
-          OUTPUT_TYPE=type=registry VERSION=${ github.event.pull_request.number}}  make docker-build-image
+          OUTPUT_TYPE=type=registry VERSION=${{ github.event.pull_request.number}}  make docker-build-image
 
       - name: Install Azure CLI latest
         run: |
