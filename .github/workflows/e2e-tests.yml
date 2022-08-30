@@ -47,7 +47,7 @@ jobs:
     environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      E2E_IMG_TAG:  ${{ github.event.number }}
+      E2E_IMG_TAG:  "e2e-ci"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
