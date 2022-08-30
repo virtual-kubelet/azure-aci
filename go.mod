@@ -3,7 +3,7 @@ module github.com/virtual-kubelet/azure-aci
 go 1.16
 
 require (
-	contrib.go.opencensus.io/exporter/ocagent v0.4.12
+	contrib.go.opencensus.io/exporter/ocagent v0.7.0
 	github.com/Azure/azure-sdk-for-go v63.0.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.20
 	github.com/Azure/go-autorest/autorest/adal v0.9.20
@@ -12,25 +12,29 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/BurntSushi/toml v0.3.1
+	github.com/cpuguy83/dockercfg v0.3.0
 	github.com/dimchansky/utfbom v1.1.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.16.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
+	github.com/spf13/cobra v1.0.0
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/thoas/go-funk v0.9.1
-	github.com/virtual-kubelet/node-cli v0.7.0
 	github.com/virtual-kubelet/virtual-kubelet v1.6.0
-	go.opencensus.io v0.22.2
+	go.opencensus.io v0.22.3
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.19.10
 	k8s.io/apimachinery v0.19.10
 	k8s.io/client-go v0.19.10
+	k8s.io/klog v1.0.0
 )
 
 // fix cve
