@@ -1,7 +1,7 @@
 name: e2e-tests
 
 on:
-  pull_request_target:
+  pull_request:
     branches: [master]
     paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
   push:
@@ -44,10 +44,12 @@ jobs:
 
   e2e-tests:
     needs: export-registry
-    environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       E2E_IMG_TAG:  "e2e-ci"
+      CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
+      SUBSCRIPTIONID: '5e1e737b-b4e2-48a2-b9d0-34764affdbaa'
+      TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -57,9 +59,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          submodules: true
-          fetch-depth: 0
 
       - name: Set e2e Cluster Name
         run: |
@@ -78,6 +77,7 @@ jobs:
           OUTPUT_TYPE=type=registry make docker-build-image
         env:
           VERSION: ${{ env.E2E_IMG_TAG}}
+
       - name: Install Azure CLI latest
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
@@ -105,8 +105,5 @@ jobs:
       - uses: actions/delete-package-versions@v3
         if: ${{ always() }}
         with:
-          owner: 'virtual-kubelet'
-          repo: 'azure-aci'
           package-name: 'virtual-kubelet'
           token: ${{ secrets.GITHUB_TOKEN }}
-          num-old-versions-to-delete: 1
