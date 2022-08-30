@@ -12,7 +12,7 @@ require (
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/BurntSushi/toml v0.3.1
-	github.com/cpuguy83/dockercfg v0.3.0
+	github.com/cpuguy83/dockercfg v0.3.1
 	github.com/dimchansky/utfbom v1.1.0
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.1.1
@@ -25,7 +25,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
-	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/thoas/go-funk v0.9.1
 	github.com/virtual-kubelet/virtual-kubelet v1.6.0
 	go.opencensus.io v0.22.3
@@ -33,6 +32,7 @@ require (
 	gotest.tools v2.2.0+incompatible
 	k8s.io/api v0.19.10
 	k8s.io/apimachinery v0.19.10
+	k8s.io/apiserver v0.19.10
 	k8s.io/client-go v0.19.10
 	k8s.io/klog v1.0.0
 )

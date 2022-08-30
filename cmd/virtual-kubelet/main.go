@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,6 +35,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node"
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
@@ -120,6 +122,11 @@ func main() {
 		return nil
 	}
 
+	configureRoutes := func(cfg *nodeutil.NodeConfig) error {
+		mux := http.NewServeMux()
+		cfg.Handler = mux
+		return nodeutil.AttachProviderRoutes(mux)(cfg)
+	}
 	withWebhookAuth := func(cfg *nodeutil.NodeConfig) error {
 		if !webhookAuth {
 			return nil
@@ -133,6 +140,15 @@ func main() {
 			}
 			if webhookAuthzUnauthedCacheTTL > 0 {
 				cfg.AuthzConfig.AllowCacheTTL = webhookAuthzUnauthedCacheTTL
+			}
+
+			if clientCACert != "" {
+				ca, err := dynamiccertificates.NewDynamicCAContentFromFile("client-ca", clientCACert)
+				if err != nil {
+					return err
+				}
+				cfg.AuthnConfig.ClientCertificateCAContentProvider = ca
+				go ca.Run(1, context.TODO().Done())
 			}
 			return nil
 		})
@@ -179,6 +195,7 @@ func main() {
 			p, err := azprovider.NewACIProvider(cfgPath, cfg, os.Getenv("VKUBELET_POD_IP"), int32(listenPort), clusterDomain)
 			return p, nil, err
 		},
+			configureRoutes,
 			withClient,
 			withTaint,
 			withVersion,

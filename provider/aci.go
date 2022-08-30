@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	"github.com/cpuguy83/dockercfg"
 	"github.com/gorilla/websocket"
 	client "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
@@ -1777,7 +1778,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 
 		// Handle the case for Secret volume.
 		if v.Secret != nil {
-			paths := make(map[string]string)
+			paths := make(map[string]*string)
 			secret, err := p.secretL.Secrets(pod.Namespace).Get(v.Secret.SecretName)
 			if v.Secret.Optional != nil && !*v.Secret.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("Secret %s is required by Pod %s and does not exist", v.Secret.SecretName, pod.Name)
@@ -1802,7 +1803,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 
 		// Handle the case for ConfigMap volume.
 		if v.ConfigMap != nil {
-			paths := make(map[string]string)
+			paths := make(map[string]*string)
 			configMap, err := p.configL.ConfigMaps(pod.Namespace).Get(v.ConfigMap.Name)
 			if v.ConfigMap.Optional != nil && !*v.ConfigMap.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", v.ConfigMap.Name, pod.Name)
