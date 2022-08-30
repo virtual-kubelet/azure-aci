@@ -47,8 +47,6 @@ jobs:
     environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      IMG_VERSION: "dev"
-      IMG_TAG: "dev"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -64,9 +62,9 @@ jobs:
 
       - name: Set e2e Cluster Name
         run: |
-            rand=$RANDOM
-            echo "CLUSTER_NAME=vk-aci-test-${rand}" >> $GITHUB_ENV
-     
+          rand=$RANDOM
+          echo "CLUSTER_NAME=vk-aci-test-${rand}" >> $GITHUB_ENV
+
       - name: Login to ${{ env.REGISTRY }}
         uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
         with:
@@ -74,20 +72,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set image version
-        run: |
-          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV   
-
-      - name: Set Image tag
-        run: |
-          ver=${{ env.IMG_VERSION}}
-          echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV   
-
       - name: Build image
         run: |
           OUTPUT_TYPE=type=registry make docker-build-image
         env:
-          VERSION: ${{ env.IMG_VERSION }}
+          VERSION: ${{ github.event.number }}
 
       - name: Install Azure CLI latest
         run: |
