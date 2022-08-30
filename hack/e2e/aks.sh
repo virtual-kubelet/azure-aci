@@ -15,7 +15,7 @@ fi
 
 : "${RANDOM_NUM:=$RANDOM}"
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -106,7 +106,6 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
-    --node-vm-size standard_d8_v3 \
     --generate-ssh-keys
 
 az role assignment create \

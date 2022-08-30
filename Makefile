@@ -24,7 +24,7 @@ E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
-VERSION      ?= $(shell git describe --abbrev=0 --tags)
+VERSION      ?= $(VERSION)
 IMG_TAG ?= $(subst v,,$(VERSION))
 
 

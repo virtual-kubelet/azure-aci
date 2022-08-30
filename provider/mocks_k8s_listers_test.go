@@ -89,6 +89,20 @@ func (m *MockConfigMapLister) EXPECT() *MockConfigMapListerMockRecorder {
 	return m.recorder
 }
 
+// ConfigMaps mocks base method.
+func (m *MockConfigMapLister) ConfigMaps(arg0 string) v10.ConfigMapNamespaceLister {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ConfigMaps", arg0)
+	ret0, _ := ret[0].(v10.ConfigMapNamespaceLister)
+	return ret0
+}
+
+// ConfigMaps indicates an expected call of ConfigMaps.
+func (mr *MockConfigMapListerMockRecorder) ConfigMaps(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigMaps", reflect.TypeOf((*MockConfigMapLister)(nil).ConfigMaps), arg0)
+}
+
 // List mocks base method.
 func (m *MockConfigMapLister) List(arg0 labels.Selector) ([]*v1.ConfigMap, error) {
 	m.ctrl.T.Helper()
@@ -102,20 +116,6 @@ func (m *MockConfigMapLister) List(arg0 labels.Selector) ([]*v1.ConfigMap, error
 func (mr *MockConfigMapListerMockRecorder) List(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockConfigMapLister)(nil).List), arg0)
-}
-
-// ConfigMaps mocks base method.
-func (m *MockConfigMapLister) ConfigMaps(arg0 string) v10.ConfigMapNamespaceLister {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ConfigMaps", arg0)
-	ret0, _ := ret[0].(v10.ConfigMapNamespaceLister)
-	return ret0
-}
-
-// ConfigMaps indicates an expected call of ConfigMaps.
-func (mr *MockConfigMapListerMockRecorder) ConfigMaps(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ConfigMaps", reflect.TypeOf((*MockConfigMapLister)(nil).ConfigMaps), arg0)
 }
 
 // MockConfigMapNamespaceLister is a mock of ConfigMapNamespaceLister interface.

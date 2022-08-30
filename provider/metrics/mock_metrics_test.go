@@ -12,48 +12,43 @@ import (
 	aci "github.com/virtual-kubelet/azure-aci/client/aci"
 	statsv1alpha1 "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	corev1listers "k8s.io/client-go/listers/core/v1"
 )
 
-// MockPodLister is a mock of PodLister interface.
-type MockPodLister struct {
+// MockPodGetter is a mock of PodGetter interface.
+type MockPodGetter struct {
 	ctrl     *gomock.Controller
-	recorder *MockPodListerMockRecorder
+	recorder *MockPodGetterMockRecorder
 }
 
-func (m *MockPodLister) List(selector labels.Selector) (ret []*v1.Pod, err error) {
-	m.ctrl.T.Helper()
-	mList := m.ctrl.Call(m, "List", selector)
-	mList0 := mList[0].([]*v1.Pod)
-	mList1, _ := mList[1].(error)
-	return mList0, mList1
-}
-
-func (m *MockPodLister) Pods(namespace string) corev1listers.PodNamespaceLister {
-return nil
-}
-
-func (m *MockPodListerMockRecorder) List(selector interface{})  *gomock.Call {
-	m.mock.ctrl.T.Helper()
-	return m.mock.ctrl.RecordCallWithMethodType(m.mock, "List", reflect.TypeOf((*MockPodLister)(nil).List), selector)
-}
-
-// MockPodListerMockRecorder is the mock recorder for MockPodLister.
-type MockPodListerMockRecorder struct {
-	mock *MockPodLister
+// MockPodGetterMockRecorder is the mock recorder for MockPodGetter.
+type MockPodGetterMockRecorder struct {
+	mock *MockPodGetter
 }
 
 // NewMockPodGetter creates a new mock instance.
-func NewMockPodLister(ctrl *gomock.Controller) *MockPodLister {
-	mock := &MockPodLister{ctrl: ctrl}
-	mock.recorder = &MockPodListerMockRecorder{mock}
+func NewMockPodGetter(ctrl *gomock.Controller) *MockPodGetter {
+	mock := &MockPodGetter{ctrl: ctrl}
+	mock.recorder = &MockPodGetterMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPodLister) EXPECT() *MockPodListerMockRecorder {
+func (m *MockPodGetter) EXPECT() *MockPodGetterMockRecorder {
 	return m.recorder
+}
+
+// GetPods mocks base method.
+func (m *MockPodGetter) GetPods() []*v1.Pod {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPods")
+	ret0, _ := ret[0].([]*v1.Pod)
+	return ret0
+}
+
+// GetPods indicates an expected call of GetPods.
+func (mr *MockPodGetterMockRecorder) GetPods() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPods", reflect.TypeOf((*MockPodGetter)(nil).GetPods))
 }
 
 // MockMetricsGetter is a mock of MetricsGetter interface.
