@@ -133,6 +133,12 @@ az role assignment create \
     --assignee-principal-type "ServicePrincipal" \
     --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
 
+az role assignment create \
+    --role "Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}"
+
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "${TMPDIR}/kubeconfig"
 export KUBECONFIG="${TMPDIR}/kubeconfig"
 
@@ -150,6 +156,8 @@ helm install \
     --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE" \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
+    --set "providers.azure.aciResourceGroup=$RESOURCE_GROUP" \
+    --set "providers.azure.aciRegion=$LOCATION" \
     "$CHART_NAME" \
     ./charts/virtual-kubelet
 

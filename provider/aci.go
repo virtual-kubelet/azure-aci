@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"regexp"
+
 	"github.com/pkg/errors"
 
 	"github.com/gorilla/websocket"
@@ -68,6 +70,10 @@ const (
 const (
 	gpuResourceName   = "nvidia.com/gpu"
 	gpuTypeAnnotation = "virtual-kubelet.io/gpu-type"
+)
+
+const (
+	delegatedIdentitiesAnnotation = "virtual-kubelet.io/delegated-resources"
 )
 
 const (
@@ -667,16 +673,47 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
+	masterURI := os.Getenv("MASTER_URI")
+	t := regexp.MustCompile(`[:/]`)
+	masterURISplit := t.Split(masterURI, -1)
+	clusterFqdn := ""
+	if len(masterURISplit) > 1 {
+		clusterFqdn = masterURISplit[3]
+	}
+	cluster, err := p.aciClient.GetAKSCluster(ctx, p.resourceGroup, clusterFqdn)
+	if err != nil {
+		return err
+	}
+
 	// get containers
 	containers, err := p.getContainers(pod)
 	if err != nil {
 		return err
 	}
+
 	// get registry creds
 	creds, err := p.getImagePullSecrets(pod)
 	if err != nil {
 		return err
 	}
+
+	// use MI (kubelet identity) for image pull when image pull secrets are not present
+	if len(creds) == 0 {
+		// get Managed Identity based creds
+		creds = p.getImagePullManagedIdentitySecrets(pod, &cluster.Properties.IdentityProfile.KubeletIdentity, &containerGroup)
+	}
+
+	//get array of delegated identities from annotations
+	//delegatedIdentityString := pod.Annotations[delegatedIdentitiesAnnotation]
+	//re := regexp.MustCompile(`,`)
+	//delegatedIdentities := re.Split(delegatedIdentityString, -1)
+
+	//set containerGroupIdentity
+	err = p.setContainerGroupIdentity(ctx, &cluster.Properties.IdentityProfile.KubeletIdentity, pod.Annotations[delegatedIdentitiesAnnotation], "UserAssigned", &containerGroup)
+	if err != nil {
+		return err
+	}
+
 	// get volumes
 	volumes, err := p.getVolumes(pod)
 	if err != nil {
@@ -771,8 +808,10 @@ func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *aci.DNSConfig {
 	nameServers := make([]string, 0)
 	searchDomains := []string{}
 
+	AzureDNSIP := "168.63.129.16"
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
 		nameServers = append(nameServers, p.kubeDNSIP)
+		nameServers = append(nameServers, AzureDNSIP)
 		searchDomains = p.generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod)
 	}
 
@@ -1311,7 +1350,31 @@ func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 	}
 }
 
+// get list of distinct acr servernames from pod
+func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
+	// using map to avoid duplicates
+	serverNamesMap := map[string]int{}
+	acrRegexp := "[a-z0-9]+\\.azurecr\\.io"
+	for _, container := range pod.Spec.Containers {
+		img := container.Image
+		re := regexp.MustCompile(`/`)
+		imageSplit := re.Split(img, -1)
+		server := imageSplit[0]
+		isMatch, _ := regexp.MatchString(acrRegexp, server)
+		if len(imageSplit) > 1 && isMatch {
+			serverNamesMap[server] = 0
+		}
+	}
+
+	serverNames := []string{}
+	for k, _ := range serverNamesMap {
+		serverNames = append(serverNames, k)
+	}
+	return serverNames
+}
+
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCredential, error) {
+
 	ips := make([]aci.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	for _, ref := range pod.Spec.ImagePullSecrets {
 		secret, err := p.resourceManager.GetSecret(ref.Name, pod.Namespace)
@@ -1335,7 +1398,51 @@ func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]aci.ImageRegistryCrede
 		}
 
 	}
+
 	return ips, nil
+}
+
+// returns an arry of ACI ImageRegistryCredential objects based on the identity specified
+func (p *ACIProvider) getImagePullManagedIdentitySecrets(pod *v1.Pod, identity *aci.AzIdentity, contianerGroup * aci.ContainerGroup) []aci.ImageRegistryCredential {
+	serverNames := p.getImageServerNames(pod)
+	ips := make([]aci.ImageRegistryCredential, 0, len(serverNames))
+	if identity != nil{
+		for _, server := range serverNames {
+			cred := aci.ImageRegistryCredential{
+				Server:  server,
+				Identity: identity.ResourceId,
+			}
+			ips = append(ips, cred)
+		}
+	}
+	return ips
+}
+
+// sets Identity as User Assigned ContainerGroup Identity
+func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *aci.AzIdentity, delegatedIdentityStringBase64 string, identityType string, containerGroup *aci.ContainerGroup) (error) {
+	if identity == nil {
+		return nil
+	}
+	identityList := map[string]map[string]string{}
+	identityList[identity.ResourceId] = map[string]string{}
+	delegatedIdentityObject := map[string]aci.DelegatedIdentitySpec{}
+
+	if len(delegatedIdentityStringBase64) > 0{
+		decodedString, err := base64.StdEncoding.DecodeString(delegatedIdentityStringBase64)
+		err = json.Unmarshal([]byte(decodedString), &delegatedIdentityObject)
+
+		if err != nil {
+			return fmt.Errorf("Could not parse Base64 Encoded DelegatedIdentity JSON \n %v", err)
+		}
+	}
+
+	cgIdentity := aci.ACIContainerGroupIdentity{
+		Type: identityType,
+		UserAssignedIdentities: identityList,
+		DelegatedResources: delegatedIdentityObject,
+	}
+	containerGroup.Identity = &cgIdentity
+	return nil
 }
 
 func makeRegistryCredential(server string, authConfig AuthConfig) (*aci.ImageRegistryCredential, error) {
