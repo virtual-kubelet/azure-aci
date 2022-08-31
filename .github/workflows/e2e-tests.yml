@@ -1,12 +1,16 @@
 name: e2e-tests
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request_target:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
   push:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 permissions:
   id-token: write
@@ -17,23 +21,8 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  detect-noop:
-    runs-on: ubuntu-latest
-    outputs:
-      noop: ${{ steps.noop.outputs.should_skip  }}
-    steps:
-      - name: Detect No-op Changes
-        id: noop
-        uses: fkirc/skip-duplicate-actions@v4.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN  }}
-          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
-          concurrent_skipping: false
-
   export-registry:
     runs-on: ubuntu-20.04
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -47,7 +36,7 @@ jobs:
     environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      E2E_IMG_TAG:  "e2e-ci"
+      E2E_IMG_TAG: "e2e-ci"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -104,5 +93,5 @@ jobs:
       - uses: actions/delete-package-versions@v3
         if: ${{ always() }}
         with:
-          package-name: 'virtual-kubelet'
+          package-name: "virtual-kubelet"
           token: ${{ secrets.GITHUB_TOKEN }}

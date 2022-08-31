@@ -1,42 +1,31 @@
 name: azure-aci-test
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
   pull_request_target:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 jobs:
-  detect-noop:
-    runs-on: ubuntu-latest
-    outputs:
-      noop: ${{ steps.noop.outputs.should_skip  }}
-    steps:
-      - name: Detect No-op Changes
-        id: noop
-        uses: fkirc/skip-duplicate-actions@v4.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN  }}
-          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
-          concurrent_skipping: false
-
   tests:
     env:
-      ACTIVEDIRECTORYENDPOINTURL: 'https://login.microsoftonline.com'
-      RESOURCEMANAGERENDPOINTURL: 'https://management.azure.com/'
-      ACTIVEDIRECTORYGRAPHRESOURCEID: 'https://login.microsoftonline.com'
-      SQLMANAGEMENTENDPOINTURL: 'https://management.core.windows.net:8443/'
-      GALLERYENDPOINTURL: 'https://gallery.azure.com/'
-      MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
+      ACTIVEDIRECTORYENDPOINTURL: "https://login.microsoftonline.com"
+      RESOURCEMANAGERENDPOINTURL: "https://management.azure.com/"
+      ACTIVEDIRECTORYGRAPHRESOURCEID: "https://login.microsoftonline.com"
+      SQLMANAGEMENTENDPOINTURL: "https://management.core.windows.net:8443/"
+      GALLERYENDPOINTURL: "https://gallery.azure.com/"
+      MANAGEMENTENDPOINTURL: "https://manage.windowsazure.com/"
       CLIENTSECRET: ${{ secrets.CLIENT_SECRET }}
       WORKSPACEKEY: ${{ secrets.OMS_WORKSPACE_KEY }}
 
     runs-on: ubuntu-latest
     environment: test
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
     steps:
       - name: Set up Go
         uses: actions/setup-go@v3
@@ -70,7 +59,7 @@ jobs:
           omsworkspaceID: ${{ secrets.OMSWORKSPACEID  }}
           omsworkspaceKey: ${{ secrets.OMS_WORKSPACE_KEY }}
         run: |
-           make testauth test
+          make testauth test
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3
