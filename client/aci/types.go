@@ -3,6 +3,7 @@ package aci
 import (
 	"time"
 
+	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/virtual-kubelet/azure-aci/client/api"
 )
 
@@ -58,14 +59,6 @@ const (
 	User OperationsOrigin = "User"
 )
 
-// AzureFileVolume is the properties of the Azure File volume. Azure File shares are mounted as volumes.
-type AzureFileVolume struct {
-	ShareName          string `json:"shareName,omitempty"`
-	ReadOnly           bool   `json:"readOnly,omitempty"`
-	StorageAccountName string `json:"storageAccountName,omitempty"`
-	StorageAccountKey  string `json:"storageAccountKey,omitempty"`
-}
-
 // Container is a container instance.
 type Container struct {
 	Name                string `json:"name,omitempty"`
@@ -91,10 +84,10 @@ type ContainerGroupProperties struct {
 	RestartPolicy            ContainerGroupRestartPolicy          `json:"restartPolicy,omitempty"`
 	IPAddress                *IPAddress                           `json:"ipAddress,omitempty"`
 	OsType                   OperatingSystemTypes                 `json:"osType,omitempty"`
-	Volumes                  []Volume                             `json:"volumes,omitempty"`
+	Volumes                  []azaci.Volume                       `json:"volumes,omitempty"`
 	InstanceView             ContainerGroupPropertiesInstanceView `json:"instanceView,omitempty"`
 	Diagnostics              *ContainerGroupDiagnostics           `json:"diagnostics,omitempty"`
-	SubnetIds           	 []*SubnetIdDefinition            `json:"subnetIds,omitempty"`
+	SubnetIds                []*SubnetIdDefinition                `json:"subnetIds,omitempty"`
 	Extensions               []*Extension                         `json:"extensions,omitempty"`
 	DNSConfig                *DNSConfig                           `json:"dnsConfig,omitempty"`
 }
@@ -105,7 +98,7 @@ type ContainerGroupPropertiesInstanceView struct {
 	State  string  `json:"state,omitempty"`
 }
 
-// SubnetIdDefinition is the subnet ID, the format should be 
+// SubnetIdDefinition is the subnet ID, the format should be
 // /subscriptions/{subscriptionID}/resourceGroups/{ResourceGroup}/providers/Microsoft.Network/virtualNetworks/{VNET}/subnets/{Subnet}
 type SubnetIdDefinition struct {
 	ID string `json:"id,omitempty"`
@@ -242,7 +235,7 @@ type GPUSKU string
 
 const (
 	// K80 specifies the K80 GPU SKU
-	K80  GPUSKU = "K80"
+	K80 GPUSKU = "K80"
 	// P100 specifies the P100 GPU SKU
 	P100 GPUSKU = "P100"
 	// V100 specifies the V100 GPU SKU
@@ -291,7 +284,7 @@ type UsageListResult struct {
 // Volume is the properties of the volume.
 type Volume struct {
 	Name      string                 `json:"name,omitempty"`
-	AzureFile *AzureFileVolume       `json:"azureFile,omitempty"`
+	AzureFile *azaci.AzureFileVolume `json:"azureFile,omitempty"`
 	EmptyDir  map[string]interface{} `json:"emptyDir"`
 	Secret    map[string]string      `json:"secret,omitempty"`
 	GitRepo   *GitRepoVolume         `json:"gitRepo,omitempty"`
@@ -460,7 +453,7 @@ type ExtensionType string
 
 // Supported extension types
 const (
-	ExtensionTypeKubeProxy ExtensionType = "kube-proxy"
+	ExtensionTypeKubeProxy       ExtensionType = "kube-proxy"
 	ExtensionTypeRealtimeMetrics ExtensionType = "realtime-metrics"
 )
 

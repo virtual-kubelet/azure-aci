@@ -4,16 +4,15 @@ go 1.16
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.4.12
-	github.com/Azure/azure-sdk-for-go v43.0.0+incompatible
-	github.com/Azure/go-autorest/autorest v0.11.0
-	github.com/Azure/go-autorest/autorest/adal v0.9.0
+	github.com/Azure/azure-sdk-for-go v63.0.0+incompatible
+	github.com/Azure/go-autorest/autorest v0.11.20
+	github.com/Azure/go-autorest/autorest/adal v0.9.20
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.0
-	github.com/Azure/go-autorest/autorest/mocks v0.4.0
+	github.com/Azure/go-autorest/autorest/mocks v0.4.2
 	github.com/Azure/go-autorest/autorest/to v0.4.0 // indirect
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/BurntSushi/toml v0.3.1
 	github.com/dimchansky/utfbom v1.1.0
-	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.3
