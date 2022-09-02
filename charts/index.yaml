@@ -113,10 +113,10 @@ entries:
     version: 1.3.0
   virtual-kubelet-azure-aci:
   - apiVersion: v2
-    created: "2022-09-02T18:08:41.895313074Z"
+    created: "2022-09-02T18:08:44.272204116Z"
     description: a Helm chart to install virtual kubelet with Azure provider in an
       AKS cluster.
-    digest: ba5271952e6ed38b841032a4971a70111a82cb1e50c13482e41e4f969d8a02e0
+    digest: cfdadbdc2bfdd3cc1729e3dde36fe0655d0fb35cb482041c6fad43cabc8a01e5
     maintainers:
     - email: guofei@microsoft.com
       name: Fei Guo
@@ -128,4 +128,4 @@ entries:
     urls:
     - https://virtual-kubelet.github.io/azure-aci/charts/virtual-kubelet-azure-aci-1.4.3.tgz
     version: 1.4.3
-generated: "2022-09-02T18:08:41.893013934Z"
+generated: "2022-09-02T18:08:44.270896207Z"
