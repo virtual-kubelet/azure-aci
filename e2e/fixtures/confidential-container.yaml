@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: confidential-container-sevsnp
+  namespace: vk-test
+  annotations:
+    virtual-kubelet.io/acc-cce-policy: "eyJhbGxvd19hbGwiOiB0cnVlLCAiY29udGFpbmVycyI6IHsibGVuZ3RoIjogMCwgImVsZW1lbnRzIjogbnVsbH19"
+    virtual-kubelet.io/acc-isolation-type: "SevSnp"
+spec:
+  restartPolicy: Never
+  containers:
+  - image: alpine
+    imagePullPolicy: Always
+    name: e2etest-conf-container
+    command: [ "/bin/sh" ]
+    args: [ "-c", "sTimeout=10; xMax=1; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Sleeping $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
+    resources:
+      requests:
+        memory: 1G
+        cpu: 1
+  nodeSelector:
+    kubernetes.io/role: agent
+    beta.kubernetes.io/os: linux
+    type: virtual-kubelet
+  tolerations:
+  - key: virtual-kubelet.io/provider
+    operator: Exists

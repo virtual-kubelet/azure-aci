@@ -73,8 +73,8 @@ const (
 )
 
 const (
-	accCCEPolicyAnnotation = "virtual-kubelet.io/acc/cce-policy"
-	accIsolationTypeAnnotation = "virtual-kubelet.io/acc/isolation-type"
+	accCCEPolicyAnnotation = "virtual-kubelet.io/acc-cce-policy"
+	accIsolationTypeAnnotation = "virtual-kubelet.io/acc-isolation-type"
 	accIsolationTypeString = "SevSnp"
 )
 
@@ -684,7 +684,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 	cluster, err := p.aciClient.GetAKSCluster(ctx, p.resourceGroup, clusterFqdn)
 	if err != nil {
-		return err
+		log.G(ctx).Infof("can't get cluster \n %v", err)
 	}
 
 	// get containers
@@ -700,7 +700,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	// use MI (kubelet identity) for image pull when image pull secrets are not present
-	if len(creds) == 0 {
+	if len(creds) == 0 && cluster != nil{
 		// get Managed Identity based creds
 		creds = p.getImagePullManagedIdentitySecrets(pod, &cluster.Properties.IdentityProfile.KubeletIdentity, &containerGroup)
 		//set containerGroupIdentity
@@ -709,6 +709,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	// get volumes
 	volumes, err := p.getVolumes(pod)
+
 	if err != nil {
 		return err
 	}
@@ -924,7 +925,9 @@ func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *aci.ContainerGroupDiagnostics
 	return p.diagnostics
 }
 
+// only throw error if one of the two is present not if both are absent
 func (p *ACIProvider) getConfidentialComputeProperties(pod *v1.Pod) (*aci.ConfidentialComputeProperties, error) {
+	fmt.Println(pod.Annotations)
 	if pod.Annotations != nil {
 		ccePolicy, ccePolicyExists := pod.Annotations[accCCEPolicyAnnotation]
 		isolationType, isolationTypeExists := pod.Annotations[accIsolationTypeAnnotation]
@@ -937,7 +940,9 @@ func (p *ACIProvider) getConfidentialComputeProperties(pod *v1.Pod) (*aci.Confid
 			}
 			return nil, fmt.Errorf("ConfidentialComputeProperties not set : Isolation Type \"%s\" not recognized", isolationType)
 		}
-		return nil, fmt.Errorf("ConfidentialComputeProperties not set: Both isolationType and ccePolicy should be specified for confidential containers")
+		if (ccePolicyExists && !isolationTypeExists) || (!ccePolicyExists && isolationTypeExists){
+			return nil, fmt.Errorf("ConfidentialComputeProperties not set: Both isolationType and ccePolicy should be specified for confidential containers")
+		}
 	}
 
 	return nil, nil

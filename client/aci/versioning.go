@@ -43,9 +43,9 @@ func newVersionProvider(defaultVersion string) (*VersionProvider) {
 //	reference to an instance of VersionProvider with the finalVersion field updated
 //</returns>
 func (versionProvider *VersionProvider) getVersion(containerGroup ContainerGroup, ctx context.Context) (* VersionProvider) {
-
-    versionProvider.setVersionFromProperty(string(containerGroup.ContainerGroupProperties.ConfidentialComputeProperties.CCEPolicy), "ConfidentialCompute", ctx)
-
+	if containerGroup.ContainerGroupProperties.ConfidentialComputeProperties != nil {
+		versionProvider.setVersionFromProperty(string(containerGroup.ContainerGroupProperties.ConfidentialComputeProperties.CCEPolicy), "ConfidentialCompute", ctx)
+	}
     log.G(ctx).Infof("API Version set to %s \n", versionProvider.finalVersion)
     return versionProvider
 }
