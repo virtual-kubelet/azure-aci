@@ -3,7 +3,6 @@ package e2e
 import (
 	"os"
 	"os/exec"
-	"regexp"
 )
 
 //execute kubectl command in terminal
