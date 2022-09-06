@@ -32,6 +32,7 @@ fi
 
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
+: "${ACR_NAME=vktestregistry$RANDOM_NUM}"
 
 error() {
     echo "$@" >&2
@@ -52,7 +53,6 @@ cleanup() {
   fi
 }
 trap 'cleanup' EXIT
-
 
 check_aci_registered() {
     az provider list --query "[?contains(namespace,'Microsoft.ContainerInstance')]" -o json | jq -r '.[0].registrationState'
@@ -95,6 +95,12 @@ node_identity="$(az identity create --name "${RESOURCE_GROUP}-node-identity" --r
 
 node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
+
+az acr create --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --sku Standard
+az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
+export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
+export ACR_NAME=${ACR_NAME}
+
 az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
@@ -106,6 +112,7 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
+	--attach-acr $ACR_ID \
     --generate-ssh-keys
 
 az role assignment create \
@@ -181,5 +188,7 @@ CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $
 
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
 export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
+
+envsubst < e2e/fixtures/mi-pull-image.yaml > e2e/fixtures/mi-pull-image-exec.yaml
 
 $@

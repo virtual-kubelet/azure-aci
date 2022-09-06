@@ -1,35 +1,24 @@
-apiVersion: v1
-kind: Pod
-metadata:
-  name: mi-pull-image
-  namespace: secrets
-spec:
-  nodeName: secrets-virtual-kubelet
-  containers:
-  - image: $CONTAINER_IMAGE
-    imagePullPolicy: Always
-    name: e2etest-acr-test-mi-container
-    command: [ "/bin/sh" ]
-    args: [ "-c", "sTimeout=10; xMax=10; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Sleeping $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
-    resources:
-      requests:
-        memory: 1G
-        cpu: 1
 ---
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mi-pull-image
-  namespace: nosecrets
+  name: mi-pull-image-2
+  namespace: vk-test
 spec:
-  nodeName: nosecrets-virtual-kubelet
   containers:
-  - image: $CONTAINER_IMAGE
+  - image: ${ACR_NAME}.azurecr.io/library/alpine
     imagePullPolicy: Always
     name: e2etest-acr-test-mi-container
     command: [ "/bin/sh" ]
-    args: [ "-c", "sTimeout=10; xMax=10; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Sleeping $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
+    args: [ "-c", "sTimeout=10; xMax=2; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Sleeping $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
     resources:
       requests:
         memory: 1G
         cpu: 1
+  nodeSelector:
+    kubernetes.io/role: agent
+    beta.kubernetes.io/os: linux
+    type: virtual-kubelet
+  tolerations:
+  - key: virtual-kubelet.io/provider
+    operator: Exists
