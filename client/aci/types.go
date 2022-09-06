@@ -3,6 +3,7 @@ package aci
 import (
 	"time"
 
+	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/virtual-kubelet/azure-aci/client/api"
 )
 
@@ -57,14 +58,6 @@ const (
 	// User specifies the user state for operations origin.
 	User OperationsOrigin = "User"
 )
-
-// AzureFileVolume is the properties of the Azure File volume. Azure File shares are mounted as volumes.
-type AzureFileVolume struct {
-	ShareName          string `json:"shareName,omitempty"`
-	ReadOnly           bool   `json:"readOnly,omitempty"`
-	StorageAccountName string `json:"storageAccountName,omitempty"`
-	StorageAccountKey  string `json:"storageAccountKey,omitempty"`
-}
 
 // AKSClusterListResult is the aks cluster list response that contains cluster properties
 // ttps://management.azure.com/subscriptions/{subscription}/resourceGroups/{resouorce-groups}/providers/Microsoft.ContainerService/managedClusters/{clusterid}?api-version=2022-04-01
@@ -125,7 +118,7 @@ type ContainerGroupProperties struct {
 	RestartPolicy            ContainerGroupRestartPolicy          `json:"restartPolicy,omitempty"`
 	IPAddress                *IPAddress                           `json:"ipAddress,omitempty"`
 	OsType                   OperatingSystemTypes                 `json:"osType,omitempty"`
-	Volumes                  []Volume                             `json:"volumes,omitempty"`
+	Volumes                  []azaci.Volume                       `json:"volumes,omitempty"`
 	InstanceView             ContainerGroupPropertiesInstanceView `json:"instanceView,omitempty"`
 	Diagnostics              *ContainerGroupDiagnostics           `json:"diagnostics,omitempty"`
 	SubnetIds                []*SubnetIdDefinition                `json:"subnetIds,omitempty"`
@@ -335,7 +328,7 @@ type UsageListResult struct {
 // Volume is the properties of the volume.
 type Volume struct {
 	Name      string                 `json:"name,omitempty"`
-	AzureFile *AzureFileVolume       `json:"azureFile,omitempty"`
+	AzureFile *azaci.AzureFileVolume `json:"azureFile,omitempty"`
 	EmptyDir  map[string]interface{} `json:"emptyDir"`
 	Secret    map[string]string      `json:"secret,omitempty"`
 	GitRepo   *GitRepoVolume         `json:"gitRepo,omitempty"`
