@@ -1391,7 +1391,7 @@ func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
 	}
 
 	serverNames := []string{}
-	for k, _ := range serverNamesMap {
+	for k := range serverNamesMap {
 		serverNames = append(serverNames, k)
 	}
 	return serverNames

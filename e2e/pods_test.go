@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 	"time"
-	"fmt"
 )
 
 func TestPodLifecycle(t *testing.T) {

@@ -28,7 +28,7 @@ type VersionProvider struct {
 //</summary>
 //<param name="defaultVersion"> The default api version </param>
 //<returns>
-//	reference to  an instance of the verison provider object
+//	reference to  an instance of the version provider object
 //</returns>
 func newVersionProvider(defaultVersion string) (*VersionProvider) {
     return &VersionProvider{defaultVersion}

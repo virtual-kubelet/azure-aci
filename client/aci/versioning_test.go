@@ -13,7 +13,7 @@ func TestSetVersionFromPropertyInMap(t *testing.T) {
 	defaultVersion := apiVersion
 	versionProvider:= newVersionProvider(defaultVersion)
 
-	// should use defualt version when property is not populated
+	// should use default version when property is not populated
 	versionProvider.setVersionFromProperty("", key, context.Background())
 	assert.Check(t, is.Equal(versionProvider.finalVersion, defaultVersion), "Default version should be used when a property value is empty")
 
