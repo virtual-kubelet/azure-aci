@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: mi-pull-image-2
+  name: e2etest-acr-test-mi-container
   namespace: vk-test
 spec:
   containers:
