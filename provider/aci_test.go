@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
@@ -1074,6 +1075,7 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 func TestCreatePodWithProjectedVolume(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
+	projectedVolumeName := "projectedvolume"
 
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
@@ -1122,8 +1124,10 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
+	encodedSecretVal := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		certVal := cg.Volumes[0].Secret["ca.crt"]
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
 		assert.Check(t, cg != nil, "Container group is nil")
@@ -1132,8 +1136,8 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
 		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
-		assert.Check(t, is.Equal("projectedvolume", cg.Volumes[0].Name), "volume name doesn't match")
-		assert.Check(t, is.Equal(base64.StdEncoding.EncodeToString([]byte("fake-ca-data")), cg.Volumes[0].Secret["ca.crt"]), "configmap data doesn't match")
+		assert.Check(t, is.Equal(projectedVolumeName, *cg.Volumes[0].Name), "volume name doesn't match")
+		assert.Check(t, is.Equal(encodedSecretVal, *certVal), "configmap data doesn't match")
 
 		return http.StatusOK, cg
 	}
@@ -1187,6 +1191,29 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 				},
 			},
 		},
+	}
+
+	aciServerMocker.OnGetContainerGroup = func(subscription, resourceGroup, containerGroup string) (int, interface{}) {
+
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+
+		caStr := "ca.crt"
+
+		return http.StatusOK, aci.ContainerGroup{
+			Tags: map[string]string{
+				"NodeName": fakeNodeName,
+			},
+			Name: "nginx",
+			ContainerGroupProperties: aci.ContainerGroupProperties{
+				ProvisioningState: "Creating",
+				Volumes: []azaci.Volume{
+					{
+						Name:   &projectedVolumeName,
+						Secret: map[string]*string{"Key": &caStr, "Path": &caStr},
+					},
+				},
+			},
+		}
 	}
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {

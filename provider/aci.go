@@ -22,6 +22,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/gorilla/websocket"
 	client "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
@@ -1758,7 +1759,7 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*aci.ContainerProbe, e
 	}, nil
 }
 
-func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.Volume, error) {
+func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azaci.Volume, error) {
 	var secretName, shareName string
 	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
 		for k, v := range volume.CSI.VolumeAttributes {
@@ -1787,17 +1788,20 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*aci.
 		return nil, fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name)
 	}
 
-	return &aci.Volume{
-		Name: volume.Name,
-		AzureFile: &aci.AzureFileVolume{
-			ShareName:          shareName,
-			StorageAccountName: string(secret.Data[azureFileStorageAccountName]),
-			StorageAccountKey:  string(secret.Data[azureFileStorageAccountKey]),
+	storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
+	storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
+
+	return &azaci.Volume{
+		Name: &volume.Name,
+		AzureFile: &azaci.AzureFileVolume{
+			ShareName:          &shareName,
+			StorageAccountName: &storageAccountNameStr,
+			StorageAccountKey:  &storageAccountKeyStr,
 		}}, nil
 }
 
-func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
-	volumes := make([]aci.Volume, 0, len(pod.Spec.Volumes))
+func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
+	volumes := make([]azaci.Volume, 0, len(pod.Spec.Volumes))
 	for _, v := range pod.Spec.Volumes {
 		// Handle the case for Azure File CSI driver
 		if v.CSI != nil {
@@ -1824,14 +1828,16 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 			if secret == nil {
 				return nil, fmt.Errorf("Getting secret for AzureFile volume returned an empty secret")
 			}
+			storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
+			storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
 
-			volumes = append(volumes, aci.Volume{
-				Name: v.Name,
-				AzureFile: &aci.AzureFileVolume{
-					ShareName:          v.AzureFile.ShareName,
-					ReadOnly:           v.AzureFile.ReadOnly,
-					StorageAccountName: string(secret.Data[azureFileStorageAccountName]),
-					StorageAccountKey:  string(secret.Data[azureFileStorageAccountKey]),
+			volumes = append(volumes, azaci.Volume{
+				Name: &v.Name,
+				AzureFile: &azaci.AzureFileVolume{
+					ShareName:          &v.AzureFile.ShareName,
+					ReadOnly:           &v.AzureFile.ReadOnly,
+					StorageAccountName: &storageAccountNameStr,
+					StorageAccountKey:  &storageAccountKeyStr,
 				},
 			})
 			continue
@@ -1839,8 +1845,8 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 
 		// Handle the case for the EmptyDir.
 		if v.EmptyDir != nil {
-			volumes = append(volumes, aci.Volume{
-				Name:     v.Name,
+			volumes = append(volumes, azaci.Volume{
+				Name:     &v.Name,
 				EmptyDir: map[string]interface{}{},
 			})
 			continue
@@ -1848,12 +1854,12 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 
 		// Handle the case for GitRepo volume.
 		if v.GitRepo != nil {
-			volumes = append(volumes, aci.Volume{
-				Name: v.Name,
-				GitRepo: &aci.GitRepoVolume{
-					Directory:  v.GitRepo.Directory,
-					Repository: v.GitRepo.Repository,
-					Revision:   v.GitRepo.Revision,
+			volumes = append(volumes, azaci.Volume{
+				Name: &v.Name,
+				GitRepo: &azaci.GitRepoVolume{
+					Directory:  &v.GitRepo.Directory,
+					Repository: &v.GitRepo.Repository,
+					Revision:   &v.GitRepo.Revision,
 				},
 			})
 			continue
@@ -1861,7 +1867,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 
 		// Handle the case for Secret volume.
 		if v.Secret != nil {
-			paths := make(map[string]string)
+			paths := make(map[string]*string)
 			secret, err := p.resourceManager.GetSecret(v.Secret.SecretName, pod.Namespace)
 			if v.Secret.Optional != nil && !*v.Secret.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("Secret %s is required by Pod %s and does not exist", v.Secret.SecretName, pod.Name)
@@ -1871,12 +1877,13 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 			}
 
 			for k, v := range secret.Data {
-				paths[k] = base64.StdEncoding.EncodeToString(v)
+				strV := base64.StdEncoding.EncodeToString(v)
+				paths[k] = &strV
 			}
 
 			if len(paths) != 0 {
-				volumes = append(volumes, aci.Volume{
-					Name:   v.Name,
+				volumes = append(volumes, azaci.Volume{
+					Name:   &v.Name,
 					Secret: paths,
 				})
 			}
@@ -1885,7 +1892,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 
 		// Handle the case for ConfigMap volume.
 		if v.ConfigMap != nil {
-			paths := make(map[string]string)
+			paths := make(map[string]*string)
 			configMap, err := p.resourceManager.GetConfigMap(v.ConfigMap.Name, pod.Namespace)
 			if v.ConfigMap.Optional != nil && !*v.ConfigMap.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", v.ConfigMap.Name, pod.Name)
@@ -1895,15 +1902,17 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 			}
 
 			for k, v := range configMap.Data {
-				paths[k] = base64.StdEncoding.EncodeToString([]byte(v))
+				strV := base64.StdEncoding.EncodeToString([]byte(v))
+				paths[k] = &strV
 			}
 			for k, v := range configMap.BinaryData {
-				paths[k] = base64.StdEncoding.EncodeToString(v)
+				strV := base64.StdEncoding.EncodeToString(v)
+				paths[k] = &strV
 			}
 
 			if len(paths) != 0 {
-				volumes = append(volumes, aci.Volume{
-					Name:   v.Name,
+				volumes = append(volumes, azaci.Volume{
+					Name:   &v.Name,
 					Secret: paths,
 				})
 			}
@@ -1912,7 +1921,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 
 		if v.Projected != nil {
 			log.G(context.TODO()).Info("Found projected volume")
-			paths := make(map[string]string)
+			paths := make(map[string]*string)
 
 			for _, source := range v.Projected.Sources {
 				switch {
@@ -1935,11 +1944,13 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 									if err != nil {
 										return nil, err
 									}
-									paths[k] = string(data)
+									dataStr := string(data)
+									paths[k] = &dataStr
 								}
 
 								for k, v := range secret.Data {
-									paths[k] = base64.StdEncoding.EncodeToString(v)
+									strV := base64.StdEncoding.EncodeToString(v)
+									paths[k] = &strV
 								}
 
 								break Secrets
@@ -1963,13 +1974,15 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 								if err != nil {
 									return nil, err
 								}
-								paths[k] = string(data)
+								dataStr := string(data)
+								paths[k] = &dataStr
 							}
 						}
 
 						for k, v := range secret.Data {
 							if keyToPath.Key == k {
-								paths[k] = base64.StdEncoding.EncodeToString(v)
+								strV := base64.StdEncoding.EncodeToString(v)
+								paths[k] = &strV
 							}
 						}
 					}
@@ -1986,20 +1999,22 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]aci.Volume, error) {
 					for _, keyToPath := range source.ConfigMap.Items {
 						for k, v := range configMap.Data {
 							if keyToPath.Key == k {
-								paths[k] = base64.StdEncoding.EncodeToString([]byte(v))
+								strV := base64.StdEncoding.EncodeToString([]byte(v))
+								paths[k] = &strV
 							}
 						}
 						for k, v := range configMap.BinaryData {
 							if keyToPath.Key == k {
-								paths[k] = base64.StdEncoding.EncodeToString(v)
+								strV := base64.StdEncoding.EncodeToString(v)
+								paths[k] = &strV
 							}
 						}
 					}
 				}
 			}
 			if len(paths) != 0 {
-				volumes = append(volumes, aci.Volume{
-					Name:   v.Name,
+				volumes = append(volumes, azaci.Volume{
+					Name:   &v.Name,
 					Secret: paths,
 				})
 			}
@@ -2293,9 +2308,9 @@ func filterServiceAccountSecretVolume(osType string, containerGroup *aci.Contain
 		l := log.G(context.TODO()).WithField("containerGroup", containerGroup.Name)
 		l.Infof("Ignoring service account secret volumes '%v' for Windows", reflect.ValueOf(serviceAccountSecretVolumeName).MapKeys())
 
-		volumes := make([]aci.Volume, 0, len(containerGroup.ContainerGroupProperties.Volumes))
+		volumes := make([]azaci.Volume, 0, len(containerGroup.ContainerGroupProperties.Volumes))
 		for _, volume := range containerGroup.ContainerGroupProperties.Volumes {
-			if _, ok := serviceAccountSecretVolumeName[volume.Name]; !ok {
+			if _, ok := serviceAccountSecretVolumeName[*volume.Name]; !ok {
 				volumes = append(volumes, volume)
 			}
 		}
