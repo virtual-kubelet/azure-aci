@@ -5,12 +5,16 @@ metadata:
   name: e2etest-acr-test-mi-container
   namespace: vk-test
 spec:
+  restartPolicy: Never
   containers:
   - image: ${ACR_NAME}.azurecr.io/library/alpine
     imagePullPolicy: Always
     name: e2etest-acr-test-mi-container
-    command: [ "/bin/sh" ]
-    args: [ "-c", "sTimeout=10; xMax=2; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Sleeping $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
+    command: [
+      "sh",
+      "-c",
+      "sleep 10; while sleep 5; do echo pulled image using mi; done",
+    ]
     resources:
       requests:
         memory: 1G
