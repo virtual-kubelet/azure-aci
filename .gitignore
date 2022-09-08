@@ -21,3 +21,7 @@ hack/tools/bin/
 .DS_Store
 .vscode/
 .idea/
+
+
+# File produced during testing
+e2e/fixtures/mi-pull-image-exec.yaml
