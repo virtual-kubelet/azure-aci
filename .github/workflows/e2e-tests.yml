@@ -9,9 +9,8 @@ on:
     paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
 
 permissions:
-  id-token: write
-  contents: read
-  packages: write
+   id-token: write
+   contents: read
 
 env:
   REGISTRY: ghcr.io
@@ -57,29 +56,23 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: Shorten SHA
+        id: vars
+        run: echo "::set-output name=pr_sha_short::$(git rev-parse --short ${{ github.event.pull_request.head.sha }} )"
 
       - name: Set e2e Cluster Name
         run: |
-          rand=$RANDOM
-          echo "CLUSTER_NAME=vk-aci-test-${rand}" >> $GITHUB_ENV
-
-      - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build image
-        run: |
-          OUTPUT_TYPE=type=registry make docker-build-image
-        env:
-          VERSION: ${{ env.E2E_IMG_TAG}}
+          echo "CLUSTER_NAME=vk-aci-test-${{ steps.vars.outputs.pr_sha_short }}" >> $GITHUB_ENV
 
       - name: Install Azure CLI latest
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
+
       - uses: azure/login@v1.4.5
         with:
           client-id: ${{ secrets.CLIENTID }}
@@ -88,21 +81,17 @@ jobs:
 
       - name: Run e2e test
         run: |
-          make e2e-test
+          OUTPUT_TYPE=type=registry make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
           E2E_REGION: ${{ secrets.E2E_REGION}}
           CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
           VERSION: ${{ env.E2E_IMG_TAG}}
+          E2E_TARGET: "pr"
+          PR_COMMIT_SHA: ${{ steps.vars.outputs.pr_sha_short }}
 
       - name: Cleanup e2e resources
         if: ${{ always() }}
         run: |
           set +e
           az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
-
-      - uses: actions/delete-package-versions@v3
-        if: ${{ always() }}
-        with:
-          package-name: 'virtual-kubelet'
-          token: ${{ secrets.GITHUB_TOKEN }}
