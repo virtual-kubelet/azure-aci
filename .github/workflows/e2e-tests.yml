@@ -66,7 +66,13 @@ jobs:
 
       - name: Set e2e Cluster Name
         run: |
-          echo "CLUSTER_NAME=vk-aci-test${{ steps.vars.outputs.pr_sha_short }}" >> $GITHUB_ENV
+          rand=${{ steps.vars.outputs.pr_sha_short }}
+          
+          if [ "$rand" = "" ]; then
+             rand=$RANDOM
+          fi
+
+          echo "CLUSTER_NAME=vk-aci-test${rand}" >> $GITHUB_ENV
 
       - name: Install Azure CLI latest
         run: |
