@@ -74,6 +74,17 @@ fi
 echo -e "\n......Creating Resource Group\n"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
+echo -e "\n......Creating ACR\n"
+if [ "$E2E_TARGET" = "pr" ]; then
+  az acr create --resource-group "$RESOURCE_GROUP" \
+    --name "$ACR_NAME" --sku Basic
+
+  az acr login --name "$ACR_NAME"
+  IMG_URL=$ACR_NAME.azurecr.io
+  IMG_REPO="virtual-kubelet"
+  OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+
+fi
 
 KUBE_DNS_IP=10.0.0.10
 
