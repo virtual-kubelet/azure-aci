@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Goreleaser
-        uses: goreleaser/goreleaser-action@v2.9.1
+        uses: goreleaser/goreleaser-action@v3.1.0
         with:
           version: latest
           args: release --rm-dist --timeout 60m --debug
