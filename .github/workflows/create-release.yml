@@ -2,7 +2,7 @@ name: create_release
 on:
   create:
     # Publish semver tags as releases.
-    tags: [ 'v*.*.*.*' ]
+    tags: [ 'v*.*.*' ]
 
 permissions:
   contents: write

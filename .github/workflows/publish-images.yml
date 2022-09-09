@@ -3,7 +3,7 @@ name: publish_images
 on:
   create:
     # Publish semver tags as releases.
-    tags: [ 'v*.*.*.*' ]
+    tags: [ 'v*.*.*' ]
 
 permissions:
   contents: read
@@ -16,7 +16,6 @@ env:
 jobs:
   export-registry:
     runs-on: ubuntu-20.04
-    needs: detect-noop
     if: needs.detect-noop.outputs.noop != 'true'
     outputs:
       registry: ${{ steps.export.outputs.registry }}
