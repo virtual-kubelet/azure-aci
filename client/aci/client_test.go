@@ -27,7 +27,7 @@ import (
 
 var (
 	client                   *Client
-	location                 = "westus"
+	location                 = "eastus2"
 	resourceGroup            = "virtual-node-test-rg"
 	containerGroup           = "virtual-kubelet-test-container-group"
 	virtualNetwork           = "virtual-kubelet-tests-vnet"
@@ -218,8 +218,8 @@ func TestCreateContainerGroupWithoutResourceLimit(t *testing.T) {
 						},
 						Resources: ResourceRequirements{
 							Requests: &ComputeResources{
-								CPU:        1,
-								MemoryInGB: 1,
+								CPU:        0.5,
+								MemoryInGB: 0.5,
 							},
 						},
 					},

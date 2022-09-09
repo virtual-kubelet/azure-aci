@@ -9,9 +9,8 @@ on:
     paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
 
 permissions:
-  id-token: write
-  contents: read
-  packages: write
+   id-token: write
+   contents: read
 
 env:
   REGISTRY: ghcr.io
@@ -46,11 +45,8 @@ jobs:
     needs: export-registry
     environment: test
     env:
-      CLIENTID: 'd1464cac-2a02-4e77-a1e3-c6a9220e99b9'
-      SUBSCRIPTIONID: '076cd026-379c-4383-8bec-8835382efe90'
-      TENANT_ID: '72f988bf-86f1-41af-91ab-2d7cd011db47'
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      IMG_VERSION: "dev"
+      E2E_IMG_TAG:  "e2e-ci"
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go
@@ -61,45 +57,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          submodules: true
-          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
-      - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@49ed152c8eca782a232dede0303416e8f356c37b
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Shorten SHA
+        id: vars
+        run: echo "::set-output name=pr_sha_short::$(git rev-parse --short ${{ github.event.pull_request.head.sha }} )"
 
-      - name: Set image version
+      - name: Set e2e Cluster Name
         run: |
-          echo "IMG_VERSION=$(git describe --abbrev=0 --tags --always)" >> $GITHUB_ENV      
+          rand=${{ steps.vars.outputs.pr_sha_short }}
+          
+          if [ "$rand" = "" ]; then
+             rand=$RANDOM
+          fi
 
-      - name: Build image
-        run: |
-          OUTPUT_TYPE=type=registry make docker-build-image
-        env:
-          VERSION: ${{ env.IMG_VERSION }}
+          echo "CLUSTER_NAME=vk-aci-test${rand}" >> $GITHUB_ENV
 
       - name: Install Azure CLI latest
         run: |
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
+
       - uses: azure/login@v1.4.5
         with:
-          client-id: ${{ env.CLIENTID }}
-          tenant-id: ${{ env.TENANT_ID }}
-          subscription-id: ${{ env.SUBSCRIPTIONID }}
+          client-id: ${{ secrets.CLIENTID }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          subscription-id: ${{ secrets.SUBSCRIPTIONID }}
 
       - name: Run e2e test
         run: |
-          make e2e-test
+          OUTPUT_TYPE=type=registry make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
-      - name: Delete image
-        uses: bots-house/ghcr-delete-image-action@v1.0.1
-        with:
-          owner: virtual-kubelet/azure-aci
-          name: virtual-kubelet
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ env.IMG_VERSION }}
+          E2E_REGION: ${{ secrets.E2E_REGION}}
+          CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
+          VERSION: ${{ env.E2E_IMG_TAG}}
+          E2E_TARGET: "pr"
+          PR_COMMIT_SHA: ${{ steps.vars.outputs.pr_sha_short }}
+
+      - name: Cleanup e2e resources
+        if: ${{ always() }}
+        run: |
+          set +e
+          az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true

@@ -13,7 +13,12 @@ if ! type go > /dev/null; then
   exit 1
 fi
 
-: "${RANDOM_NUM:=$RANDOM}"
+: "${RANDOM_NUM:=${PR_RAND}}"
+
+if [ "$PR_RAND" = "" ]; then
+    RANDOM_NUM=$RANDOM
+fi
+
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
 : "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
@@ -29,8 +34,8 @@ fi
 : "${VNET_NAME=myAKSVNet}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
-
-: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vncsidrivers$RANDOM_NUM}"
+: "${ACR_NAME=vkacr$RANDOM_NUM}"
+: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 
 error() {
@@ -46,7 +51,7 @@ fi
 TMPDIR=""
 
 cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait
+  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
   if [ -n "$TMPDIR" ]; then
       rm -rf "$TMPDIR"
   fi
@@ -68,6 +73,16 @@ fi
 
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
+if [ "$E2E_TARGET" = "pr" ]; then
+  az acr create --resource-group "$RESOURCE_GROUP" \
+    --name "$ACR_NAME" --sku Basic
+
+  az acr login --name "$ACR_NAME"
+  IMG_URL=$ACR_NAME.azurecr.io
+  IMG_REPO="virtual-kubelet"
+  OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+
+fi
 
 KUBE_DNS_IP=10.0.0.10
 
@@ -95,6 +110,8 @@ node_identity="$(az identity create --name "${RESOURCE_GROUP}-node-identity" --r
 
 node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
+
+if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
@@ -106,7 +123,21 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
+    --generate-ssh-keys \
+    --attach-acr "$ACR_NAME"
+fi
+
+az aks create \
+    -g "$RESOURCE_GROUP" \
+    -l "$LOCATION" \
+    -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
+    -n "$CLUSTER_NAME" \
+    --network-plugin azure \
+    --vnet-subnet-id "$aks_subnet_id" \
+    --dns-service-ip "$KUBE_DNS_IP" \
+    --assign-kubelet-identity "$node_identity_id" \
+    --assign-identity "$cluster_identity_id" \
     --generate-ssh-keys
 
 az role assignment create \
@@ -152,9 +183,9 @@ helm install \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
     "$CHART_NAME" \
-    ./helm
+    ./charts/virtual-kubelet
 
-kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-aci-for-aks" --timeout=300s
+kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-azure-aci" --timeout=300s
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break
