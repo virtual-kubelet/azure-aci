@@ -13,7 +13,12 @@ if ! type go > /dev/null; then
   exit 1
 fi
 
-: "${RANDOM_NUM:=$RANDOM}"
+: "${RANDOM_NUM:=${PR_RAND}}"
+
+if [ "$PR_RAND" = "" ]; then
+    RANDOM_NUM=$RANDOM
+fi
+
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
 : "${LOCATION:=westus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
@@ -29,7 +34,7 @@ fi
 : "${VNET_NAME=myAKSVNet}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
-
+: "${ACR_NAME=vkacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 : "${ACR_NAME=vktestregistry$RANDOM_NUM}"
@@ -68,6 +73,16 @@ fi
 
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
+if [ "$E2E_TARGET" = "pr" ]; then
+  az acr create --resource-group "$RESOURCE_GROUP" \
+    --name "$ACR_NAME" --sku Basic
+
+  az acr login --name "$ACR_NAME"
+  IMG_URL=$ACR_NAME.azurecr.io
+  IMG_REPO="virtual-kubelet"
+  OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+
+fi
 
 KUBE_DNS_IP=10.0.0.10
 
@@ -100,6 +115,23 @@ az acr create --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --sku Standa
 az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
 export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
 export ACR_NAME=${ACR_NAME}
+
+
+if [ "$E2E_TARGET" = "pr" ]; then
+az aks create \
+    -g "$RESOURCE_GROUP" \
+    -l "$LOCATION" \
+    -c "$NODE_COUNT" \
+    --node-vm-size standard_d8_v3 \
+    -n "$CLUSTER_NAME" \
+    --network-plugin azure \
+    --vnet-subnet-id "$aks_subnet_id" \
+    --dns-service-ip "$KUBE_DNS_IP" \
+    --assign-kubelet-identity "$node_identity_id" \
+    --assign-identity "$cluster_identity_id" \
+    --generate-ssh-keys \
+    --attach-acr "$ACR_NAME"
+fi
 
 az aks create \
     -g "$RESOURCE_GROUP" \
