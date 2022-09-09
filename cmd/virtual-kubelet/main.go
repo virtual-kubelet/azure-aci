@@ -18,8 +18,11 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	azprovider "github.com/virtual-kubelet/azure-aci/provider"
+	"github.com/virtual-kubelet/azure-aci/pkg/auth"
+	"github.com/virtual-kubelet/azure-aci/pkg/client"
+	azprovider "github.com/virtual-kubelet/azure-aci/pkg/provider"
 	cli "github.com/virtual-kubelet/node-cli"
 	logruscli "github.com/virtual-kubelet/node-cli/logrus"
 	opencensuscli "github.com/virtual-kubelet/node-cli/opencensus"
@@ -60,27 +63,49 @@ func main() {
 	o.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
 	o.PodSyncWorkers = numberOfWorkers
 
-	node, err := cli.New(ctx,
-		cli.WithBaseOpts(o),
-		cli.WithCLIVersion(buildVersion, buildTime),
-		cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
-			return azprovider.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort, cfg.KubeClusterDomain)
-		}),
-		cli.WithPersistentFlags(logConfig.FlagSet()),
-		cli.WithPersistentPreRunCallback(func() error {
-			return logruscli.Configure(logConfig, logger)
-		}),
-		cli.WithPersistentFlags(traceConfig.FlagSet()),
-		cli.WithPersistentPreRunCallback(func() error {
-			return opencensuscli.Configure(ctx, &traceConfig, o)
-		}),
-	)
-
+	//Setup config
+	azConfig := auth.Config{}
+	err = azConfig.SetAuthConfig()
 	if err != nil {
 		log.G(ctx).Fatal(err)
 	}
 
-	if err := node.Run(ctx); err != nil {
-		log.G(ctx).Fatal(err)
+	azACIAPIs := client.NewAzClientsAPIs(ctx, azConfig)
+
+	run := func(ctx context.Context) error {
+		node, err := cli.New(ctx,
+			cli.WithBaseOpts(o),
+			cli.WithCLIVersion(buildVersion, buildTime),
+			cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
+				return azprovider.NewACIProvider(ctx, cfg.ConfigPath, azConfig, azACIAPIs, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort, cfg.KubeClusterDomain)
+			}),
+			cli.WithPersistentFlags(logConfig.FlagSet()),
+			cli.WithPersistentPreRunCallback(func() error {
+				return logruscli.Configure(logConfig, logger)
+			}),
+			cli.WithPersistentFlags(traceConfig.FlagSet()),
+			cli.WithPersistentPreRunCallback(func() error {
+				return opencensuscli.Configure(ctx, &traceConfig, o)
+			}),
+		)
+		if err != nil {
+			return err
+		}
+
+		go func() {
+			err := node.Run(ctx)
+			if err != nil {
+
+			}
+		}()
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	if err := run(ctx); err != nil {
+		if !errors.Is(err, context.Canceled) {
+			log.G(ctx).Fatal(err)
+		}
+		log.G(ctx).Debug(err)
 	}
 }
