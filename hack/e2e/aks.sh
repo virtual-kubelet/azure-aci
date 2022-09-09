@@ -13,7 +13,12 @@ if ! type go > /dev/null; then
   exit 1
 fi
 
-: "${RANDOM_NUM:=$RANDOM}"
+: "${RANDOM_NUM:=${PR_RAND}}"
+
+if [ "$PR_RAND" = "" ]; then
+    RANDOM_NUM=$RANDOM
+fi
+
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
 : "${LOCATION:=eastus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
@@ -29,7 +34,7 @@ fi
 : "${VNET_NAME=myAKSVNet}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
-
+: "${ACR_NAME=vkacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 : "${ACR_NAME=vktestregistry$RANDOM_NUM}"
@@ -68,7 +73,6 @@ fi
 
 echo -e "\n......Creating Resource Group\n"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
-echo -e "\n......Creating Resource Group.........[DONE]\n"
 
 
 KUBE_DNS_IP=10.0.0.10
@@ -113,19 +117,22 @@ export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAM
 export ACR_NAME=${ACR_NAME}
 
 
-# Adding role assignment to maanged identity 
-# When AKS Create is executed using Azure CLI, the Network Contributor role will be added automatically. 
-# If you are using an ARM template or other clients, you need to use the Principal ID of the cluster managed identity to perform a role assignment.
-# Refer : https://docs.microsoft.com/en-us/azure/aks/configure-kubenet#add-role-assignment-for-managed-identity 
-echo -e "\n......Creating RBAC Role for UAA on Resource Group\n"
-az role assignment create \
-    --role "User Access Administrator" \
-    --assignee-object-id "$cluster_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}"
-echo -e "\n......Creating RBAC Role for UAA on Resource Group.........[DONE]\n"
+if [ "$E2E_TARGET" = "pr" ]; then
+az aks create \
+    -g "$RESOURCE_GROUP" \
+    -l "$LOCATION" \
+    -c "$NODE_COUNT" \
+    --node-vm-size standard_d8_v3 \
+    -n "$CLUSTER_NAME" \
+    --network-plugin azure \
+    --vnet-subnet-id "$aks_subnet_id" \
+    --dns-service-ip "$KUBE_DNS_IP" \
+    --assign-kubelet-identity "$node_identity_id" \
+    --assign-identity "$cluster_identity_id" \
+    --generate-ssh-keys \
+    --attach-acr "$ACR_NAME"
+fi
 
-echo -e "\n......Creating AKS Cluster\n"
 az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
