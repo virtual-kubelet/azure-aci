@@ -1,0 +1,12 @@
+apiVersion: v2
+description: a Helm chart to install virtual kubelet with Azure provider in an AKS cluster.
+maintainers:
+- email: guofei@microsoft.com
+  name: Fei Guo
+- email: heba.elayoty@microsoft.com
+  name: Heba Elayoty
+name: virtual-kubelet-azure-aci
+sources:
+- https://github.com/virtual-kubelet/azure-aci
+version: 1.4.3
+

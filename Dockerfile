@@ -13,8 +13,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,id=vk-azure-aci,sharing=locked,target=/root/.cache/go-build \
     GOARM="${TARGETVARIANT#v}" make build GOARM="$GOARM"
 
-FROM --platform=$TARGETPLATFORM scratch
-COPY --from=builder /go/src/github.com/virtual-kubelet/azure-aci/bin/virtual-kubelet /usr/bin/virtual-kubelet
+FROM --platform=$BUILDPLATFORM gcr.io/distroless/static
+COPY --from=builder  /go/src/github.com/virtual-kubelet/azure-aci/bin/virtual-kubelet /usr/bin/virtual-kubelet
 COPY --from=builder /etc/ssl/certs/ /etc/ssl/certs
+
 ENTRYPOINT [ "/usr/bin/virtual-kubelet" ]
 CMD [ "--help" ]
