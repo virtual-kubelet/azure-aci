@@ -75,16 +75,16 @@ echo -e "\n......Creating Resource Group\n"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
 echo -e "\n......Creating ACR\n"
-if [ "$E2E_TARGET" = "pr" ]; then
-  az acr create --resource-group "$RESOURCE_GROUP" \
+az acr create --resource-group "$RESOURCE_GROUP" \
     --name "$ACR_NAME" --sku Basic
 
+if [ "$E2E_TARGET" = "pr" ]; then
   az acr login --name "$ACR_NAME"
   IMG_URL=$ACR_NAME.azurecr.io
   IMG_REPO="virtual-kubelet"
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
-
 fi
+echo -e "\n......Creating ACR.........[DONE]\n"
 
 KUBE_DNS_IP=10.0.0.10
 
@@ -119,9 +119,6 @@ node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --re
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 echo -e "\n......Creating managed identities for AKS and Node.........[DONE]\n"
 
-echo -e "\n......Creating ACR\n"
-az acr create --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --sku Standard
-echo -e "\n......Creating ACR.........[DONE]\n"
 
 az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
 export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
