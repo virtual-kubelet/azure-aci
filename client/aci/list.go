@@ -71,7 +71,6 @@ func (c *Client) ListContainerGroups(ctx context.Context, resourceGroup string) 
 
 func (c *Client) ListAKSClusters(ctx context.Context, resourceGroup string) (*AKSClusterListResult, error) {
 
-	// make aksApiVersion a new constant
 	urlParams := url.Values{
 		"api-version": []string{aksApiVersion},
 	}
