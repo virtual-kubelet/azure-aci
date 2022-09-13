@@ -20,7 +20,7 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=westus2}"
+: "${LOCATION:=eastus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -182,6 +182,8 @@ helm install \
     --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE" \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
+	--set "providers.azure.aciResourceGroup=${RESOURCE_GROUP}" \
+	--set "providers.azure.aciRegion=${LOCATION}" \
     "$CHART_NAME" \
     ./charts/virtual-kubelet
 

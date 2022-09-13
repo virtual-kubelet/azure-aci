@@ -17,8 +17,11 @@ spec:
   - image: alpine
     imagePullPolicy: Always
     name: container
-    command: [ "/bin/sh" ]
-    args: [ "-c", "sTimeout=10; xMax=10; x=1; while [ $x -le $((xMax*(60/sTimeout))) ]; do echo \"Hi $x time for $((sTimeout))s \" $(( x++ )) \" => $(date +%Y-%m-%d_%H:%M:%S)\"; sleep $sTimeout; done" ]
+    command: [
+        "sh",
+        "-c",
+        "while sleep 10; do echo pod with init container; done;"
+    ]
     resources:
       requests:
         memory: 1G
