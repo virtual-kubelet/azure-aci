@@ -6,16 +6,6 @@ import (
 	"time"
 )
 
-type E2EPodTestCase struct {
-	name string
-	pod  E2EPodInfo
-}
-
-type E2EPodInfo struct {
-	name string
-	dir  string
-}
-
 func TestPodLifecycle(t *testing.T) {
 	// delete the namespace first
 	cmd := kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
