@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.16 as builder
+FROM --platform=$BUILDPLATFORM golang:1.18 as builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
