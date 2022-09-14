@@ -182,8 +182,6 @@ helm install \
     --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE" \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
-	--set "providers.azure.aciResourceGroup=${RESOURCE_GROUP}" \
-	--set "providers.azure.aciRegion=${LOCATION}" \
     "$CHART_NAME" \
     ./charts/virtual-kubelet
 
