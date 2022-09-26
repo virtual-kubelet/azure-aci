@@ -52,8 +52,8 @@ spec:
           value: {{ .managedIdentityID }}
 {{- end }}
 {{- if .targetAKS }}
-        - name: ACS_CREDENTIAL_LOCATION
-          value: /etc/acs/azure.json
+        - name: AKS_CREDENTIAL_LOCATION
+          value: /etc/aks/azure.json
         - name: AZURE_TENANT_ID
           value: {{ .tenantId }}
         - name: AZURE_SUBSCRIPTION_ID
@@ -117,8 +117,8 @@ spec:
           readOnly: true
 {{- if eq (required "You must specify a Virtual Kubelet provider" .Values.provider) "azure" }}
 {{- if .Values.providers.azure.targetAKS }}
-        - name: acs-credential
-          mountPath: "/etc/acs/azure.json"
+        - name: aks-credential
+          mountPath: "/etc/aks/azure.json"
 {{- end }}
 {{- end }}
         command: ["virtual-kubelet"]
@@ -158,7 +158,7 @@ spec:
           path: /etc/kubernetes/certs
 {{- if eq (required "You must specify a Virtual Kubelet provider" .Values.provider) "azure" }}
 {{- if .Values.providers.azure.targetAKS }}
-      - name: acs-credential
+      - name: aks-credential
         hostPath:
           path: /etc/kubernetes/azure.json
           type: File

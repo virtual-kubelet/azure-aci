@@ -77,7 +77,7 @@ func (c *Config) SetAuthConfig() error {
 		c.AuthConfig = auth
 	}
 
-	if aksCredFilepath := os.Getenv("ACS_CREDENTIAL_LOCATION"); aksCredFilepath != "" {
+	if aksCredFilepath := os.Getenv("AKS_CREDENTIAL_LOCATION"); aksCredFilepath != "" {
 		c.AKSCredential, err = NewAKSCredential(aksCredFilepath)
 		if err != nil {
 			return err

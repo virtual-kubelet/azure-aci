@@ -9,29 +9,16 @@ import (
 const cred = `
 {
     "cloud":"AzurePublicCloud",
-    "tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47",
-    "subscriptionId": "11122233-4444-5555-6666-777888999000",
+    "tenantId": "######-86f1-41af-91ab-######",
+    "subscriptionId": "#######-4444-5555-6666-########",
     "aadClientId": "123",
     "aadClientSecret": "456",
     "resourceGroup": "vk-test-rg",
-    "location": "westcentralus",
-    "subnetName": "k8s-subnet",
-    "securityGroupName": "k8s-master-nsg",
-    "vnetName": "k8s-vnet",
-    "routeTableName": "k8s-master-routetable",
-    "primaryAvailabilitySetName": "agentpool1-availabilitySet",
-    "cloudProviderBackoff": true,
-    "cloudProviderBackoffRetries": 6,
-    "cloudProviderBackoffExponent": 1.5,
-    "cloudProviderBackoffDuration": 5,
-    "cloudProviderBackoffJitter": 1,
-    "cloudProviderRatelimit": true,
-    "cloudProviderRateLimitQPS": 3,
-    "cloudProviderRateLimitBucket": 10
+    "location": "westcentralus"
 }`
 
-func TestAcsCred(t *testing.T) {
-	file, err := ioutil.TempFile("", "acs_test")
+func TestAKSCred(t *testing.T) {
+	file, err := ioutil.TempFile("", "aks_auth_test")
 	if err != nil {
 		t.Error(err)
 	}
@@ -51,12 +38,12 @@ func TestAcsCred(t *testing.T) {
 		t.Errorf("Wanted %s, got %s.", wanted, cred.Cloud)
 	}
 
-	wanted = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	wanted = "######-86f1-41af-91ab-######"
 	if cred.TenantID != wanted {
 		t.Errorf("Wanted %s, got %s.", wanted, cred.TenantID)
 	}
 
-	wanted = "11122233-4444-5555-6666-777888999000"
+	wanted = "#######-4444-5555-6666-########"
 	if cred.SubscriptionID != wanted {
 		t.Errorf("Wanted %s, got %s.", wanted, cred.SubscriptionID)
 	}
@@ -81,8 +68,8 @@ func TestAcsCred(t *testing.T) {
 	}
 }
 
-func TestAcsCredFileNotFound(t *testing.T) {
-	file, err := ioutil.TempFile("", "acs_test")
+func TestAKSCredFileNotFound(t *testing.T) {
+	file, err := ioutil.TempFile("", "AKS_test")
 	if err != nil {
 		t.Error(err)
 	}
@@ -103,16 +90,14 @@ func TestAcsCredFileNotFound(t *testing.T) {
 const credBad = `
 {
     "cloud":"AzurePublicCloud",
-    "tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47",
-    "subscriptionId": "11122233-4444-5555-6666-777888999000",
+    "tenantId": "######-86f1-41af-91ab-######",
+    "subscriptionId": "#######-4444-5555-6666-########",
     "aadClientId": "123",
     "aadClientSecret": "456",
-    "resourceGroup": "vk-test-rg",
-    "location": "westcentralus",
-	"subnetName": "k8s-subnet",`
+    "resourceGroup": "vk-test-rg",`
 
-func TestAcsCredBadJson(t *testing.T) {
-	file, err := ioutil.TempFile("", "acs_test")
+func TestAKSCredBadJson(t *testing.T) {
+	file, err := ioutil.TempFile("", "aks_auth_test")
 	if err != nil {
 		t.Error(err)
 	}
