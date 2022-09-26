@@ -42,7 +42,7 @@ func TestAcsCred(t *testing.T) {
 		t.Error(err)
 	}
 
-	cred, err := NewAcsCredential(file.Name())
+	cred, err := NewAKSCredential(file.Name())
 	if err != nil {
 		t.Error(err)
 	}
@@ -95,7 +95,7 @@ func TestAcsCredFileNotFound(t *testing.T) {
 
 	os.Remove(fileName)
 
-	if _, err := NewAcsCredential(fileName); err == nil {
+	if _, err := NewAKSCredential(fileName); err == nil {
 		t.Fatal("expected to fail with bad json")
 	}
 }
@@ -123,7 +123,7 @@ func TestAcsCredBadJson(t *testing.T) {
 		t.Error(err)
 	}
 
-	if _, err := NewAcsCredential(file.Name()); err == nil {
+	if _, err := NewAKSCredential(file.Name()); err == nil {
 		t.Fatal("expected to fail with bad json")
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"unicode/utf16"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	_ "github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
@@ -21,21 +21,14 @@ import (
 
 type CloudEnvironmentName string
 
-var (
-	AzureGermany = cloud.Configuration{
-		ActiveDirectoryAuthorityHost: "https://login.microsoftonline.de/", Services: map[cloud.ServiceName]cloud.ServiceConfiguration{},
-	}
-)
-
 const (
 	AzurePublicCloud       CloudEnvironmentName = "AzurePublicCloud"
 	AzureUSGovernmentCloud CloudEnvironmentName = "AzureUSGovernment"
-	AzureGermanyCloud      CloudEnvironmentName = "AzureGermany"
 	AzureChinaCloud        CloudEnvironmentName = "AzureChina"
 )
 
 type Config struct {
-	AcsCredential *acsCredential
+	AKSCredential *aksCredential
 	AuthConfig    *Authentication
 	Cloud         cloud.Configuration
 	Authorizer    autorest.Authorizer
@@ -84,26 +77,26 @@ func (c *Config) SetAuthConfig() error {
 		c.AuthConfig = auth
 	}
 
-	if acsFilepath := os.Getenv("ACS_CREDENTIAL_LOCATION"); acsFilepath != "" {
-		c.AcsCredential, err = NewAcsCredential(acsFilepath)
+	if aksCredFilepath := os.Getenv("ACS_CREDENTIAL_LOCATION"); aksCredFilepath != "" {
+		c.AKSCredential, err = NewAKSCredential(aksCredFilepath)
 		if err != nil {
 			return err
 		}
 
-		if c.AcsCredential != nil {
+		if c.AKSCredential != nil {
 			var clientId string
-			if !strings.EqualFold(c.AcsCredential.ClientID, "msi") {
-				clientId = c.AcsCredential.ClientID
+			if !strings.EqualFold(c.AKSCredential.ClientID, "msi") {
+				clientId = c.AKSCredential.ClientID
 			}
 
 			//Set Azure cloud environment
-			c.Cloud = getCloudConfiguration(c.AcsCredential.Cloud)
+			c.Cloud = getCloudConfiguration(c.AKSCredential.Cloud)
 			c.AuthConfig = NewAuthentication(
 				clientId,
-				c.AcsCredential.ClientSecret,
-				c.AcsCredential.SubscriptionID,
-				c.AcsCredential.TenantID,
-				c.AcsCredential.UserAssignedIdentityID)
+				c.AKSCredential.ClientSecret,
+				c.AKSCredential.SubscriptionID,
+				c.AKSCredential.TenantID,
+				c.AKSCredential.UserAssignedIdentityID)
 		}
 
 		if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
@@ -137,11 +130,6 @@ func (c *Config) SetAuthConfig() error {
 	}
 
 	resource := c.Cloud.Services[cloud.ResourceManager].Endpoint
-	options := &arm.ClientOptions{}
-
-	if cs, ok := options.Cloud.Services[cloud.ResourceManager]; ok {
-		resource = cs.Endpoint
-	}
 
 	c.Authorizer, err = c.getAuthorizer(resource)
 	if err != nil {
@@ -193,8 +181,8 @@ func NewAuthentication(clientID, clientSecret, subscriptionID, tenantID, userAss
 	}
 }
 
-// acsCredential represents the credential file for ACS
-type acsCredential struct {
+// aksCredential represents the credential file for AKS
+type aksCredential struct {
 	Cloud                  string `json:"cloud"`
 	TenantID               string `json:"tenantId"`
 	SubscriptionID         string `json:"subscriptionId"`
@@ -207,23 +195,23 @@ type acsCredential struct {
 	UserAssignedIdentityID string `json:"userAssignedIdentityID"`
 }
 
-// NewAcsCredential returns an acsCredential struct from file path
-func NewAcsCredential(p string) (*acsCredential, error) {
-	logger := log.G(context.TODO()).WithField("method", "NewAcsCredential").WithField("file", p)
-	logger.Debug("Reading ACS credential file")
+// NewAKSCredential returns an aksCredential struct from file path
+func NewAKSCredential(p string) (*aksCredential, error) {
+	logger := log.G(context.TODO()).WithField("method", "NewAKSCredential").WithField("file", p)
+	logger.Debug("Reading AKS credential file")
 
 	b, err := ioutil.ReadFile(p)
 	if err != nil {
-		return nil, fmt.Errorf("reading ACS credential file %q failed: %v", p, err)
+		return nil, fmt.Errorf("reading AKS credential file %q failed: %v", p, err)
 	}
 
 	// Unmarshal the Authentication file.
-	var cred acsCredential
+	var cred aksCredential
 	if err := json.Unmarshal(b, &cred); err != nil {
 		return nil, err
 	}
 
-	logger.Debug("Load ACS credential file successfully")
+	logger.Debug("Load AKS credential file successfully")
 	return &cred, nil
 }
 
@@ -257,8 +245,6 @@ func getCloudConfiguration(cloudName string) cloud.Configuration {
 		return cloud.AzureGovernment
 	case string(AzureChinaCloud):
 		return cloud.AzureChina
-	case string(AzureGermanyCloud):
-		return AzureGermany
 	}
 	panic("cloud config does not exist")
 }
