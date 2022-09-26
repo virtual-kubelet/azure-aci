@@ -14,6 +14,8 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  # Common versions
+  GO_VERSION: '1.18'
 
 jobs:
   detect-noop:
@@ -49,10 +51,10 @@ jobs:
       E2E_IMG_TAG:  "e2e-ci"
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go
+      - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ secrets.GO_VERSION  }}
+          go-version: ${{ env.GO_VERSION  }}
 
       - name: Checkout
         uses: actions/checkout@v3
