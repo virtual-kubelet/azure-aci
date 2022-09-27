@@ -1074,6 +1074,7 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	projectedVolumeName := "projectedvolume"
+	emptyVolumeName := "emptyVolumeName"
 
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
@@ -1125,7 +1126,7 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 	encodedSecretVal := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
-		certVal := cg.Volumes[0].Secret["ca.crt"]
+		certVal := cg.Volumes[1].Secret["ca.crt"]
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
 		assert.Check(t, cg != nil, "Container group is nil")
@@ -1133,8 +1134,9 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
-		assert.Check(t, is.Equal(projectedVolumeName, *cg.Volumes[0].Name), "volume name doesn't match")
+		assert.Check(t, is.Equal(2, len(cg.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(emptyVolumeName, *cg.Volumes[0].Name), "volume name doesn't match")
+		assert.Check(t, is.Equal(projectedVolumeName, *cg.Volumes[1].Name), "volume name doesn't match")
 		assert.Check(t, is.Equal(encodedSecretVal, *certVal), "configmap data doesn't match")
 
 		return http.StatusOK, cg
@@ -1166,7 +1168,13 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 			},
 			Volumes: []v1.Volume{
 				{
-					Name: "projectedvolume",
+					Name: emptyVolumeName,
+					VolumeSource: v1.VolumeSource{
+						EmptyDir: &v1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: projectedVolumeName,
 					VolumeSource: v1.VolumeSource{
 						Projected: &v1.ProjectedVolumeSource{
 							Sources: []v1.VolumeProjection{
