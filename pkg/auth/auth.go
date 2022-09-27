@@ -85,21 +85,19 @@ func (c *Config) SetAuthConfig() error {
 			return err
 		}
 
-		if c.AKSCredential != nil {
-			var clientId string
-			if !strings.EqualFold(c.AKSCredential.ClientID, "msi") {
-				clientId = c.AKSCredential.ClientID
-			}
-
-			//Set Azure cloud environment
-			c.Cloud = getCloudConfiguration(c.AKSCredential.Cloud)
-			c.AuthConfig = NewAuthentication(
-				clientId,
-				c.AKSCredential.ClientSecret,
-				c.AKSCredential.SubscriptionID,
-				c.AKSCredential.TenantID,
-				c.AKSCredential.UserAssignedIdentityID)
+		var clientId string
+		if !strings.EqualFold(c.AKSCredential.ClientID, "msi") {
+			clientId = c.AKSCredential.ClientID
 		}
+
+		//Set Azure cloud environment
+		c.Cloud = getCloudConfiguration(c.AKSCredential.Cloud)
+		c.AuthConfig = NewAuthentication(
+			clientId,
+			c.AKSCredential.ClientSecret,
+			c.AKSCredential.SubscriptionID,
+			c.AKSCredential.TenantID,
+			c.AKSCredential.UserAssignedIdentityID)
 
 		if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
 			c.AuthConfig.ClientID = clientID
