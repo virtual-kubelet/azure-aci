@@ -28,6 +28,7 @@ export IMG_TAG=1.4.1
 export ENABLE_VNET=true
 
 # The following variables needs to be set according to the customer cluster.
+#(The information can be found in the Azure portal: AKS overview->Properties->Networking panel)
 export ACI_SUBNET_NAME=
 export ACI_SUBNET_RANGE=
 export CLUSTER_SUBNET_RANGE=
