@@ -34,13 +34,15 @@ type Config struct {
 	Authorizer    autorest.Authorizer
 }
 
-// getAuthorizer return autorest authorizer
+// getAuthorizer return autorest authorizer.
 func (c *Config) getAuthorizer(resource string) (autorest.Authorizer, error) {
 	var auth autorest.Authorizer
 	var err error
 
 	var token *adal.ServicePrincipalToken
-	if c.AuthConfig.UseUserIdentity {
+	isUserIdentity := len(c.AuthConfig.ClientID) == 0
+
+	if isUserIdentity {
 		token, err = adal.NewServicePrincipalTokenFromManagedIdentity(
 			resource, &adal.ManagedIdentityOptions{ClientID: c.AuthConfig.UserIdentityClientId})
 		if err != nil {
@@ -63,7 +65,7 @@ func (c *Config) getAuthorizer(resource string) (autorest.Authorizer, error) {
 	return auth, err
 }
 
-// SetAuthConfig sets the configuration needed for Authentication
+// SetAuthConfig sets the configuration needed for Authentication.
 func (c *Config) SetAuthConfig() error {
 	var err error
 	c.Cloud = cloud.AzurePublic
@@ -110,9 +112,10 @@ func (c *Config) SetAuthConfig() error {
 		if userIdentityClientId := os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID"); userIdentityClientId != "" {
 			c.AuthConfig.UserIdentityClientId = userIdentityClientId
 		}
-		c.AuthConfig.UseUserIdentity = (len(c.AuthConfig.ClientID) == 0)
 
-		if c.AuthConfig.UseUserIdentity {
+		isUserIdentity := len(c.AuthConfig.ClientID) == 0
+
+		if isUserIdentity {
 			if len(c.AuthConfig.UserIdentityClientId) == 0 {
 				return fmt.Errorf("neither AZURE_CLIENT_ID or VIRTUALNODE_USER_IDENTITY_CLIENTID is being set")
 			}
@@ -145,11 +148,10 @@ type Authentication struct {
 	ClientSecret         string `json:"clientSecret,omitempty"`
 	SubscriptionID       string `json:"subscriptionId,omitempty"`
 	TenantID             string `json:"tenantId,omitempty"`
-	UseUserIdentity      bool   `json:"useUserIdentity,omitempty"`
 	UserIdentityClientId string `json:"userIdentityClientId,omitempty"`
 }
 
-// newAuthenticationFromFile returns an Authentication struct from file path
+// newAuthenticationFromFile returns an Authentication struct from file path.
 func (a *Authentication) newAuthenticationFromFile(filepath string) error {
 	b, err := ioutil.ReadFile(filepath)
 	if err != nil {
@@ -195,7 +197,7 @@ type aksCredential struct {
 	UserAssignedIdentityID string `json:"userAssignedIdentityID"`
 }
 
-// newAKSCredential returns an aksCredential struct from file path
+// newAKSCredential returns an aksCredential struct from file path.
 func newAKSCredential(filePath string) (*aksCredential, error) {
 	logger := log.G(context.TODO()).WithField("method", "newAKSCredential").WithField("file", filePath)
 	logger.Debug("Reading AKS credential file")
@@ -211,7 +213,7 @@ func newAKSCredential(filePath string) (*aksCredential, error) {
 		return nil, err
 	}
 
-	logger.Debug("Load AKS credential file successfully")
+	logger.Debug("load AKS credential file successfully")
 	return &cred, nil
 }
 
