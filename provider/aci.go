@@ -198,7 +198,7 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		azAuth = auth
 	}
 
-	if acsFilepath := os.Getenv("ACS_CREDENTIAL_LOCATION"); acsFilepath != "" {
+	if acsFilepath := os.Getenv("AKS_CREDENTIAL_LOCATION"); acsFilepath != "" {
 		acsCredential, err := NewAcsCredential(acsFilepath)
 		if err != nil {
 			return nil, err
