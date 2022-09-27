@@ -70,7 +70,7 @@ func (c *Config) SetAuthConfig() error {
 
 	if authFilepath := os.Getenv("AZURE_AUTH_LOCATION"); authFilepath != "" {
 		auth := &Authentication{}
-		err = auth.NewAuthenticationFromFile(authFilepath)
+		err = auth.newAuthenticationFromFile(authFilepath)
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func (c *Config) SetAuthConfig() error {
 	}
 
 	if aksCredFilepath := os.Getenv("AKS_CREDENTIAL_LOCATION"); aksCredFilepath != "" {
-		c.AKSCredential, err = NewAKSCredential(aksCredFilepath)
+		c.AKSCredential, err = newAKSCredential(aksCredFilepath)
 		if err != nil {
 			return err
 		}
@@ -149,8 +149,8 @@ type Authentication struct {
 	UserIdentityClientId string `json:"userIdentityClientId,omitempty"`
 }
 
-// NewAuthenticationFromFile returns an Authentication struct from file path
-func (a *Authentication) NewAuthenticationFromFile(filepath string) error {
+// newAuthenticationFromFile returns an Authentication struct from file path
+func (a *Authentication) newAuthenticationFromFile(filepath string) error {
 	b, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return fmt.Errorf("reading Authentication file %q failed: %v", filepath, err)
@@ -195,14 +195,14 @@ type aksCredential struct {
 	UserAssignedIdentityID string `json:"userAssignedIdentityID"`
 }
 
-// NewAKSCredential returns an aksCredential struct from file path
-func NewAKSCredential(p string) (*aksCredential, error) {
-	logger := log.G(context.TODO()).WithField("method", "NewAKSCredential").WithField("file", p)
+// newAKSCredential returns an aksCredential struct from file path
+func newAKSCredential(filePath string) (*aksCredential, error) {
+	logger := log.G(context.TODO()).WithField("method", "newAKSCredential").WithField("file", filePath)
 	logger.Debug("Reading AKS credential file")
 
-	b, err := ioutil.ReadFile(p)
+	b, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("reading AKS credential file %q failed: %v", p, err)
+		return nil, fmt.Errorf("reading AKS credential file %q failed: %v", filePath, err)
 	}
 
 	// Unmarshal the Authentication file.
