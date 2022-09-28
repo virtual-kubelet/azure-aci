@@ -31,6 +31,7 @@ export ENABLE_VNET=true
 
 # The following variables needs to be set according to the customer cluster.
 #(The information can be found in the Azure portal: AKS overview->Properties->Networking panel)
+export VIRTUALNODE_USER_IDENTITY_CLIENTID=
 export VIRTUAL_NODE_SUBNET_NAME=
 export VIRTUAL_NODE_SUBNET_RANGE=
 export CLUSTER_SUBNET_RANGE=
@@ -49,6 +50,7 @@ helm install "$CHART_NAME" \
     --set providers.azure.vnet.subnetCidr=$VIRTUAL_NODE_SUBNET_RANGE \
     --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
     --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
+    --set providers.azure.managedIdentityID=$VIRTUALNODE_USER_IDENTITY_CLIENTID \
     ./helm
 
 ```
@@ -63,7 +65,7 @@ $ kubectl get nodes
 
 ```shell
 NAME                                   STATUS    ROLES     AGE       VERSION
-virtual-kubelet-aci-downgrade                    Ready     agent     2m         v1.19.10-vk-azure-aci-v1.4.1-dev
+virtual-kubelet-aci-1.4.1                    Ready     agent     2m         v1.19.10-vk-azure-aci-v1.4.1
 ```
 </details><br/>
 
