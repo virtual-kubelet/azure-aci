@@ -82,6 +82,9 @@ The `virtual-kubelet-aci-1.4.1` virtual node is managed by the downgraded versio
 Users can add labels/taints to the `virtual-kubelet-aci-1.4.1` node and change the deployment Pod
 template accordingly so that new ACI Pods can be scheduled to the `virtual-kubelet-aci-1.4.1` virtual node.  
 
-### Configuration
+### Cleanup
 
-For more advanced configurations, please refer to the helm parameters [README](../charts/virtual-kubelet/README.md)
+```shell
+helm uninstall virtual-kubelet-azure-aci-downgrade
+kubectl delete node virtual-kubelet-aci-1.4.1
+```
