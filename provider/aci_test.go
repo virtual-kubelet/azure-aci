@@ -1233,6 +1233,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	fakeShareName := "aksshare"
 	azureFileVolumeName := "azure"
+	emptyVolumeName := "emptyVolumeName"
 
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
@@ -1267,7 +1268,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(1, len(cg.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(2, len(cg.Volumes)), "volume count not match")
 
 		return http.StatusOK, cg
 	}
@@ -1299,14 +1300,22 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		MountPath: "/mnt/azure",
 	}
 
-	fakePodVolume := v1.Volume{
-		Name: azureFileVolumeName,
-		VolumeSource: v1.VolumeSource{
-			CSI: &v1.CSIVolumeSource{
-				Driver: "file.csi.azure.com",
-				VolumeAttributes: map[string]string{
-					azureFileSecretName: fakeVolumeSecret,
-					azureFileShareName:  fakeShareName,
+	fakePodVolumes := []v1.Volume{
+		{
+			Name: emptyVolumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: azureFileVolumeName,
+			VolumeSource: v1.VolumeSource{
+				CSI: &v1.CSIVolumeSource{
+					Driver: "file.csi.azure.com",
+					VolumeAttributes: map[string]string{
+						azureFileSecretName: fakeVolumeSecret,
+						azureFileShareName:  fakeShareName,
+					},
 				},
 			},
 		},
@@ -1315,63 +1324,69 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	cases := []struct {
 		description   string
 		secretVolume  *v1.Secret
-		volume        v1.Volume
+		volumes       []v1.Volume
 		expectedError error
 	}{
 		{
 			description:   "Secret is nil",
 			secretVolume:  nil,
-			volume:        fakePodVolume,
-			expectedError: fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", fakeSecret.Name, fakePodVolume.Name),
+			volumes:       fakePodVolumes,
+			expectedError: fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", fakeSecret.Name, fakePodVolumes[1].Name),
 		},
 		{
 			description:   "Volume has a secret with a valid value",
 			secretVolume:  &fakeSecret,
-			volume:        fakePodVolume,
+			volumes:       fakePodVolumes,
 			expectedError: nil,
 		},
 		{
 			description:  "Volume has no secret",
 			secretVolume: &fakeSecret,
-			volume: v1.Volume{
+			volumes: []v1.Volume{{
 				Name: azureFileVolumeName,
 				VolumeSource: v1.VolumeSource{
 					CSI: &v1.CSIVolumeSource{
 						Driver:           "file.csi.azure.com",
 						VolumeAttributes: map[string]string{},
 					},
-				}},
+				},
+			}},
 			expectedError: fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", azureFileVolumeName),
 		},
 		{
 			description:  "Volume has no share name",
 			secretVolume: &fakeSecret,
-			volume: v1.Volume{
-				Name: azureFileVolumeName,
-				VolumeSource: v1.VolumeSource{
-					CSI: &v1.CSIVolumeSource{
-						Driver: "file.csi.azure.com",
-						VolumeAttributes: map[string]string{
-							azureFileSecretName: fakeVolumeSecret,
+			volumes: []v1.Volume{
+				{
+					Name: azureFileVolumeName,
+					VolumeSource: v1.VolumeSource{
+						CSI: &v1.CSIVolumeSource{
+							Driver: "file.csi.azure.com",
+							VolumeAttributes: map[string]string{
+								azureFileSecretName: fakeVolumeSecret,
+							},
 						},
 					},
 				}},
-			expectedError: fmt.Errorf("share name for AzureFile CSI driver %s cannot be empty or nil", fakePodVolume.Name),
+			expectedError: fmt.Errorf("share name for AzureFile CSI driver %s cannot be empty or nil", fakePodVolumes[1].Name),
 		},
 		{
 			description:  "Volume is Disk Driver",
 			secretVolume: &fakeSecret,
-			volume: v1.Volume{
-				Name: azureFileVolumeName,
-				VolumeSource: v1.VolumeSource{
-					CSI: &v1.CSIVolumeSource{
-						Driver: "disk.csi.azure.com",
-						VolumeAttributes: map[string]string{
-							azureFileSecretName: fakeVolumeSecret,
-							azureFileShareName:  fakeShareName,
+			volumes: []v1.Volume{
+				{
+					Name: azureFileVolumeName,
+					VolumeSource: v1.VolumeSource{
+						CSI: &v1.CSIVolumeSource{
+							Driver: "disk.csi.azure.com",
+							VolumeAttributes: map[string]string{
+								azureFileSecretName: fakeVolumeSecret,
+								azureFileShareName:  fakeShareName,
+							},
 						},
 					},
-				}},
+				},
+			},
 			expectedError: fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", podName, azureFileVolumeName, "disk.csi.azure.com"),
 		},
 	}
@@ -1417,12 +1432,16 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)
 
-			if tc.volume.CSI.VolumeAttributes != nil && len(tc.volume.CSI.VolumeAttributes) != 0 {
-				mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-				mockSecretNamespaceLister.EXPECT().Get(tc.volume.CSI.VolumeAttributes[azureFileSecretName]).Return(tc.secretVolume, nil)
+			for _, volume := range tc.volumes {
+				if volume.CSI != nil {
+					if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
+						mockSecretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+						mockSecretNamespaceLister.EXPECT().Get(volume.CSI.VolumeAttributes[azureFileSecretName]).Return(tc.secretVolume, nil)
+					}
+				}
 			}
 
-			pod.Spec.Volumes = append(pod.Spec.Volumes, tc.volume)
+			pod.Spec.Volumes = tc.volumes
 
 			err = provider.CreatePod(context.Background(), pod)
 
