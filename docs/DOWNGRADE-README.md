@@ -11,10 +11,12 @@ Instructions for setup a downgrade for the previous official release using Helm.
 ### Installing the chart
 
 1. Clone project
+
 ```shell
 $ git clone https://github.com/virtual-kubelet/azure-aci.git
-$ cd helm
+$ git checkout v1.4.1
 ```
+
 2. Install chart using Helm v3.0+
 ```shell
 export CHART_NAME=virtual-kubelet-azure-aci-downgrade
@@ -29,8 +31,8 @@ export ENABLE_VNET=true
 
 # The following variables needs to be set according to the customer cluster.
 #(The information can be found in the Azure portal: AKS overview->Properties->Networking panel)
-export ACI_SUBNET_NAME=
-export ACI_SUBNET_RANGE=
+export VIRTUAL_NODE_SUBNET_NAME=
+export VIRTUAL_NODE_SUBNET_RANGE=
 export CLUSTER_SUBNET_RANGE=
 export KUBE_DNS_IP=
 
@@ -43,11 +45,11 @@ helm install "$CHART_NAME" \
     --set image.tag=$IMG_TAG \
     --set providers.azure.masterUri=$MASTER_URI \
     --set providers.azure.vnet.enabled=$ENABLE_VNET \
-    --set providers.azure.vnet.subnetName=$ACI_SUBNET_NAME \
-    --set providers.azure.vnet.subnetCidr=$ACI_SUBNET_RANGE \
+    --set providers.azure.vnet.subnetName=$VIRTUAL_NODE_SUBNET_NAME \
+    --set providers.azure.vnet.subnetCidr=$VIRTUAL_NODE_SUBNET_RANGE \
     --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
     --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
-    ./charts/virtual-kubelet
+    ./helm
 
 ```
 
