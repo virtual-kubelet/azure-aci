@@ -16,13 +16,11 @@ import (
 	"strings"
 	"testing"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
-
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1072,9 +1070,12 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 
 func TestCreatePodWithProjectedVolume(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
-	podNamespace := "ns-" + uuid.New().String()
+	podNamespace := "ns-name"
 	projectedVolumeName := "projectedvolume"
 	emptyVolumeName := "emptyVolumeName"
+	fakeSecretName := "fake-secret"
+	fakeShareName := "aksshare"
+	azureFileVolumeName := "azurefile"
 
 	aadServerMocker := NewAADMock()
 	aciServerMocker := NewACIMock()
@@ -1094,39 +1095,18 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		return http.StatusOK, manifest
 	}
 
-	mockCtrl := gomock.NewController(GinkgoT())
+	mockCtrl := gomock.NewController(t)
 	podLister := NewMockPodLister(mockCtrl)
 	secretLister := NewMockSecretLister(mockCtrl)
 	configMapLister := NewMockConfigMapLister(mockCtrl)
 	serviceLister := NewMockServiceLister(mockCtrl)
 	pvcLister := NewMockPersistentVolumeClaimLister(mockCtrl)
 	pvLister := NewMockPersistentVolumeLister(mockCtrl)
+	mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 
-	resourceManager, err := manager.NewResourceManager(podLister, secretLister, configMapLister, serviceLister, pvcLister, pvLister)
-	if err != nil {
-		t.Fatal("Unable to prepare the mocks for resourceManager", err)
-	}
-
-	configMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
-	configMapLister.EXPECT().ConfigMaps(podNamespace).Return(configMapNamespaceLister)
-	configMapNamespaceLister.EXPECT().Get("kube-root-ca.crt").Return(&v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "kube-root-ca.crt",
-		},
-		Data: map[string]string{
-			"ca.crt": "fake-ca-data",
-			"foo":    "bar",
-		},
-	}, nil)
-
-	provider, err := createTestProvider(aadServerMocker, aciServerMocker, resourceManager)
-	if err != nil {
-		t.Fatal("Unable to create test provider", err)
-	}
 	encodedSecretVal := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 
 	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
-		certVal := cg.Volumes[1].Secret["ca.crt"]
 		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
 		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
 		assert.Check(t, cg != nil, "Container group is nil")
@@ -1134,12 +1114,68 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(2, len(cg.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(3, len(cg.Volumes)), "volume count not match")
 		assert.Check(t, is.Equal(emptyVolumeName, *cg.Volumes[0].Name), "volume name doesn't match")
-		assert.Check(t, is.Equal(projectedVolumeName, *cg.Volumes[1].Name), "volume name doesn't match")
+		assert.Check(t, is.Equal(azureFileVolumeName, *cg.Volumes[1].Name), "volume name doesn't match")
+		assert.Check(t, is.Equal(projectedVolumeName, *cg.Volumes[2].Name), "volume name doesn't match")
+		certVal := cg.Volumes[2].Secret["ca.crt"]
 		assert.Check(t, is.Equal(encodedSecretVal, *certVal), "configmap data doesn't match")
 
 		return http.StatusOK, cg
+	}
+
+	fakeSecret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fakeSecretName,
+			Namespace: podNamespace,
+		},
+		Data: map[string][]byte{
+			azureFileStorageAccountName: []byte("azure storage account name"),
+			azureFileStorageAccountKey:  []byte("azure storage account key")},
+	}
+
+	fakeVolumeMount := v1.VolumeMount{
+		Name:      azureFileVolumeName,
+		MountPath: "/mnt/azure",
+	}
+
+	fakeVolumes := []v1.Volume{
+		{
+			Name: emptyVolumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		}, {
+			Name: azureFileVolumeName,
+			VolumeSource: v1.VolumeSource{
+				AzureFile: &v1.AzureFileVolumeSource{
+					ShareName:  fakeShareName,
+					SecretName: fakeSecretName,
+					ReadOnly:   true,
+				},
+			},
+		}, {
+			Name: projectedVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: "kube-root-ca.crt",
+								},
+								Items: []v1.KeyToPath{
+									{
+										Key:  "ca.crt",
+										Path: "ca.crt",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	pod := &v1.Pod{
@@ -1166,60 +1202,39 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 					},
 				},
 			},
-			Volumes: []v1.Volume{
-				{
-					Name: emptyVolumeName,
-					VolumeSource: v1.VolumeSource{
-						EmptyDir: &v1.EmptyDirVolumeSource{},
-					},
-				},
-				{
-					Name: projectedVolumeName,
-					VolumeSource: v1.VolumeSource{
-						Projected: &v1.ProjectedVolumeSource{
-							Sources: []v1.VolumeProjection{
-								{
-									ConfigMap: &v1.ConfigMapProjection{
-										LocalObjectReference: v1.LocalObjectReference{
-											Name: "kube-root-ca.crt",
-										},
-										Items: []v1.KeyToPath{
-											{
-												Key:  "ca.crt",
-												Path: "ca.crt",
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
 		},
 	}
+	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)
 
-	aciServerMocker.OnGetContainerGroup = func(subscription, resourceGroup, containerGroup string) (int, interface{}) {
-
-		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
-
-		caStr := "ca.crt"
-
-		return http.StatusOK, aci.ContainerGroup{
-			Tags: map[string]string{
-				"NodeName": fakeNodeName,
-			},
-			Name: "nginx",
-			ContainerGroupProperties: aci.ContainerGroupProperties{
-				ProvisioningState: "Creating",
-				Volumes: []azaci.Volume{
-					{
-						Name:   &projectedVolumeName,
-						Secret: map[string]*string{"Key": &caStr, "Path": &caStr},
-					},
-				},
-			},
+	for _, volume := range fakeVolumes {
+		if volume.AzureFile != nil {
+			secretLister.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+			mockSecretNamespaceLister.EXPECT().Get(volume.AzureFile.SecretName).Return(fakeSecret, nil)
 		}
+	}
+
+	configMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+	configMapLister.EXPECT().ConfigMaps(podNamespace).Return(configMapNamespaceLister)
+	configMapNamespaceLister.EXPECT().Get("kube-root-ca.crt").Return(&v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "kube-root-ca.crt",
+		},
+		Data: map[string]string{
+			"ca.crt": "fake-ca-data",
+			"foo":    "bar",
+		},
+	}, nil)
+
+	pod.Spec.Volumes = fakeVolumes
+
+	resourceManager, err := manager.NewResourceManager(podLister, secretLister, configMapLister, serviceLister, pvcLister, pvLister)
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks for resourceManager", err)
+	}
+
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, resourceManager)
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
 	}
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
