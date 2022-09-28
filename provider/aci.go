@@ -1691,6 +1691,7 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azac
 func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 	volumes := make([]azaci.Volume, 0, len(pod.Spec.Volumes))
 	for _, v := range pod.Spec.Volumes {
+		v := v
 		// Handle the case for Azure File CSI driver
 		if v.CSI != nil {
 			// Check if the CSI driver is file (Disk is not supported by ACI)
