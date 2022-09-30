@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -33,6 +34,16 @@ func TestPodWithMultiVolume(t *testing.T) {
 		t.Fatal(string(out))
 	}
 	t.Log("success create pod with multi-volume")
+
+	cmd = kubectl("exec", "pod/vk-e2e-volume", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	if strings.Contains(string(out), "No such file or directory") {
+		t.Fatal("failed to list mounted volumes")
+	}
+	t.Log("success exec mounted files for pod with multi-volume")
 
 	// query metrics
 	deadline = time.Now().Add(5 * time.Minute)

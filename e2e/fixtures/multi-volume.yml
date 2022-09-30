@@ -5,13 +5,14 @@ metadata:
   namespace: vk-test
 spec:
   containers:
-  - command:
-    - sh
-    - -c
-    - ls /var/run/secrets/kubernetes.io/serviceaccount
-    image: busybox
+  - image: busybox
     imagePullPolicy: Always
     name: busybox
+    command:  [
+      "sh",
+      "-c",
+      "sleep 10; while sleep 0.01; do wget -q -O- http://127.0.0.1; done",
+    ]
     resources:
       requests:
         cpu: "1"
