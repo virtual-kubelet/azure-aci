@@ -1715,7 +1715,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 			}
 
 			if secret == nil {
-				return nil, fmt.Errorf("Getting secret for AzureFile volume returned an empty secret")
+				return nil, fmt.Errorf("getting secret for AzureFile volume returned an empty secret")
 			}
 			storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
 			storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
