@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vk-e2e-volume
+  namespace: vk-test
+spec:
+  containers:
+  - image: busybox
+    imagePullPolicy: Always
+    name: busybox
+    command:  [
+      "sh",
+      "-c",
+      "sleep 10; while sleep 0.01; do wget -q -O- http://127.0.0.1; done",
+    ]
+    resources:
+      requests:
+        cpu: "1"
+        memory: 1G
+  - image: k8s.gcr.io/hpa-example
+    imagePullPolicy: Always
+    name: hpa-example
+    ports:
+      - containerPort: 80
+        name: http
+        protocol: TCP
+    terminationMessagePath: /dev/termination-log
+    terminationMessagePolicy: File
+    volumeMounts:
+    - mountPath: /var/log/
+      name: emptydirvol
+    - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+      name: kube-api-access-zrc9l
+    resources:
+      requests:
+        cpu: "1"
+        memory: 1G
+  securityContext: {}
+  nodeSelector:
+    kubernetes.io/role: agent
+    beta.kubernetes.io/os: linux
+    type: virtual-kubelet
+  preemptionPolicy: PreemptLowerPriority
+  tolerations:
+    - key: virtual-kubelet.io/provider
+      operator: Exists
+  volumes:
+    - name: kube-api-access-zrc9l
+      projected:
+        defaultMode: 420
+        sources:
+        - serviceAccountToken:
+            expirationSeconds: 3607
+            path: token
+        - configMap:
+            items:
+            - key: ca.crt
+              path: ca.crt
+            name: kube-root-ca.crt
+        - downwardAPI:
+            items:
+            - fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.namespace
+              path: namespace
+    - emptyDir: {}
+      name: emptydirvol
