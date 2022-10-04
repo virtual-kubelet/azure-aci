@@ -49,6 +49,8 @@ func NewAzClientsAPIs(ctx context.Context, azConfig auth.Config) *AzClientsAPIs 
 	obj.ContainerGroupClient = cgClient
 
 	lClient := azaci.NewLocationClientWithBaseURI(azConfig.Cloud.Services[cloud.ResourceManager].Endpoint, azConfig.AuthConfig.SubscriptionID)
+	lClient.Authorizer = azConfig.Authorizer
+	//needed for metadata
 	lClient.Client.Authorizer = azConfig.Authorizer
 	obj.LocationClient = lClient
 
@@ -148,6 +150,7 @@ func (a *AzClientsAPIs) ListCapabilities(ctx context.Context, region string) (*[
 		return nil, errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", region)
 	}
 
+	logger.Infof("ListCapabilitiesComplete status code:", capabilities.Response().StatusCode)
 	if capabilities.Response().StatusCode != http.StatusOK {
 		logger.Warn("Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", region)
 		return nil, nil

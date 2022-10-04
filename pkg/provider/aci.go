@@ -351,20 +351,21 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 		p.pods = podsQuota
 	}
 
-	capabilities, err := p.azClientsAPIs.ListCapabilities(ctx, p.region)
-	if err != nil {
-		return errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", p.region)
-	}
-
-	for _, capability := range *capabilities {
-		if strings.EqualFold(*capability.Location, p.region) && *capability.Gpu != "" {
-			p.gpu = "100"
-			if gpu := os.Getenv("ACI_QUOTA_GPU"); gpu != "" {
-				p.gpu = gpu
-			}
-			p.gpuSKUs = append(p.gpuSKUs, azaci.GpuSku(*capability.Gpu))
-		}
-	}
+	//TODO To be uncommented after Location API fix
+	//capabilities, err := p.azClientsAPIs.ListCapabilities(ctx, p.region)
+	//if err != nil {
+	//	return errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", p.region)
+	//}
+	//
+	//for _, capability := range *capabilities {
+	//	if strings.EqualFold(*capability.Location, p.region) && *capability.Gpu != "" {
+	//		p.gpu = "100"
+	//		if gpu := os.Getenv("ACI_QUOTA_GPU"); gpu != "" {
+	//			p.gpu = gpu
+	//		}
+	//		p.gpuSKUs = append(p.gpuSKUs, azaci.GpuSku(*capability.Gpu))
+	//	}
+	//}
 
 	return nil
 }
@@ -1243,12 +1244,12 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 
 		volMount := make([]azaci.VolumeMount, 0, len(podContainers[c].VolumeMounts))
 		aciContainer.VolumeMounts = &volMount
-		for _, v := range podContainers[c].VolumeMounts {
+		for v := range podContainers[c].VolumeMounts {
 			vol := aciContainer.VolumeMounts
 			volList := append(*vol, azaci.VolumeMount{
-				Name:      &v.Name,
-				MountPath: &v.MountPath,
-				ReadOnly:  &v.ReadOnly,
+				Name:      &podContainers[c].VolumeMounts[v].Name,
+				MountPath: &podContainers[c].VolumeMounts[v].MountPath,
+				ReadOnly:  &podContainers[c].VolumeMounts[v].ReadOnly,
 			})
 			aciContainer.VolumeMounts = &volList
 		}
@@ -1319,7 +1320,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 
 				gpuResource := &azaci.GpuResource{
 					Count: &count,
-					Sku:   sku,
+					Sku:   azaci.GpuSku(sku),
 				}
 
 				aciContainer.Resources.Requests.Gpu = gpuResource
