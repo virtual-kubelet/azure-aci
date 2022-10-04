@@ -9,7 +9,9 @@ import (
 )
 
 const (
-	DefaultUserAgent = "virtual-kubelet/azure-arm-aci"
+	DefaultUserAgent      = "virtual-kubelet/azure-arm-aci"
+	APIVersion            = "2021-10-01"
+	containerGroupURLPath = "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerInstance/containerGroups/{containerGroupName}"
 )
 
 type ContainerGroupPropertiesWrapper struct {
@@ -53,10 +55,7 @@ func (c *ContainerGroupsClientWrapper) CreateCG(ctx context.Context, resourceGro
 		err = autorest.NewErrorWithError(err, "containerinstance.ContainerGroupsClient", "CreateOrUpdate", result.Response(), "Failure sending request")
 		return err
 	}
-	if result.Response().StatusCode != http.StatusOK {
-		err = autorest.NewErrorWithError(err, "containerinstance.ContainerGroupsClient", "CreateOrUpdate", result.Response(), "Failure Creating or updating container group")
-		return err
-	}
+
 	return nil
 }
 
@@ -68,7 +67,6 @@ func (c *ContainerGroupsClientWrapper) createOrUpdatePreparerWrapper(ctx context
 		"subscriptionId":     autorest.Encode("path", c.CGClient.SubscriptionID),
 	}
 
-	const APIVersion = "2021-10-01"
 	queryParameters := map[string]interface{}{
 		"api-version": APIVersion,
 	}
@@ -77,7 +75,7 @@ func (c *ContainerGroupsClientWrapper) createOrUpdatePreparerWrapper(ctx context
 		autorest.AsContentType("application/json; charset=utf-8"),
 		autorest.AsPut(),
 		autorest.WithBaseURL(c.CGClient.BaseURI),
-		autorest.WithPathParameters("/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerInstance/containerGroups/{containerGroupName}", pathParameters),
+		autorest.WithPathParameters(containerGroupURLPath, pathParameters),
 		autorest.WithJSON(containerGroup),
 		autorest.WithQueryParameters(queryParameters))
 

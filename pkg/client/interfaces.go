@@ -3,7 +3,6 @@ package client
 import (
 	"context"
 
-	"github.com/virtual-kubelet/azure-aci/pkg"
 	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
@@ -15,7 +14,7 @@ type PodGetter interface {
 
 // MetricsGetter package dependency: query the Pod's correspoinding Container Group metrics from Container Insights
 type MetricsGetter interface {
-	GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options pkg.MetricsRequest) (*pkg.ContainerGroupMetricsResult, error)
+	GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options MetricsRequestOptions) (*ContainerGroupMetricsResult, error)
 }
 
 // ContainerGroupGetter package dependency: query the Container Group information
