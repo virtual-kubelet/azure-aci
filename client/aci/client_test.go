@@ -27,7 +27,7 @@ import (
 
 var (
 	client                   *Client
-	location                 = "eastus2"
+	location                 = "eastus2euap"
 	resourceGroup            = "virtual-node-test-rg"
 	containerGroup           = "virtual-kubelet-test-container-group"
 	virtualNetwork           = "virtual-kubelet-tests-vnet"
