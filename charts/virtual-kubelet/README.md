@@ -19,7 +19,7 @@ $ cd helm
 2. Install chart using Helm v3.0+
 ```shell
 $ export CHART_NAME=virtual-kubelet-azure-aci
-$ export VK_RELEASE=virtual-kubelet-azure-aci-1.4.4
+$ export VK_RELEASE=virtual-kubelet-azure-aci-1.4.5
 $ export NODE_NAME=virtual-kubelet-aci
 $ export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/gh-pages/charts/$VK_RELEASE.tgz
 
@@ -39,7 +39,7 @@ $ kubectl get nodes
 
 ```shell
 NAME                                   STATUS    ROLES     AGE       VERSION
-virtual-kubelet-aci                    Ready     agent     2m         v1.19.10-vk-azure-aci-v1.4.4-dev
+virtual-kubelet-aci                    Ready     agent     2m         v1.19.10-vk-azure-aci-v1.4.5-dev
 ```
 </details><br/>
 
@@ -52,7 +52,7 @@ The following table lists the configurable parameters of the azure-aci chart and
 | image.secretName                               | The name of image secret.                                                                                             | `virtual-kubelet-aci-acr`             |
 | image.repository                               | Image repository.                                                                                                     | `mcr.microsoft.com`                   |
 | image.name                                     | Image name.                                                                                                           | `oss/virtual-kubelet/virtual-kubelet` |
-| image.tag                                      | Image release version/tag.                                                                                            | `1.4.4`                               |
+| image.tag                                      | Image release version/tag.                                                                                            | `1.4.5`                               |
 | image.pullPolicy                               | Image pull policy.                                                                                                    | `Always`                              | 
 | nodeName                                       | The node name that will be assigned to be the VK one.                                                                 | `virtual-node-aci-linux-helm`         |
 | nodeOsType                                     | The node/VM type. Values should be `Windows` or `Linux`.                                                              | `Linux`                               |
