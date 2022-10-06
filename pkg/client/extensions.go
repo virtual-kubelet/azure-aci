@@ -150,7 +150,6 @@ func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*Extensio
 			},
 		},
 	}
-
 	return &extension, nil
 }
 
@@ -171,7 +170,7 @@ func getKubeconfigAuthInfo(authInfos map[string]*clientcmdapi.AuthInfo) *clientc
 }
 
 // GetRealtimeMetricsExtension gets the realtime extension
-func GetRealtimeMetricsExtension() (*Extension, error) {
+func GetRealtimeMetricsExtension() *Extension {
 	extension := Extension{
 		Name: "vk-realtime-metrics",
 		Properties: &ExtensionProperties{
@@ -181,5 +180,5 @@ func GetRealtimeMetricsExtension() (*Extension, error) {
 			ProtectedSettings: map[string]string{},
 		},
 	}
-	return &extension, nil
+	return &extension
 }
