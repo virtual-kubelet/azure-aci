@@ -4,7 +4,6 @@ import (
 	"context"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	"github.com/virtual-kubelet/azure-aci/pkg"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 )
@@ -18,7 +17,7 @@ type ListLogsFunc func(ctx context.Context, resourceGroup, cgName, containerName
 type ExecuteContainerCommandFunc func(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (azaci.ContainerExecResponse, error)
 
 //metrics interfaces
-type GetContainerGroupMetricsFunc func(ctx context.Context, resourceGroup, containerGroup string, options pkg.MetricsRequest) (*pkg.ContainerGroupMetricsResult, error)
+type GetContainerGroupMetricsFunc func(ctx context.Context, resourceGroup, containerGroup string, options client.MetricsRequestOptions) (*client.ContainerGroupMetricsResult, error)
 type GetContainerGroupFunc func(ctx context.Context, resourceGroup, containerGroupName string) (*client.ContainerGroupWrapper, error)
 
 type MockACIProvider struct {
@@ -91,7 +90,7 @@ func (m *MockACIProvider) ExecuteContainerCommand(ctx context.Context, resourceG
 }
 
 //metrics interfaces
-func (m *MockACIProvider) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options pkg.MetricsRequest) (*pkg.ContainerGroupMetricsResult, error) {
+func (m *MockACIProvider) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options client.MetricsRequestOptions) (*client.ContainerGroupMetricsResult, error) {
 	if m.MockGetContainerGroupMetrics != nil {
 		return m.MockGetContainerGroupMetrics(ctx, resourceGroup, containerGroup, options)
 	}
