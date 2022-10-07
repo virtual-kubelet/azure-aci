@@ -51,8 +51,8 @@ related objects. To compare, the built-in ACI virtual kubelet is deployed in the
 
 ```shell
 # The client id of the aciconnectorlinux-XXXX managed identity in the MC_XXXX resource group.
-# Tip: you should be able to find the same env variable from Pod spec of 
-# the aci-connector-linux-XXXX pod running in kube-system namespace and reuse the id.
+# Tip: you may be able to find the same env variable from Pod spec of the aci-connector-linux-XXXX 
+# pod running in kube-system namespace and reuse the id.
 export VIRTUALNODE_USER_IDENTITY_CLIENTID=
 
 helm install "$CHART_NAME" \
@@ -76,10 +76,45 @@ helm install "$CHART_NAME" \
 #### Option 2: Install using service principal 
 
 If you decide to use service principal for the virtual kubelet to access Azure services,
-make sure to add XXX [TBD] roles for the service principal.
+make sure to add "Contributor" role and MC_XXXX resource group scope for the service principal.
 
 ```shell
-export TBD
+export VK_SP=
+export RESOURCE_GROUP=
+export LOCATION=
+export SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+# Create a service principal for a resource group using a preferred name and role
+export AZURE_CLIENT_SECRET=$(az ad sp create-for-rbac --name $VK_SP \
+                         --role "Contributor" \
+                         --scopes /subscriptions/${SUBSCRIPTION_ID}/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}\
+                         --query password -o tsv)
+
+export AZURE_CLIENT_ID=$(az ad sp list --display-name $VK_SP --query [$VK_SP].appId -o tsv)
+```
+
+In case the AKS cluster is using a custom VNet, you will need to create the following role assignments for the VNet ID and ACI subnet ID:
+
+```shell
+export VNET_ID=$(az network vnet show --resource-group $VNET_RESOURCE_GROUP --name $VNET_NAME --query id -o tsv)
+export ACI_SUBNET_ID=$(az network vnet subnet show --resource-group $VNET_RESOURCE_GROUP --vnet-name $VNET_NAME --name $ACI_SUBNET_NAME --query id -o tsv)
+
+az role assignment create \
+    --assignee-object-id AZURE_CLIENT_ID \
+    --role "Network Contributor" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope $VNET_ID
+
+az role assignment create \
+    --assignee-object-id AZURE_CLIENT_ID \
+    --role "Network Contributor" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope ACI_SUBNET_ID
+```
+
+Now, we can use the service principal we created to install the helm chart:
+
+```shell
+# Note: in case you want to reset the Service Principal password, you can run "az ad sp credential reset --id $AZURE_CLIENT_ID --query password -o tsv"
 
 helm install "$CHART_NAME" \
     --set provider=azure \
@@ -88,14 +123,16 @@ helm install "$CHART_NAME" \
     --set image.repository=$IMG_URL  \
     --set image.name=$IMG_REPO \
     --set image.tag=$IMG_TAG \
+    --set  providers.azure.targetKey=true \
+    --set  providers.azure.clientId=$AZURE_CLIENT_ID \
+    --set  providers.azure.targetAKS=$AZURE_CLIENT_SECRET \
     --set providers.azure.masterUri=$MASTER_URI \
     --set providers.azure.vnet.enabled=$ENABLE_VNET \
     --set providers.azure.vnet.subnetName=$VIRTUAL_NODE_SUBNET_NAME \
     --set providers.azure.vnet.subnetCidr=$VIRTUAL_NODE_SUBNET_RANGE \
     --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
     --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
-    --set TBD
-
+    ./helm
 ```
 
 ### Verification
