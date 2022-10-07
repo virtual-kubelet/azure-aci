@@ -18,6 +18,7 @@ env:
   # Common versions
   GO_VERSION: '1.18'
 
+jobs:
   lint:
     name: "Lint"
     runs-on: ubuntu-latest
