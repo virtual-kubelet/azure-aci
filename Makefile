@@ -124,7 +124,14 @@ bin/virtual-kubelet: BUILD_VERSION          ?= $(shell git describe --tags --alw
 bin/virtual-kubelet: BUILD_DATE             ?= $(shell date -u '+%Y-%m-%d-%H:%M UTC')
 bin/virtual-kubelet: VERSION_FLAGS    := -ldflags='-X "main.buildVersion=$(BUILD_VERSION)" -X "main.buildTime=$(BUILD_DATE)"'
 
-bin/%:
+FILTER_TESTS = $(filter-out $(wildcard **/*_test.go), $1)
+FILTER_E2E = $(filter-out $(wildcard e2e/**), $1)
+FILTER_HACK = $(filter-out $(wildcard hack/**), $1)
+GO_FILES = $(wildcard **/*.go)
+GO_BIN_DEPS = $(call FILTER_HACK, $(call FILTER_TESTS, $(call FILTER_E2E, $(GO_FILES))))
+
+# Add dependencies for all .go files except those in e2e and test files.
+bin/%: $(GO_BIN_DEPS)
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -o bin/$(*) $(VERSION_FLAGS) ./cmd/$(*)
 
 .PHONY: helm
