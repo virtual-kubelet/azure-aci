@@ -1,7 +1,7 @@
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 
-GOLANGCI_LINT_VER := v1.41.1
+GOLANGCI_LINT_VER := v1.49.0
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
@@ -18,13 +18,12 @@ TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
 IMG_NAME ?= virtual-kubelet
-IMG_REPO ?= $(REGISTRY)/$(IMG_NAME)
+IMAGE ?= $(REGISTRY)/$(IMG_NAME)
 LOCATION := $(E2E_REGION)
 E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
-VERSION      ?= $(VERSION)
 IMG_TAG ?= $(subst v,,$(VERSION))
 
 
@@ -60,7 +59,7 @@ docker-build-image: docker-buildx-builder
 		--output=$(OUTPUT_TYPE) \
 		--platform="$(BUILDPLATFORM)" \
 		--pull \
-		--tag $(IMG_REPO):$(IMG_TAG) .
+		--tag $(IMAGE):$(IMG_TAG) .
 
 .PHONY: build
 build: bin/virtual-kubelet
@@ -81,7 +80,7 @@ test:
 
 .PHONY: e2e-test
 e2e-test:
-	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 
 .PHONY: vet
 vet:

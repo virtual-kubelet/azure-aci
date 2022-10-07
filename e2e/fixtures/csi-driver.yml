@@ -34,6 +34,8 @@ spec:
     volumeMounts:
       - name: azure
         mountPath: /mnt/azure
+      - name: emptydirvol
+        mountPath: /var/log/
   nodeSelector:
     kubernetes.io/role: agent
     beta.kubernetes.io/os: linux
@@ -48,3 +50,5 @@ spec:
       volumeAttributes:
         secretName: csidriversecret  # required
         shareName: vncsidriversharename  # required
+  - emptyDir: { }
+    name: emptydirvol
