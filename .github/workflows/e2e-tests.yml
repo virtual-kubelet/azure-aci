@@ -1,10 +1,14 @@
 name: e2e-tests
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group:  ${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 on:
+  workflow_run:
+    workflows: [Lint, azure-aci-test]
+    types:
+      - completed
   pull_request_target:
     branches: [master]
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]

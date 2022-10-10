@@ -1,10 +1,14 @@
 name: azure-aci-test
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group:  ${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 on:
+  workflow_run:
+    workflows: [Lint]
+    types:
+      - completed
   push:
     branches: [master]
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
