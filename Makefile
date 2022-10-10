@@ -120,7 +120,7 @@ test-loganalytics-json:
 	chmod a+x hack/ci/create_loganalytics_auth.sh
 	hack/ci/create_loganalytics_auth.sh
 
-bin/virtual-kubelet: BUILD_VERSION          ?= $(shell git describe --tags --always --dirty="-dev")
+bin/virtual-kubelet: BUILD_VERSION          ?= $(IMG_TAG)
 bin/virtual-kubelet: BUILD_DATE             ?= $(shell date -u '+%Y-%m-%d-%H:%M UTC')
 bin/virtual-kubelet: VERSION_FLAGS    := -ldflags='-X "main.buildVersion=$(BUILD_VERSION)" -X "main.buildTime=$(BUILD_DATE)"'
 

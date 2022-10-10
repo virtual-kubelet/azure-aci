@@ -4,17 +4,25 @@ ARG TARGETARCH
 ARG TARGETVARIANT
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
 SHELL ["/bin/bash", "-c"]
-WORKDIR /go/src/github.com/virtual-kubelet/azure-aci
-COPY go.mod ./
-COPY go.sum ./
-RUN --mount=type=cache,target=/go/pkg/mod go mod download
-COPY . ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,id=vk-azure-aci,sharing=locked,target=/root/.cache/go-build \
+WORKDIR /workspace
+# Copy the Go Modules manifests
+COPY go.mod go.mod
+COPY go.sum go.sum
+# cache deps before building and copying source so that we don't need to re-download as much
+# and so that source changes don't invalidate our downloaded layer
+ENV GOCACHE=/root/gocache
+RUN \
+    --mount=type=cache,target=${GOCACHE} \
+    --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+COPY . .
+
+RUN --mount=type=cache,target=${GOCACHE} \
+    --mount=type=cache,id=vk-azure-aci,sharing=locked,target=/go/pkg/mod \
     GOARM="${TARGETVARIANT#v}" make build GOARM="$GOARM"
 
 FROM --platform=$BUILDPLATFORM gcr.io/distroless/static
-COPY --from=builder  /go/src/github.com/virtual-kubelet/azure-aci/bin/virtual-kubelet /usr/bin/virtual-kubelet
+COPY --from=builder  /workspace/bin/virtual-kubelet /usr/bin/virtual-kubelet
 COPY --from=builder /etc/ssl/certs/ /etc/ssl/certs
 
 ENTRYPOINT [ "/usr/bin/virtual-kubelet" ]
