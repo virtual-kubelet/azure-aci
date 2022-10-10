@@ -351,20 +351,20 @@ func (p *ACIProvider) setupCapacity(ctx context.Context) error {
 		p.pods = podsQuota
 	}
 
-	//capabilities, err := p.azClientsAPIs.ListCapabilities(ctx, p.region)
-	//if err != nil {
-	//	return errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", p.region)
-	//}
-	//
-	//for _, capability := range *capabilities {
-	//	if strings.EqualFold(*capability.Location, p.region) && *capability.Gpu != "" {
-	//		p.gpu = "100"
-	//		if gpu := os.Getenv("ACI_QUOTA_GPU"); gpu != "" {
-	//			p.gpu = gpu
-	//		}
-	//		p.gpuSKUs = append(p.gpuSKUs, azaci.GpuSku(*capability.Gpu))
-	//	}
-	//}
+	capabilities, err := p.azClientsAPIs.ListCapabilities(ctx, p.region)
+	if err != nil {
+		return errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", p.region)
+	}
+
+	for _, capability := range *capabilities {
+		if strings.EqualFold(*capability.Location, p.region) && *capability.Gpu != "" {
+			p.gpu = "100"
+			if gpu := os.Getenv("ACI_QUOTA_GPU"); gpu != "" {
+				p.gpu = gpu
+			}
+			p.gpuSKUs = append(p.gpuSKUs, azaci.GpuSku(*capability.Gpu))
+		}
+	}
 
 	return nil
 }
@@ -458,12 +458,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	ctx = addAzureAttributes(ctx, span, p)
 
 	cg := &client2.ContainerGroupWrapper{
-		ContainerGroupPropertiesWrapper: &client2.ContainerGroupPropertiesWrapper{},
+		ContainerGroupPropertiesWrapper: &client2.ContainerGroupPropertiesWrapper{
+			ContainerGroupProperties: &azaci.ContainerGroupProperties{},
+		},
 	}
 
 	cg.Location = &p.region
 	cg.ContainerGroupProperties.RestartPolicy = azaci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType = azaci.OperatingSystemTypes(p.operatingSystem)
+	cg.ContainerGroupProperties.OsType = azaci.OperatingSystemTypes(p.operatingSystem)
 
 	// get containers
 	containers, err := p.getContainers(pod)
@@ -482,10 +484,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	}
 	// assign all the things
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = &containers
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
+	cg.ContainerGroupProperties.Containers = &containers
+	cg.ContainerGroupProperties.Volumes = &volumes
+	cg.ContainerGroupProperties.ImageRegistryCredentials = creds
+	cg.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
 
 	filterServiceAccountSecretVolume(p.operatingSystem, cg)
 
@@ -505,13 +507,13 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		}
 	}
 	if len(ports) > 0 && p.subnetName == "" {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
+		cg.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
 			Ports: &ports,
 			Type:  "Public",
 		}
 
 		if dnsNameLabel := pod.Annotations[virtualKubeletDNSNameLabel]; dnsNameLabel != "" {
-			cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress.DNSNameLabel = &dnsNameLabel
+			cg.ContainerGroupProperties.IPAddress.DNSNameLabel = &dnsNameLabel
 		}
 	}
 
@@ -540,8 +542,8 @@ func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *
 
 	subnetID := "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName
 	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
+	cg.ContainerGroupProperties.SubnetIds = &cgIDList
+	cg.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
 	cg.Extensions = p.containerGroupExtensions
 }
 
@@ -1966,7 +1968,7 @@ func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroup
 	if strings.EqualFold(osType, "Windows") {
 		serviceAccountSecretVolumeName := make(map[string]bool)
 
-		for index, container := range *cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers {
+		for index, container := range *cgw.ContainerGroupProperties.Containers {
 			volumeMounts := make([]azaci.VolumeMount, 0, len(*container.VolumeMounts))
 			for _, volumeMount := range *container.VolumeMounts {
 				if !strings.EqualFold(serviceAccountSecretMountPath, *volumeMount.MountPath) {
@@ -1975,7 +1977,7 @@ func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroup
 					serviceAccountSecretVolumeName[*volumeMount.Name] = true
 				}
 			}
-			(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers)[index].VolumeMounts = &volumeMounts
+			(*cgw.ContainerGroupProperties.Containers)[index].VolumeMounts = &volumeMounts
 		}
 
 		if len(serviceAccountSecretVolumeName) == 0 {
@@ -1985,14 +1987,14 @@ func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroup
 		l := log.G(context.TODO()).WithField("containerGroup", cgw.Name)
 		l.Infof("Ignoring service account secret volumes '%v' for Windows", reflect.ValueOf(serviceAccountSecretVolumeName).MapKeys())
 
-		volumes := make([]azaci.Volume, 0, len(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes))
-		for _, volume := range *cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes {
+		volumes := make([]azaci.Volume, 0, len(*cgw.ContainerGroupProperties.Volumes))
+		for _, volume := range *cgw.ContainerGroupProperties.Volumes {
 			if _, ok := serviceAccountSecretVolumeName[*volume.Name]; !ok {
 				volumes = append(volumes, volume)
 			}
 		}
 
-		cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
+		cgw.ContainerGroupProperties.Volumes = &volumes
 	}
 }
 

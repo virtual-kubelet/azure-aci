@@ -254,6 +254,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 }
 
 // Tests create pod with GPU SKU in annotation.
+
 func TestCreatePodWithGPUSKU(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
