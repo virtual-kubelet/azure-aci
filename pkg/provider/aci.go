@@ -464,8 +464,8 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	cg.Location = &p.region
-	cg.ContainerGroupProperties.RestartPolicy = azaci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
-	cg.ContainerGroupProperties.OsType = azaci.OperatingSystemTypes(p.operatingSystem)
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.RestartPolicy = azaci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType = azaci.OperatingSystemTypes(p.operatingSystem)
 
 	// get containers
 	containers, err := p.getContainers(pod)
@@ -484,20 +484,20 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	}
 	// assign all the things
-	cg.ContainerGroupProperties.Containers = &containers
-	cg.ContainerGroupProperties.Volumes = &volumes
-	cg.ContainerGroupProperties.ImageRegistryCredentials = creds
-	cg.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
 
 	filterServiceAccountSecretVolume(p.operatingSystem, cg)
 
 	// create ipaddress if containerPort is used
 	count := 0
-	for _, container := range containers {
+	for _, container := range *containers {
 		count = count + len(*container.Ports)
 	}
 	ports := make([]azaci.Port, 0, count)
-	for _, container := range containers {
+	for _, container := range *containers {
 		for _, containerPort := range *container.Ports {
 
 			ports = append(ports, azaci.Port{
@@ -507,13 +507,13 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		}
 	}
 	if len(ports) > 0 && p.subnetName == "" {
-		cg.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
+		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
 			Ports: &ports,
 			Type:  "Public",
 		}
 
 		if dnsNameLabel := pod.Annotations[virtualKubeletDNSNameLabel]; dnsNameLabel != "" {
-			cg.ContainerGroupProperties.IPAddress.DNSNameLabel = &dnsNameLabel
+			cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress.DNSNameLabel = &dnsNameLabel
 		}
 	}
 
@@ -542,9 +542,9 @@ func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *
 
 	subnetID := "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName
 	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupProperties.SubnetIds = &cgIDList
-	cg.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
-	cg.Extensions = p.containerGroupExtensions
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
+	cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
 }
 
 func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *azaci.DNSConfiguration {
@@ -1212,7 +1212,7 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []azaci.ImageRegistryCred
 	return ips, err
 }
 
-func (p *ACIProvider) getContainers(pod *v1.Pod) ([]azaci.Container, error) {
+func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 	containers := make([]azaci.Container, 0, len(pod.Spec.Containers))
 
 	podContainers := pod.Spec.Containers
@@ -1345,7 +1345,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]azaci.Container, error) {
 
 		containers = append(containers, aciContainer)
 	}
-	return containers, nil
+	return &containers, nil
 }
 
 func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaci.GpuSku, error) {
@@ -1968,7 +1968,7 @@ func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroup
 	if strings.EqualFold(osType, "Windows") {
 		serviceAccountSecretVolumeName := make(map[string]bool)
 
-		for index, container := range *cgw.ContainerGroupProperties.Containers {
+		for index, container := range *cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers {
 			volumeMounts := make([]azaci.VolumeMount, 0, len(*container.VolumeMounts))
 			for _, volumeMount := range *container.VolumeMounts {
 				if !strings.EqualFold(serviceAccountSecretMountPath, *volumeMount.MountPath) {
@@ -1977,7 +1977,7 @@ func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroup
 					serviceAccountSecretVolumeName[*volumeMount.Name] = true
 				}
 			}
-			(*cgw.ContainerGroupProperties.Containers)[index].VolumeMounts = &volumeMounts
+			(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers)[index].VolumeMounts = &volumeMounts
 		}
 
 		if len(serviceAccountSecretVolumeName) == 0 {
@@ -1987,14 +1987,14 @@ func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroup
 		l := log.G(context.TODO()).WithField("containerGroup", cgw.Name)
 		l.Infof("Ignoring service account secret volumes '%v' for Windows", reflect.ValueOf(serviceAccountSecretVolumeName).MapKeys())
 
-		volumes := make([]azaci.Volume, 0, len(*cgw.ContainerGroupProperties.Volumes))
-		for _, volume := range *cgw.ContainerGroupProperties.Volumes {
+		volumes := make([]azaci.Volume, 0, len(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes))
+		for _, volume := range *cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes {
 			if _, ok := serviceAccountSecretVolumeName[*volume.Name]; !ok {
 				volumes = append(volumes, volume)
 			}
 		}
 
-		cgw.ContainerGroupProperties.Volumes = &volumes
+		cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
 	}
 }
 

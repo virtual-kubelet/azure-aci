@@ -36,16 +36,16 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupProperties.Containers
+		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
-		assert.Check(t, is.Equal(1, len(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers)), "1 Container is expected")
-		assert.Check(t, is.Equal("nginx", *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers)[0].Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(3, len(*cg.ContainerGroupProperties.Volumes)), "volume count not match")
-		assert.Check(t, is.Equal(azureFileVolumeName1, *(*cg.ContainerGroupProperties.Volumes)[1].Name), "volume name is not matched")
-		assert.Check(t, is.Equal(fakeShareName1, *(*cg.ContainerGroupProperties.Volumes)[1].AzureFile.ShareName), "volume share name is not matched")
-		assert.Check(t, is.Equal(azureFileVolumeName2, *(*cg.ContainerGroupProperties.Volumes)[2].Name), "volume name is not matched")
-		assert.Check(t, is.Equal(fakeShareName2, *(*cg.ContainerGroupProperties.Volumes)[2].AzureFile.ShareName), "volume share name is not matched")
+		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", *(containers)[0].Name), "Container nginx is expected")
+		assert.Check(t, is.Equal(3, len(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(azureFileVolumeName1, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[1].Name), "volume name is not matched")
+		assert.Check(t, is.Equal(fakeShareName1, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[1].AzureFile.ShareName), "volume share name is not matched")
+		assert.Check(t, is.Equal(azureFileVolumeName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].Name), "volume name is not matched")
+		assert.Check(t, is.Equal(fakeShareName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].AzureFile.ShareName), "volume share name is not matched")
 
 		return nil
 	}
@@ -240,14 +240,14 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 
 	encodedSecretVal := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupProperties.Containers
-		volumes := *cg.ContainerGroupProperties.Volumes
-		certVal := (*cg.ContainerGroupProperties.Volumes)[2].Secret["ca.crt"]
+		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+		volumes := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes
+		certVal := (*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].Secret["ca.crt"]
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(3, len(*cg.ContainerGroupProperties.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(3, len(volumes)), "volume count not match")
 		assert.Check(t, is.Equal(projectedVolumeName, *volumes[2].Name), "volume name doesn't match")
 		assert.Check(t, is.Equal(encodedSecretVal, *certVal), "configmap data doesn't match")
 
@@ -396,12 +396,12 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupProperties.Containers
+		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(2, len(*cg.ContainerGroupProperties.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(2, len(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)), "volume count not match")
 
 		return nil
 	}
