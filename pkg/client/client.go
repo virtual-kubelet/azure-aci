@@ -25,7 +25,7 @@ type ContainerGroupWrapper struct {
 	// Identity - The identity of the container group, if configured.
 	Identity *azaci.ContainerGroupIdentity `json:"identity,omitempty"`
 	// ContainerGroupProperties - The container group properties
-	*ContainerGroupPropertiesWrapper `json:"properties,omitempty"`
+	ContainerGroupPropertiesWrapper *ContainerGroupPropertiesWrapper `json:"properties,omitempty"`
 	// ID - READ-ONLY; The resource id.
 	ID *string `json:"id,omitempty"`
 	// Name - READ-ONLY; The resource name.
@@ -86,43 +86,41 @@ func (c *ContainerGroupsClientWrapper) createOrUpdatePreparerWrapper(ctx context
 // MarshalJSON is the custom marshaler for ContainerGroupProperties.
 func (cg ContainerGroupPropertiesWrapper) MarshalJSON() ([]byte, error) {
 	objectMap := make(map[string]interface{})
-	if cg.ContainerGroupProperties != nil {
-		if cg.ContainerGroupProperties.Containers != nil {
-			objectMap["containers"] = cg.ContainerGroupProperties.Containers
-		}
-		if cg.ContainerGroupProperties.ImageRegistryCredentials != nil {
-			objectMap["imageRegistryCredentials"] = cg.ContainerGroupProperties.ImageRegistryCredentials
-		}
-		if cg.ContainerGroupProperties.RestartPolicy != "" {
-			objectMap["restartPolicy"] = cg.ContainerGroupProperties.RestartPolicy
-		}
-		if cg.ContainerGroupProperties.IPAddress != nil {
-			objectMap["ipAddress"] = cg.ContainerGroupProperties.IPAddress
-		}
-		if cg.ContainerGroupProperties.OsType != "" {
-			objectMap["osType"] = cg.ContainerGroupProperties.OsType
-		}
-		if cg.ContainerGroupProperties.Volumes != nil {
-			objectMap["volumes"] = cg.ContainerGroupProperties.Volumes
-		}
-		if cg.ContainerGroupProperties.Diagnostics != nil {
-			objectMap["diagnostics"] = cg.ContainerGroupProperties.Diagnostics
-		}
-		if cg.ContainerGroupProperties.SubnetIds != nil {
-			objectMap["subnetIds"] = cg.ContainerGroupProperties.SubnetIds
-		}
-		if cg.ContainerGroupProperties.DNSConfig != nil {
-			objectMap["dnsConfig"] = cg.ContainerGroupProperties.DNSConfig
-		}
-		if cg.ContainerGroupProperties.Sku != "" {
-			objectMap["sku"] = cg.ContainerGroupProperties.Sku
-		}
-		if cg.ContainerGroupProperties.EncryptionProperties != nil {
-			objectMap["encryptionProperties"] = cg.ContainerGroupProperties.EncryptionProperties
-		}
-		if cg.ContainerGroupProperties.InitContainers != nil {
-			objectMap["initContainers"] = cg.ContainerGroupProperties.InitContainers
-		}
+	if cg.ContainerGroupProperties.Containers != nil {
+		objectMap["containers"] = cg.ContainerGroupProperties.Containers
+	}
+	if cg.ContainerGroupProperties.ImageRegistryCredentials != nil {
+		objectMap["imageRegistryCredentials"] = cg.ContainerGroupProperties.ImageRegistryCredentials
+	}
+	if cg.ContainerGroupProperties.RestartPolicy != "" {
+		objectMap["restartPolicy"] = cg.ContainerGroupProperties.RestartPolicy
+	}
+	if cg.ContainerGroupProperties.IPAddress != nil {
+		objectMap["ipAddress"] = cg.ContainerGroupProperties.IPAddress
+	}
+	if cg.ContainerGroupProperties.OsType != "" {
+		objectMap["osType"] = cg.ContainerGroupProperties.OsType
+	}
+	if cg.ContainerGroupProperties.Volumes != nil {
+		objectMap["volumes"] = cg.ContainerGroupProperties.Volumes
+	}
+	if cg.ContainerGroupProperties.Diagnostics != nil {
+		objectMap["diagnostics"] = cg.ContainerGroupProperties.Diagnostics
+	}
+	if cg.ContainerGroupProperties.SubnetIds != nil {
+		objectMap["subnetIds"] = cg.ContainerGroupProperties.SubnetIds
+	}
+	if cg.ContainerGroupProperties.DNSConfig != nil {
+		objectMap["dnsConfig"] = cg.ContainerGroupProperties.DNSConfig
+	}
+	if cg.ContainerGroupProperties.Sku != "" {
+		objectMap["sku"] = cg.ContainerGroupProperties.Sku
+	}
+	if cg.ContainerGroupProperties.EncryptionProperties != nil {
+		objectMap["encryptionProperties"] = cg.ContainerGroupProperties.EncryptionProperties
+	}
+	if cg.ContainerGroupProperties.InitContainers != nil {
+		objectMap["initContainers"] = cg.ContainerGroupProperties.InitContainers
 	}
 	if cg.Extensions != nil {
 		objectMap["extensions"] = cg.Extensions
