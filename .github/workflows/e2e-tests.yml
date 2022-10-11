@@ -1,14 +1,10 @@
 name: e2e-tests
 
 concurrency:
-  group:  ${{ github.head_ref || github.run_id }}
+  group:  ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 on:
-  workflow_run:
-    workflows: [azure-aci-test]
-    types:
-      - completed
   pull_request_target:
     branches: [master]
     paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
@@ -27,7 +23,6 @@ env:
 
 jobs:
   export-registry:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-20.04
     outputs:
       registry: ${{ steps.export.outputs.registry }}
@@ -38,13 +33,12 @@ jobs:
           echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
 
   e2e-tests:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     needs: export-registry
     environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       E2E_IMG_TAG: "e2e-ci"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v3
