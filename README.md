@@ -762,7 +762,7 @@ If you used Virtual Nodes, can follow the steps [here](https://docs.microsoft.co
 
 
 <!-- LINKS -->
-[kubectl-create]: https://kubernetes.io/docs/user-guide/kubectl/v1.6/#create
-[kubectl-get]: https://kubernetes.io/docs/user-guide/kubectl/v1.8/#get
+[kubectl-create]: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#create
+[kubectl-get]: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#get
 [az-container-list]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_list
 [az-container-show]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_show
