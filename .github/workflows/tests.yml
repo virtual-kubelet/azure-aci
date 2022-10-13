@@ -56,10 +56,10 @@ jobs:
           clientSecret: ${{ secrets.CLIENT_SECRET }}
           omsworkspaceID: ${{ secrets.OMSWORKSPACEID  }}
           omsworkspaceKey: ${{ secrets.OMS_WORKSPACE_KEY }}
+          E2E_REGION: ${{ secrets.E2E_REGION}}
         run: |
           make testauth test
-        env:
-          E2E_REGION: ${{ secrets.E2E_REGION}}
+          
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3
