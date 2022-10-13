@@ -109,6 +109,10 @@ spec:
 
 {{- end }}
 {{- end }}
+{{- if .Values.useVKVersion2 }}
+        - name: USE_VK_VERSION_2
+          value: "true"
+{{- end }}
         volumeMounts:
         - name: credentials
           mountPath: "/etc/virtual-kubelet"

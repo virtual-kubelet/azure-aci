@@ -31,13 +31,20 @@ import (
 const (
 	fakeResourceGroup = "vk-rg"
 	fakeNodeName      = "vk"
-	fakeRegion        = "westus2"
 )
 
 var (
+	fakeRegion   = getEnv("LOCATION", "westus2")
 	creationTime = "2006-01-02 15:04:05.999999999 -0700 MST"
 	azConfig     auth.Config
 )
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
 
 // Test make registry credential
 func TestMakeRegistryCredential(t *testing.T) {
@@ -201,6 +208,7 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 
 // Tests create pod with default GPU SKU.
 func TestCreatePodWithGPU(t *testing.T) {
+	t.Skip("Skipping GPU tests until Location API is fixed")
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 
@@ -255,6 +263,8 @@ func TestCreatePodWithGPU(t *testing.T) {
 // Tests create pod with GPU SKU in annotation.
 
 func TestCreatePodWithGPUSKU(t *testing.T) {
+	t.Skip("Skipping GPU tests until Location API is fixed")
+
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	gpuSKU := azaci.GpuSkuP100

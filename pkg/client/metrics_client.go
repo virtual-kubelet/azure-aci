@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	containerGroupMetricsURLPath = containerGroupURLPath + "/providers/microsoft.Insights/metrics"
+	containerGroupMetricsURLPath = "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/microsoft.Insights/metrics"
 )
 
 // AggregationType is an enum type for defining supported aggregation types.
@@ -100,6 +100,8 @@ func (c *ContainerGroupsClientWrapper) GetMetrics(ctx context.Context, resourceG
 		return nil, err
 	}
 	result, err := c.CGClient.Client.Do(req)
+	defer result.Body.Close()
+
 	if err != nil {
 		return nil, err
 	}
@@ -150,12 +152,12 @@ func (c *ContainerGroupsClientWrapper) getMetricsPreparer(ctx context.Context, r
 		"subscriptionId":     autorest.Encode("path", c.CGClient.SubscriptionID),
 	}
 
-	queryParameters := make(map[string]interface{})
-
-	queryParameters["api-version"] = []string{APIVersion}
-	queryParameters["aggregation"] = []string{aggregations}
-	queryParameters["metricnames"] = []string{metricNames}
-	queryParameters["interval"] = []string{"PT1M"} // TODO: make configurable?
+	queryParameters := map[string]interface{}{
+		"api-version": APIVersion,
+		"aggregation": aggregations,
+		"metricnames": metricNames,
+		"interval":    "PT1M", // TODO: make configurable?
+	}
 
 	if metricsRequest.Dimension != "" {
 		queryParameters["$filter"] = metricsRequest.Dimension

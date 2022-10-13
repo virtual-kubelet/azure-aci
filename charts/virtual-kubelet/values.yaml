@@ -5,6 +5,8 @@ image:
   tag: 1.4.5
   pullPolicy: Always
 
+useVKVersion2: true
+
 nodeName: "virtual-node-aci-linux-helm"
 nodeOsType: "Linux"
 monitoredNamespace: ""
@@ -39,7 +41,7 @@ providers:
     aciResourceGroup:
     aciRegion:
     masterUri:
-    enableRealTimeMetrics: false
+    enableRealTimeMetrics: true
     loganalytics:
       enabled: false
       workspaceId:
