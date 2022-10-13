@@ -2,8 +2,6 @@ name: publish_helm_chart
 
 on:
   push:
-    branches:
-      - master
     paths:
       - ".github/workflows/chart.yaml"
       - "charts/**"
