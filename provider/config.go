@@ -11,14 +11,14 @@ import (
 )
 
 type providerConfig struct {
-	ResourceGroup      string
-	Region             string
-	OperatingSystem    string
-	CPU                string
-	Memory             string
-	Pods               string
-	SubnetName         string
-	SubnetCIDR         string
+	ResourceGroup   string
+	Region          string
+	OperatingSystem string
+	CPU             string
+	Memory          string
+	Pods            string
+	SubnetName      string
+	SubnetCIDR      string
 }
 
 func (p *ACIProvider) loadConfig(r io.Reader) error {
