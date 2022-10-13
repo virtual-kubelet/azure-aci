@@ -21,3 +21,4 @@ hack/tools/bin/
 .DS_Store
 .vscode/
 .idea/
+.run/

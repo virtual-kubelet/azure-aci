@@ -1,6 +1,6 @@
 # Kubernetes Virtual Kubelet with ACI
 
-![GitHub release (latest by date)](https://img.shields.io/github/v/release/virtual-kubelet/azure-aci)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/virtual-kubelet/azure-aci)](https://github.com/virtual-kubelet/azure-aci/releases)
 ![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/virtual-kubelet/azure-aci/e2e-tests/master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/virtual-kubelet/azure-aci)](https://goreportcard.com/report/github.com/virtual-kubelet/azure-aci)
 [![codecov](https://codecov.io/gh/virtual-kubelet/azure-aci/branch/master/graph/badge.svg?token=XHb1xbrki0)](https://codecov.io/gh/virtual-kubelet/azure-aci)
