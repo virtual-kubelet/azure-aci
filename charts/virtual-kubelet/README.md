@@ -78,7 +78,6 @@ The following table lists the configurable parameters of the azure-aci chart and
 | providers.azure.aciResourceGroup               | `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments.                                         | ` `                                   |
 | providers.azure.aciRegion                      | `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments.                                         | ` `                                   |
 | providers.azure.masterUri                      | API server URL for the AKS cluster.                                                                                   | ` `                                   |
-| providers.azure.enableRealTimeMetrics          | Enable Real-Time metrics.                                                                                             | `false`                               |
 | providers.azure.loganalytics.enabled           | Log Analytics enabled flag.                                                                                           | `false`                               |
 | providers.azure.loganalytics.workspaceId       | Log Analytics workspace ID.                                                                                           | ` `                                   |
 | providers.azure.loganalytics.workspaceKey      | Log Analytics workspace Key.                                                                                          | ` `                                   |

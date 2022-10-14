@@ -12,11 +12,6 @@ type PodGetter interface {
 	GetPods() []*v1.Pod
 }
 
-// MetricsGetter package dependency: query the Pod's correspoinding Container Group metrics from Container Insights
-type MetricsGetter interface {
-	GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options MetricsRequestOptions) (*ContainerGroupMetricsResult, error)
-}
-
 // ContainerGroupGetter package dependency: query the Container Group information
 type ContainerGroupGetter interface {
 	GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*ContainerGroupWrapper, error)

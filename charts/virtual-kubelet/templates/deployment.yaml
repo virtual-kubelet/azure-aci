@@ -102,11 +102,8 @@ spec:
         - name: MASTER_URI
           value: {{ .masterUri | quote }}
 {{- end }}
-{{- if and .vnet.enabled .enableRealTimeMetrics }}
         - name: ENABLE_REAL_TIME_METRICS
           value: "true"
-{{- end }}
-
 {{- end }}
 {{- end }}
 {{- if .Values.useVKVersion2 }}

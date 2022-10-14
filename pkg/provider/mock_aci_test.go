@@ -16,8 +16,6 @@ type DeleteContainerGroupFunc func(ctx context.Context, resourceGroup, cgName st
 type ListLogsFunc func(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) *string
 type ExecuteContainerCommandFunc func(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (azaci.ContainerExecResponse, error)
 
-//metrics interfaces
-type GetContainerGroupMetricsFunc func(ctx context.Context, resourceGroup, containerGroup string, options client.MetricsRequestOptions) (*client.ContainerGroupMetricsResult, error)
 type GetContainerGroupFunc func(ctx context.Context, resourceGroup, containerGroupName string) (*client.ContainerGroupWrapper, error)
 
 type MockACIProvider struct {
@@ -29,9 +27,7 @@ type MockACIProvider struct {
 	MockListLogs                ListLogsFunc
 	MockExecuteContainerCommand ExecuteContainerCommandFunc
 
-	//metrics interfaces
-	MockGetContainerGroupMetrics GetContainerGroupMetricsFunc
-	MockGetContainerGroup        GetContainerGroupFunc
+	MockGetContainerGroup GetContainerGroupFunc
 }
 
 func NewMockACIProvider(capList ListCapabilitiesFunc) *MockACIProvider {
@@ -85,14 +81,6 @@ func (m *MockACIProvider) ExecuteContainerCommand(ctx context.Context, resourceG
 	if m.MockExecuteContainerCommand != nil {
 		result, err := m.MockExecuteContainerCommand(ctx, resourceGroup, cgName, containerName, containerReq)
 		return &result, err
-	}
-	return nil, nil
-}
-
-//metrics interfaces
-func (m *MockACIProvider) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options client.MetricsRequestOptions) (*client.ContainerGroupMetricsResult, error) {
-	if m.MockGetContainerGroupMetrics != nil {
-		return m.MockGetContainerGroupMetrics(ctx, resourceGroup, containerGroup, options)
 	}
 	return nil, nil
 }

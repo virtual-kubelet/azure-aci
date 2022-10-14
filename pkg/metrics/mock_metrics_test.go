@@ -74,21 +74,6 @@ func (m *MockMetricsGetter) EXPECT() *MockMetricsGetterMockRecorder {
 	return m.recorder
 }
 
-// GetContainerGroupMetrics mocks base method.
-func (m *MockMetricsGetter) GetContainerGroupMetrics(ctx context.Context, resourceGroup, containerGroup string, options client.MetricsRequestOptions) (*client.ContainerGroupMetricsResult, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetContainerGroupMetrics", ctx, resourceGroup, containerGroup, options)
-	ret0, _ := ret[0].(*client.ContainerGroupMetricsResult)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetContainerGroupMetrics indicates an expected call of GetContainerGroupMetrics.
-func (mr *MockMetricsGetterMockRecorder) GetContainerGroupMetrics(ctx, resourceGroup, containerGroup, options interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContainerGroupMetrics", reflect.TypeOf((*MockMetricsGetter)(nil).GetContainerGroupMetrics), ctx, resourceGroup, containerGroup, options)
-}
-
 // MockContainerGroupGetter is a mock of ContainerGroupGetter interface.
 type MockContainerGroupGetter struct {
 	ctrl     *gomock.Controller

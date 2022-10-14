@@ -22,29 +22,24 @@ const (
 )
 
 type ACIPodMetricsProvider struct {
-	nodeName           string
-	metricsSync        sync.Mutex
-	podGetter          client.PodGetter
-	aciCGGetter        client.ContainerGroupGetter
-	aciCGMetricsGetter client.MetricsGetter
-	podStatsGetter     client.PodStatsGetter
+	nodeName       string
+	metricsSync    sync.Mutex
+	podGetter      client.PodGetter
+	aciCGGetter    client.ContainerGroupGetter
+	podStatsGetter client.PodStatsGetter
 }
 
-func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter client.PodGetter, aciCGGetter client.ContainerGroupGetter, aciCGMetricsGetter client.MetricsGetter) *ACIPodMetricsProvider {
+func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter client.PodGetter, aciCGGetter client.ContainerGroupGetter) *ACIPodMetricsProvider {
 	provider := ACIPodMetricsProvider{
-		nodeName:           nodeName,
-		podGetter:          podGetter,
-		aciCGGetter:        aciCGGetter,
-		aciCGMetricsGetter: aciCGMetricsGetter,
+		nodeName:    nodeName,
+		podGetter:   podGetter,
+		aciCGGetter: aciCGGetter,
 	}
 
-	containerInsightGetter := WrapCachedPodStatsGetter(
-		30,
-		NewContainerInsightsMetricsProvider(aciCGMetricsGetter, aciResourcegroup))
 	realTimeGetter := WrapCachedPodStatsGetter(
 		5,
 		NewRealTimeMetrics())
-	provider.podStatsGetter = NewPodStatsGetterDecider(containerInsightGetter, realTimeGetter, aciResourcegroup, aciCGGetter)
+	provider.podStatsGetter = NewPodStatsGetterDecider(realTimeGetter, aciResourcegroup, aciCGGetter)
 	return &provider
 }
 
@@ -127,20 +122,18 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 }
 
 type podStatsGetterDecider struct {
-	containerInsightsGetter client.PodStatsGetter
-	realTimeGetter          client.PodStatsGetter
-	rgName                  string
-	aciCGGetter             client.ContainerGroupGetter
-	cache                   *cache.Cache
+	realTimeGetter client.PodStatsGetter
+	rgName         string
+	aciCGGetter    client.ContainerGroupGetter
+	cache          *cache.Cache
 }
 
-func NewPodStatsGetterDecider(containerInsightsGetter client.PodStatsGetter, realTimeGetter client.PodStatsGetter, rgName string, aciCGGetter client.ContainerGroupGetter) *podStatsGetterDecider {
+func NewPodStatsGetterDecider(realTimeGetter client.PodStatsGetter, rgName string, aciCGGetter client.ContainerGroupGetter) *podStatsGetterDecider {
 	decider := &podStatsGetterDecider{
-		containerInsightsGetter: containerInsightsGetter,
-		realTimeGetter:          realTimeGetter,
-		rgName:                  rgName,
-		aciCGGetter:             aciCGGetter,
-		cache:                   cache.New(ContainerGroupCacheTTLSeconds*time.Second, 10*time.Minute),
+		realTimeGetter: realTimeGetter,
+		rgName:         rgName,
+		aciCGGetter:    aciCGGetter,
+		cache:          cache.New(ContainerGroupCacheTTLSeconds*time.Second, 10*time.Minute),
 	}
 	return decider
 }
@@ -169,8 +162,8 @@ func (decider *podStatsGetterDecider) GetPodStats(ctx context.Context, pod *v1.P
 		logger.Infof("use Real-Time Metrics Extension for pod '%s'", pod.Name)
 		return decider.realTimeGetter.GetPodStats(ctx, pod)
 	} else {
-		logger.Infof("use Container Insights metrics for pod '%s'", pod.Name)
-		return decider.containerInsightsGetter.GetPodStats(ctx, pod)
+		logger.Infof("no metrics has been setup for pod '%s'", pod.Name)
+		return nil, nil
 	}
 }
 

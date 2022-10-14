@@ -325,7 +325,7 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		}
 	}
 
-	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.azClientsAPIs, p.azClientsAPIs)
+	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.azClientsAPIs)
 	return &p, err
 }
 

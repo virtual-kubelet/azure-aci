@@ -18,7 +18,6 @@ import (
 )
 
 type AzClientsInterface interface {
-	MetricsGetter
 	ContainerGroupGetter
 	CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *ContainerGroupWrapper) error
 	GetContainerGroupInfo(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error)
@@ -135,6 +134,7 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 
 	return &cg, nil
 }
+
 func (a *AzClientsAPIs) GetContainerGroupListResult(ctx context.Context, resourceGroup string) (*[]azaci.ContainerGroup, error) {
 	cgs, err := a.ContainerGroupClient.CGClient.ListByResourceGroup(ctx, resourceGroup)
 	list := cgs.Values()
@@ -161,14 +161,6 @@ func (a *AzClientsAPIs) ListCapabilities(ctx context.Context, region string) (*[
 		logger.Warn("ACI GPU capacity is not enabled. GPU capacity will be disabled")
 	}
 	return result, nil
-}
-
-func (a *AzClientsAPIs) GetContainerGroupMetrics(ctx context.Context, resourceGroup, cgName string, requestOptions MetricsRequestOptions) (*ContainerGroupMetricsResult, error) {
-	metrics, err := a.ContainerGroupClient.GetMetrics(ctx, resourceGroup, cgName, requestOptions)
-	if err != nil {
-		return nil, err
-	}
-	return metrics, nil
 }
 
 func (a *AzClientsAPIs) DeleteContainerGroup(ctx context.Context, resourceGroup, cgName string) error {
