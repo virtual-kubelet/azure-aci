@@ -102,5 +102,5 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
-// fix cve
-replace github.com/dgrijalva/jwt-go v3.2.0+incompatible => github.com/golang-jwt/jwt/v4 v4.1.0
+// fixinate the azure SDK version for concictincy accross all project packages
+replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v63.0.0+incompatible
