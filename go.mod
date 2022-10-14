@@ -102,5 +102,5 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
-// fixinate the azure SDK version for concictincy accross all project packages
+// fixinate the azure SDK version for consistency accross all project packages
 replace github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v63.0.0+incompatible
