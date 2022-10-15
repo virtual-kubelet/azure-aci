@@ -28,10 +28,13 @@ func NewContainerGroupDiagnosticsFromFile(filepath string) (*azaci.ContainerGrou
 	analyticsDataFile, err := os.Open(filepath)
 	defer analyticsDataFile.Close()
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("reading Log Analytics Auth file %q failed: %v", filepath, err))
+		return nil, fmt.Errorf("reading Log Analytics Auth file %q failed: %v", filepath, err)
 	}
 
 	fileStat, err := analyticsDataFile.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("reading Log Analytics Auth file %q failed: %v", filepath, err)
+	}
 	if fileStat.Size() == 0 {
 		return nil, fmt.Errorf("log analytics auth file %q cannot be empty", filepath)
 	}
