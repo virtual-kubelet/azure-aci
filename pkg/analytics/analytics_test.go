@@ -1,38 +1,65 @@
 package analytics
 
 import (
-	"io/ioutil"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
+
+	"gotest.tools/assert"
 )
 
+func TestNewContainerGroupDiagnostics(t *testing.T) {
+	cases := []struct {
+		description     string
+		logAnalyticsID  string
+		logAnalyticsKey string
+		expectedError   error
+	}{
+		{
+			description:     "Empty values",
+			logAnalyticsID:  "",
+			logAnalyticsKey: "",
+			expectedError:   errors.New("log Analytics configuration requires both the workspace ID and Key"),
+		},
+		{
+			description:     "Valid values",
+			logAnalyticsID:  "####-####-####-####",
+			logAnalyticsKey: "loganalyticskey&%#$",
+			expectedError:   nil,
+		}}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			cgDiagnostics, err := NewContainerGroupDiagnostics(tc.logAnalyticsID, tc.logAnalyticsKey)
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			} else {
+				assert.Equal(t, tc.logAnalyticsID, *cgDiagnostics.LogAnalytics.WorkspaceID)
+				assert.Equal(t, tc.logAnalyticsKey, *cgDiagnostics.LogAnalytics.WorkspaceKey)
+				assert.NilError(t, tc.expectedError, err)
+			}
+		})
+	}
+}
 func TestLogAnalyticsFileParsingSuccess(t *testing.T) {
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	if diagnostics == nil || diagnostics.LogAnalytics == nil {
-		t.Fatalf("Unexpected nil diagnostics. Log Analytics file not parsed correctly")
-	}
-
-	if *diagnostics.LogAnalytics.WorkspaceID == "" || *diagnostics.LogAnalytics.WorkspaceKey == "" {
-		t.Fatalf("Unexpected empty analytics authentication credentials. Log Analytics file not parsed correctly")
-	}
+	assert.Equal(t, err, nil)
+	assert.Check(t, diagnostics != nil || diagnostics.LogAnalytics != nil, "Unexpected nil diagnostics. Log Analytics file not parsed correctly")
+	assert.Check(t, *diagnostics.LogAnalytics.WorkspaceID != "" || *diagnostics.LogAnalytics.WorkspaceKey != "", "Unexpected empty analytics authentication credentials. Log Analytics file not parsed correctly")
 }
 
 func TestLogAnalyticsFileParsingFailure(t *testing.T) {
-	tempFile, err := ioutil.TempFile("", "")
+	tempFile, err := os.CreateTemp("", "test.*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = NewContainerGroupDiagnosticsFromFile(tempFile.Name())
+	assert.Error(t, fmt.Errorf("log analytics auth file %q cannot be empty", tempFile.Name()), err.Error())
 
-	// Cleaup
-	tempFile.Close()
-	os.Remove(tempFile.Name())
+	// Cleanup
+	defer tempFile.Close()
+	defer os.Remove(tempFile.Name())
 
-	if err == nil {
-		t.Fatalf("Expected parsing an empty Log Analytics auth file to fail, but there were no errors")
-	}
 }
