@@ -22,3 +22,4 @@ hack/tools/bin/
 .vscode/
 .idea/
 .run/
+dist/
