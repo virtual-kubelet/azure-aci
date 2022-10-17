@@ -1,60 +1,46 @@
 name: azure-aci-test
 
+concurrency:
+  group:  ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
   pull_request_target:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
+
+env:
+  # Common versions
+  GO_VERSION: '1.18'
 
 jobs:
-  detect-noop:
-    runs-on: ubuntu-latest
-    outputs:
-      noop: ${{ steps.noop.outputs.should_skip  }}
-    steps:
-      - name: Detect No-op Changes
-        id: noop
-        uses: fkirc/skip-duplicate-actions@v4.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN  }}
-          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
-          concurrent_skipping: false
-
   tests:
+    runs-on: ubuntu-20.04
     env:
-      ACTIVEDIRECTORYENDPOINTURL: 'https://login.microsoftonline.com'
-      RESOURCEMANAGERENDPOINTURL: 'https://management.azure.com/'
-      ACTIVEDIRECTORYGRAPHRESOURCEID: 'https://login.microsoftonline.com'
-      SQLMANAGEMENTENDPOINTURL: 'https://management.core.windows.net:8443/'
-      GALLERYENDPOINTURL: 'https://gallery.azure.com/'
-      MANAGEMENTENDPOINTURL: 'https://manage.windowsazure.com/'
+      ACTIVEDIRECTORYENDPOINTURL: "https://login.microsoftonline.com"
+      RESOURCEMANAGERENDPOINTURL: "https://management.azure.com/"
+      ACTIVEDIRECTORYGRAPHRESOURCEID: "https://login.microsoftonline.com"
+      SQLMANAGEMENTENDPOINTURL: "https://management.core.windows.net:8443/"
+      GALLERYENDPOINTURL: "https://gallery.azure.com/"
+      MANAGEMENTENDPOINTURL: "https://manage.windowsazure.com/"
       CLIENTSECRET: ${{ secrets.CLIENT_SECRET }}
       WORKSPACEKEY: ${{ secrets.OMS_WORKSPACE_KEY }}
 
-    runs-on: ubuntu-latest
     environment: test
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
     steps:
-      - name: Set up Go
+      - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ secrets.GO_VERSION  }}
+          go-version: ${{ env.GO_VERSION  }}
 
       - name: Check out code into the Go module directory
-        if: github.event_name == 'pull_request_target'
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-
-      - name: Checkout
-        if: github.event_name != 'pull_request_target'
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Run unit tests & Generate coverage
         env:
@@ -70,8 +56,10 @@ jobs:
           clientSecret: ${{ secrets.CLIENT_SECRET }}
           omsworkspaceID: ${{ secrets.OMSWORKSPACEID  }}
           omsworkspaceKey: ${{ secrets.OMS_WORKSPACE_KEY }}
+          E2E_REGION: ${{ secrets.E2E_REGION}}
         run: |
-           make testauth test
+          make testauth test
+          
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3

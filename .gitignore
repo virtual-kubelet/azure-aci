@@ -22,6 +22,8 @@ hack/tools/bin/
 .vscode/
 .idea/
 
+.run/
+dist/
 
 # File produced during testing
 e2e/fixtures/mi-pull-image-exec.yaml

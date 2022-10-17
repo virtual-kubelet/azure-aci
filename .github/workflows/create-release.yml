@@ -1,4 +1,4 @@
-name: create_release
+name: create release & publish the image
 on:
   create:
     # Publish semver tags as releases.
@@ -10,6 +10,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_NAME: 'virtual-kubelet'
 
 jobs:
   create-release:
@@ -43,14 +44,14 @@ jobs:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 0
-      - name: Login to ghcr.io
-        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Set env
@@ -59,8 +60,22 @@ jobs:
         run: |
           ver=${{ env.RELEASE_VERSION}}
           echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
-      - name: Build image
+      - name: Build and push image
         run: |
           OUTPUT_TYPE=type=registry make docker-build-image
         env:
           VERSION: ${{ env.IMG_TAG }}
+
+      - name: Scan ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

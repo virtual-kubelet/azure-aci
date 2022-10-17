@@ -2,8 +2,10 @@ image:
   secretName: virtual-kubelet-aci-acr
   repository: mcr.microsoft.com
   name: oss/virtual-kubelet/virtual-kubelet
-  tag: 1.4.3
+  tag: 1.4.5
   pullPolicy: Always
+
+useVKVersion2: true
 
 nodeName: "virtual-node-aci-linux-helm"
 nodeOsType: "Linux"
@@ -39,7 +41,6 @@ providers:
     aciResourceGroup:
     aciRegion:
     masterUri:
-    enableRealTimeMetrics: false
     loganalytics:
       enabled: false
       workspaceId:
