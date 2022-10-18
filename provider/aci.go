@@ -48,6 +48,10 @@ const (
 
 	virtualKubeletDNSNameLabel = "virtualkubelet.io/dnsnamelabel"
 
+	virtualKubeletLogAnalyticsWorkspaceId  = "virtualkubelet.io/loganalyticsworkspaceid"
+	virtualKubeletLogAnalyticsWorkspaceKey = "virtualkubelet.io/loganalyticsworkspacekey"
+	virtualKubeletACILoggerCustomColumns   = "virtualkubelet.io/aciloggercustomcolumns"
+
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 	// Parameter names defined in azure file CSI driver, refer to
 	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
@@ -79,32 +83,33 @@ const (
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
-	aciClient                *aci.Client
-	resourceManager          *manager.ResourceManager
-	resourceGroup            string
-	region                   string
-	nodeName                 string
-	operatingSystem          string
-	cpu                      string
-	memory                   string
-	pods                     string
-	gpu                      string
-	gpuSKUs                  []aci.GPUSKU
-	internalIP               string
-	daemonEndpointPort       int32
-	diagnostics              *aci.ContainerGroupDiagnostics
-	subnetName               string
-	subnetCIDR               string
-	vnetSubscriptionID       string
-	vnetName                 string
-	vnetResourceGroup        string
-	clusterDomain            string
-	kubeProxyExtension       *aci.Extension
-	realtimeMetricsExtension *aci.Extension
-	kubeDNSIP                string
-	extraUserAgent           string
-	retryConfig              client.HTTPRetryConfig
-	tracker                  *PodsTracker
+	aciClient                 *aci.Client
+	resourceManager           *manager.ResourceManager
+	resourceGroup             string
+	region                    string
+	nodeName                  string
+	operatingSystem           string
+	cpu                       string
+	memory                    string
+	pods                      string
+	gpu                       string
+	gpuSKUs                   []aci.GPUSKU
+	internalIP                string
+	daemonEndpointPort        int32
+	diagnostics               *aci.ContainerGroupDiagnostics
+	subnetName                string
+	subnetCIDR                string
+	vnetSubscriptionID        string
+	vnetName                  string
+	vnetResourceGroup         string
+	clusterDomain             string
+	kubeProxyExtension        *aci.Extension
+	realtimeMetricsExtension  *aci.Extension
+	firstPartyLoggerExtension *aci.Extension
+	kubeDNSIP                 string
+	extraUserAgent            string
+	retryConfig               client.HTTPRetryConfig
+	tracker                   *PodsTracker
 
 	metrics.ACIPodMetricsProvider
 }
@@ -531,6 +536,44 @@ func (p *ACIProvider) setupNetwork(auth *client.Authentication) error {
 	return nil
 }
 
+// Parses custom columns from a pod. Also adds a custom column called podName.
+func validateAndGetAciLoggerColumns(ctx context.Context, pod *v1.Pod) string {
+	var sb strings.Builder
+	if aciLoggerCustomColumns := pod.Annotations[virtualKubeletACILoggerCustomColumns]; aciLoggerCustomColumns != "" {
+		var aciLoggerCustomColumnsMap map[string]string
+		err := json.Unmarshal([]byte(aciLoggerCustomColumns), &aciLoggerCustomColumnsMap)
+		if err != nil {
+			log.G(ctx).Infof("Error while unmarshalling annotations: %v with value: %v for pod: %v", virtualKubeletACILoggerCustomColumns, aciLoggerCustomColumns, pod.Name)
+		}
+
+		fmt.Fprintf(&sb, "{\"podName\" : \"%v\"", pod.Name)
+		for key, element := range aciLoggerCustomColumnsMap {
+			fmt.Fprintf(&sb, ", \"%v\" : \"%v\"", key, element)
+		}
+
+		fmt.Fprintf(&sb, "}")
+	}
+
+	return sb.String()
+}
+
+func getFirstPartyLoggerExtension(ctx context.Context, pod *v1.Pod) (*aci.Extension, error) {
+	extension := aci.Extension{
+		Name: "vk-firstparty-logger",
+		Properties: &aci.ExtensionProperties{
+			Type:    aci.ExtensionTypeFirstPartyLogger,
+			Version: aci.FirstPartyLoggerDefaultVersion,
+			Settings: map[string]string{
+				"containername":   ".*",
+				"payloadtype":     "aca",
+				"custom_metadata": validateAndGetAciLoggerColumns(ctx, pod)},
+			ProtectedSettings: map[string]string{},
+		},
+	}
+
+	return &extension, nil
+}
+
 func getRealtimeMetricsExtension() (*aci.Extension, error) {
 	extension := aci.Extension{
 		Name: "vk-realtime-metrics",
@@ -745,6 +788,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		containerGroup.ContainerGroupProperties.Extensions = append(containerGroup.ContainerGroupProperties.Extensions, p.realtimeMetricsExtension)
 	}
 
+	firstPartyLoggerExtension, err := getFirstPartyLoggerExtension(ctx, pod)
+	if err != nil {
+		log.G(context.TODO()).Error("error creating first party logger extension: %v", err)
+	} else {
+		p.firstPartyLoggerExtension = firstPartyLoggerExtension
+		containerGroup.ContainerGroupProperties.Extensions = append(containerGroup.ContainerGroupProperties.Extensions, p.firstPartyLoggerExtension)
+	}
+
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
 	return p.createContainerGroup(ctx, pod.Namespace, pod.Name, &containerGroup)
@@ -897,8 +948,36 @@ func formDNSSearchFitsLimits(searches []string) string {
 
 func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *aci.ContainerGroupDiagnostics {
 	if p.diagnostics != nil && p.diagnostics.LogAnalytics != nil && p.diagnostics.LogAnalytics.LogType == aci.LogAnlyticsLogTypeContainerInsights {
+		var podDiagnostics *aci.ContainerGroupDiagnostics
+		var err error
+
 		d := *p.diagnostics
 		d.LogAnalytics.Metadata[aci.LogAnalyticsMetadataKeyPodUUID] = string(pod.ObjectMeta.UID)
+
+		// If we have both the log analytics workspace id and key, add them to the provider
+		if logAnalyticsID := pod.Annotations[virtualKubeletLogAnalyticsWorkspaceId]; logAnalyticsID != "" {
+			if logAnalyticsKey := pod.Annotations[virtualKubeletLogAnalyticsWorkspaceKey]; logAnalyticsKey != "" {
+
+				msg := fmt.Sprintf("Found Log analytics Id and key in the pod spec for pod %s. Setting diagnostics: "+
+					"LogAnalytics ID: %s, LogAnalytis Key: %s", pod.Name, logAnalyticsID, logAnalyticsKey)
+				log.G(context.TODO()).Info(msg)
+
+				podDiagnostics, err = aci.NewContainerGroupDiagnostics(logAnalyticsID, logAnalyticsKey)
+				if err != nil {
+					return &d
+				}
+
+				podDiagnostics.LogAnalytics.LogType = aci.LogAnlyticsLogTypeContainerInsights
+				podDiagnostics.LogAnalytics.Metadata = map[string]string{
+					aci.LogAnalyticsMetadataKeyClusterResourceID: os.Getenv("CLUSTER_RESOURCE_ID"),
+					aci.LogAnalyticsMetadataKeyNodeName:          pod.Spec.NodeName,
+				}
+				podDiagnostics.LogAnalytics.Metadata[aci.LogAnalyticsMetadataKeyPodUUID] = string(pod.ObjectMeta.UID)
+
+				d = *podDiagnostics
+			}
+		}
+
 		return &d
 	}
 	return p.diagnostics
