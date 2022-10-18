@@ -1,6 +1,6 @@
 # Install a downgraded Azure ACI plugin for Virtual Kubelet
 
-This document presents the instructions to install a previous official Azure ACI plugin using Helm (1.4.1 as an example).
+This document presents the instructions to install a previous official Azure ACI plugin using Helm (1.4.5 as an example).
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ Install [Helm](https://helm.sh/docs/intro/quickstart/#install-helm)
 ```shell
 $ git clone https://github.com/virtual-kubelet/azure-aci.git
 $ cd azure-aci
-$ git checkout v1.4.1
+$ git checkout v1.4.5
 ```
 
 ### Prepare `env` variables
@@ -21,13 +21,13 @@ $ git checkout v1.4.1
 ```shell
 # Fixed variables
 export CHART_NAME=virtual-kubelet-azure-aci-downgrade
-export VK_RELEASE=virtual-kubelet-azure-aci-1.4.1
-export NODE_NAME=virtual-kubelet-aci-1.4.1
+export VK_RELEASE=virtual-kubelet-azure-aci-1.4.5
+export NODE_NAME=virtual-kubelet-aci-1.4.5
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/gh-pages/charts/$VK_RELEASE.tgz
 export MASTER_URI=$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")
 export IMG_URL=mcr.microsoft.com
 export IMG_REPO=oss/virtual-kubelet/virtual-kubelet
-export IMG_TAG=1.4.1
+export IMG_TAG=1.4.5
 export ENABLE_VNET=true
 
 # ASK cluster dependent variables
@@ -69,7 +69,7 @@ helm install "$CHART_NAME" \
     --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
     --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
     --set providers.azure.managedIdentityID=$VIRTUALNODE_USER_IDENTITY_CLIENTID \
-    ./helm
+    ./charts/virtual-kubelet
 
 ```
 
@@ -142,13 +142,13 @@ $ kubectl get nodes
 
 ```shell
 NAME                                   STATUS    ROLES     AGE       VERSION
-virtual-kubelet-aci-1.4.1              Ready     agent     2m        v1.19.10-vk-azure-aci-v1.4.1
-virtual-node-aci-linux                 Ready     agent   150m        v1.19.10-vk-azure-aci-v1.4.4-dev
+virtual-kubelet-aci-1.4.5             Ready     agent     2m        v1.19.10-vk-azure-aci-v1.4.5
+virtual-node-aci-linux                 Ready     agent   150m        v1.19.10-vk-azure-aci-v1.4.6-dev
 ```
 
-The `virtual-kubelet-aci-1.4.1` virtual node is managed by the downgraded version of ACI virtual kubelet.
-Users can add labels/taints to the `virtual-kubelet-aci-1.4.1` node and change the deployment Pod
-template accordingly so that new Pods can be scheduled to the `virtual-kubelet-aci-1.4.1` virtual node.  
+The `virtual-kubelet-aci-1.4.5` virtual node is managed by the downgraded version of ACI virtual kubelet.
+Users can add labels/taints to the `virtual-kubelet-aci-1.4.5` node and change the deployment Pod
+template accordingly so that new Pods can be scheduled to the `virtual-kubelet-aci-1.4.5` virtual node.  
 
 ### Uninstallation
 
@@ -156,5 +156,5 @@ Once the downgraded virtual kubelet is not needed anymore, run the following com
 
 ```shell
 helm uninstall virtual-kubelet-azure-aci-downgrade
-kubectl delete node virtual-kubelet-aci-1.4.1
+kubectl delete node virtual-kubelet-aci-1.4.5
 ```
