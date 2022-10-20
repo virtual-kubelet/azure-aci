@@ -4,6 +4,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"gotest.tools/assert"
 )
 
 const cred = `
@@ -111,4 +113,136 @@ func TestAKSCredBadJson(t *testing.T) {
 	if _, err := newAKSCredential(file.Name()); err == nil {
 		t.Fatal("expected to fail with bad json")
 	}
+}
+
+func TestSetAuthConfigWithAuthFile(t *testing.T) {
+	authFile := `
+{
+			"clientId": "######-tuhn-41af-re3e0-######",
+  	"clientSecret": "######-###-####-####-######",
+   "subscriptionId": "######-###-####-####-######",
+   "tenantId": "######-###-####-####-######"
+
+}`
+	file, err := ioutil.TempFile("", "aks_auth_test")
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer os.Remove(file.Name())
+
+	if _, err := file.Write([]byte(authFile)); err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_CLIENT_ID", "")
+	if err != nil {
+		t.Error(err)
+	}
+	err = os.Setenv("AZURE_AUTH_LOCATION", file.Name())
+	if err != nil {
+		t.Error(err)
+	}
+	err = os.Setenv("AKS_CREDENTIAL_LOCATION", "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	azConfig := Config{}
+	err = azConfig.SetAuthConfig()
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
+
+}
+
+func TestSetAuthConfigWithAKSCredFile(t *testing.T) {
+	aksCred := `
+{
+    "cloud":"AzurePublicCloud",
+    "tenantId": "######-86f1-41af-91ab-######",
+    "subscriptionId": "#######-4444-5555-6666-########",
+    "aadClientId": "",
+    "aadClientSecret": "msi",
+    "resourceGroup": "MC_vk-test-rg",
+    "location": "westcentralus",
+ 			"vnetName": "myAKSVNet",
+    "vnetResourceGroup": "vk-aci-test-12917",
+    "userAssignedIdentityID": "######-tuhn-41af-re3e0-######"
+}`
+	file, err := ioutil.TempFile("", "aks_auth_test")
+	if err != nil {
+		t.Error(err)
+	}
+
+	defer os.Remove(file.Name())
+
+	if _, err := file.Write([]byte(aksCred)); err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_CLIENT_ID", "")
+	if err != nil {
+		t.Error(err)
+	}
+	err = os.Setenv("AZURE_AUTH_LOCATION", "")
+	if err != nil {
+		t.Error(err)
+	}
+	err = os.Setenv("AKS_CREDENTIAL_LOCATION", file.Name())
+	if err != nil {
+		t.Error(err)
+	}
+
+	azConfig := Config{}
+	err = azConfig.SetAuthConfig()
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
+
+}
+
+func TestSetAuthConfigWithEnvVariablesOnly(t *testing.T) {
+	err := os.Setenv("AZURE_AUTH_LOCATION", "")
+	if err != nil {
+		t.Error(err)
+	}
+	err = os.Setenv("AKS_CREDENTIAL_LOCATION", "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_CLIENT_ID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_CLIENT_SECRET", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("VIRTUALNODE_USER_IDENTITY_CLIENTID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_TENANT_ID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_SUBSCRIPTION_ID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	azConfig := Config{}
+	err = azConfig.SetAuthConfig()
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
 }

@@ -68,6 +68,7 @@ func (c *Config) getAuthorizer(resource string) (autorest.Authorizer, error) {
 // SetAuthConfig sets the configuration needed for Authentication.
 func (c *Config) SetAuthConfig() error {
 	var err error
+	c.AuthConfig = &Authentication{}
 	c.Cloud = cloud.AzurePublic
 
 	if authFilepath := os.Getenv("AZURE_AUTH_LOCATION"); authFilepath != "" {
@@ -98,36 +99,36 @@ func (c *Config) SetAuthConfig() error {
 			c.AKSCredential.SubscriptionID,
 			c.AKSCredential.TenantID,
 			c.AKSCredential.UserAssignedIdentityID)
+	}
 
-		if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
-			c.AuthConfig.ClientID = clientID
+	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
+		c.AuthConfig.ClientID = clientID
+	}
+
+	if clientSecret := os.Getenv("AZURE_CLIENT_SECRET"); clientSecret != "" {
+		c.AuthConfig.ClientSecret = clientSecret
+	}
+
+	if userIdentityClientId := os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID"); userIdentityClientId != "" {
+		c.AuthConfig.UserIdentityClientId = userIdentityClientId
+	}
+
+	isUserIdentity := len(c.AuthConfig.ClientID) == 0
+
+	if isUserIdentity {
+		if len(c.AuthConfig.UserIdentityClientId) == 0 {
+			return fmt.Errorf("neither AZURE_CLIENT_ID or VIRTUALNODE_USER_IDENTITY_CLIENTID is being set")
 		}
 
-		if clientSecret := os.Getenv("AZURE_CLIENT_SECRET"); clientSecret != "" {
-			c.AuthConfig.ClientSecret = clientSecret
-		}
+		log.G(context.TODO()).Info("Using user identity for Authentication")
+	}
 
-		if userIdentityClientId := os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID"); userIdentityClientId != "" {
-			c.AuthConfig.UserIdentityClientId = userIdentityClientId
-		}
+	if tenantID := os.Getenv("AZURE_TENANT_ID"); tenantID != "" {
+		c.AuthConfig.TenantID = tenantID
+	}
 
-		isUserIdentity := len(c.AuthConfig.ClientID) == 0
-
-		if isUserIdentity {
-			if len(c.AuthConfig.UserIdentityClientId) == 0 {
-				return fmt.Errorf("neither AZURE_CLIENT_ID or VIRTUALNODE_USER_IDENTITY_CLIENTID is being set")
-			}
-
-			log.G(context.TODO()).Info("Using user identity for Authentication")
-		}
-
-		if tenantID := os.Getenv("AZURE_TENANT_ID"); tenantID != "" {
-			c.AuthConfig.TenantID = tenantID
-		}
-
-		if subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID"); subscriptionID != "" {
-			c.AuthConfig.SubscriptionID = subscriptionID
-		}
+	if subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID"); subscriptionID != "" {
+		c.AuthConfig.SubscriptionID = subscriptionID
 	}
 
 	resource := c.Cloud.Services[cloud.ResourceManager].Endpoint
