@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"regexp"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
@@ -36,6 +37,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
+	azidentity "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 )
 
 const (
@@ -484,6 +487,18 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		return err
 
 	}
+
+
+	// if no username credentials are provided use agentpool MI if for pulling images from ACR
+	if len(*creds) == 0 {
+		agentPoolKubeletIdentity, err := p.getAgentPoolKubeletIdentity(ctx)
+		log.G(ctx).Infof("Could not find Agent pool identity", err)
+
+		p.setContainerGroupIdentity(ctx, agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
+		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
+	}
+
+
 	// assign all the things
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
@@ -534,6 +549,89 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
+}
+
+// get list of distinct acr servernames from pod
+func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
+	serverNamesMap := map[string]int{}
+	acrRegexp := "[a-z0-9]+\\.azurecr\\.io"
+	for _, container := range pod.Spec.Containers {
+		re := regexp.MustCompile(`/`)
+		imageSplit := re.Split(container.Image, -1)
+		isMatch, _ := regexp.MatchString(acrRegexp, imageSplit[0])
+		if len(imageSplit) > 1 && isMatch {
+			serverNamesMap[imageSplit[0]] = 0
+		}
+	}
+
+	serverNames := []string{}
+	for k := range serverNamesMap {
+		serverNames = append(serverNames, k)
+	}
+	return serverNames
+}
+
+func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, identity *armmsi.Identity, containerGroup *client2.ContainerGroupWrapper) (*[]azaci.ImageRegistryCredential){
+	serverNames := p.getImageServerNames(pod)
+	ips := make([]azaci.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
+	if identity != nil{
+		for _, server := range serverNames {
+			cred := azaci.ImageRegistryCredential{
+				Server:  &server,
+				Identity: identity.ID,
+			}
+			ips = append(ips, cred)
+		}
+	}
+	return &ips
+
+}
+
+func (p *ACIProvider) setContainerGroupIdentity(ctx context.Context, identity *armmsi.Identity, identityType azaci.ResourceIdentityType, containerGroup *client2.ContainerGroupWrapper) {
+	if identity == nil {
+		return
+	}
+
+	cgIdentity := azaci.ContainerGroupIdentity{
+		Type: identityType,
+		UserAssignedIdentities: map[string]*azaci.ContainerGroupIdentityUserAssignedIdentitiesValue{
+			*identity.ID: &azaci.ContainerGroupIdentityUserAssignedIdentitiesValue{
+				PrincipalID: identity.Properties.PrincipalID,
+				ClientID: identity.Properties.ClientID,
+			},
+		},
+	}
+	containerGroup.Identity = &cgIdentity
+}
+
+func (p *ACIProvider) getAgentPoolKubeletIdentity(ctx context.Context) (*armmsi.Identity, error) {
+
+	// initialize msi  credentials move this to setup
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, err
+	}
+	client, err := armmsi.NewUserAssignedIdentitiesClient(p.vnetSubscriptionID, cred, nil)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(p.resourceGroup, "MC_") {
+		// use sdk to list identities by RG
+		pager := client.NewListByResourceGroupPager(p.resourceGroup, nil)
+		for pager.More() {
+			// pick the agent pool identity
+			nextResult, err := pager.NextPage(ctx)
+			if err != nil {
+				return nil, err
+			}
+			for _, v := range nextResult.Value {
+				if strings.HasSuffix(*v.ID, "agentpool") {
+					return v, nil
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf("Could not find an agent pool identity for cluster under resource group %s", p.resourceGroup)
 }
 
 func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *v1.Pod) {
