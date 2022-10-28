@@ -120,15 +120,16 @@ type AuthConfig struct {
 	RegistryToken string `json:"registrytoken,omitempty"`
 }
 
-// See https://azure.microsoft.com/en-us/status/ for valid regions.
+// See https://learn.microsoft.com/en-us/azure/container-instances/container-instances-region-availability
 var validAciRegions = []string{
 	"australiaeast",
+	"australiasoutheast",
 	"brazilsouth",
 	"canadacentral",
+	"canadaeast",
 	"centralindia",
 	"centralus",
 	"centraluseuap",
-	"chinaeast2",
 	"eastasia",
 	"eastus",
 	"eastus2",
@@ -136,19 +137,30 @@ var validAciRegions = []string{
 	"francecentral",
 	"germanywestcentral",
 	"japaneast",
+	"japanwest",
+	"jioindiawest",
 	"koreacentral",
 	"northcentralus",
 	"northeurope",
+	"norwayeast",
+	"norwaywest",
+	"southafricanorth",
 	"southcentralus",
-	"southeastasia",
 	"southindia",
+	"southeastasia",
+	"swedencentral",
+	"swedensouth",
 	"switzerlandnorth",
-	"uksouth",
+	"switzerlandwest",
 	"uaenorth",
+	"uksouth",
+	"ukwest",
 	"westcentralus",
 	"westeurope",
+	"westindia",
 	"westus",
 	"westus2",
+	"westus3",
 	"usgovvirginia",
 	"usgovarizona",
 }
@@ -198,7 +210,7 @@ func NewACIProvider(config string, rm *manager.ResourceManager, nodeName, operat
 		azAuth = auth
 	}
 
-	if acsFilepath := os.Getenv("ACS_CREDENTIAL_LOCATION"); acsFilepath != "" {
+	if acsFilepath := os.Getenv("AKS_CREDENTIAL_LOCATION"); acsFilepath != "" {
 		acsCredential, err := NewAcsCredential(acsFilepath)
 		if err != nil {
 			return nil, err
@@ -1763,40 +1775,41 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azac
 
 func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 	volumes := make([]azaci.Volume, 0, len(pod.Spec.Volumes))
-	for _, v := range pod.Spec.Volumes {
+	podVolumes := pod.Spec.Volumes
+	for i := range podVolumes {
 		// Handle the case for Azure File CSI driver
-		if v.CSI != nil {
+		if podVolumes[i].CSI != nil {
 			// Check if the CSI driver is file (Disk is not supported by ACI)
-			if v.CSI.Driver == AzureFileDriverName {
-				csiVolume, err := p.getAzureFileCSI(v, pod.Namespace)
+			if podVolumes[i].CSI.Driver == AzureFileDriverName {
+				csiVolume, err := p.getAzureFileCSI(podVolumes[i], pod.Namespace)
 				if err != nil {
 					return nil, err
 				}
 				volumes = append(volumes, *csiVolume)
 				continue
 			} else {
-				return nil, fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", pod.Name, v.Name, v.CSI.Driver)
+				return nil, fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", pod.Name, podVolumes[i].Name, podVolumes[i].CSI.Driver)
 			}
 		}
 
 		// Handle the case for the AzureFile volume.
-		if v.AzureFile != nil {
-			secret, err := p.resourceManager.GetSecret(v.AzureFile.SecretName, pod.Namespace)
+		if podVolumes[i].AzureFile != nil {
+			secret, err := p.resourceManager.GetSecret(podVolumes[i].AzureFile.SecretName, pod.Namespace)
 			if err != nil {
 				return volumes, err
 			}
 
 			if secret == nil {
-				return nil, fmt.Errorf("Getting secret for AzureFile volume returned an empty secret")
+				return nil, fmt.Errorf("getting secret for AzureFile volume returned an empty secret")
 			}
 			storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
 			storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
 
 			volumes = append(volumes, azaci.Volume{
-				Name: &v.Name,
+				Name: &podVolumes[i].Name,
 				AzureFile: &azaci.AzureFileVolume{
-					ShareName:          &v.AzureFile.ShareName,
-					ReadOnly:           &v.AzureFile.ReadOnly,
+					ShareName:          &podVolumes[i].AzureFile.ShareName,
+					ReadOnly:           &podVolumes[i].AzureFile.ReadOnly,
 					StorageAccountName: &storageAccountNameStr,
 					StorageAccountKey:  &storageAccountKeyStr,
 				},
@@ -1805,33 +1818,34 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 		}
 
 		// Handle the case for the EmptyDir.
-		if v.EmptyDir != nil {
+		if podVolumes[i].EmptyDir != nil {
+			log.G(context.TODO()).Info("empty volume name ", podVolumes[i].Name)
 			volumes = append(volumes, azaci.Volume{
-				Name:     &v.Name,
+				Name:     &podVolumes[i].Name,
 				EmptyDir: map[string]interface{}{},
 			})
 			continue
 		}
 
 		// Handle the case for GitRepo volume.
-		if v.GitRepo != nil {
+		if podVolumes[i].GitRepo != nil {
 			volumes = append(volumes, azaci.Volume{
-				Name: &v.Name,
+				Name: &podVolumes[i].Name,
 				GitRepo: &azaci.GitRepoVolume{
-					Directory:  &v.GitRepo.Directory,
-					Repository: &v.GitRepo.Repository,
-					Revision:   &v.GitRepo.Revision,
+					Directory:  &podVolumes[i].GitRepo.Directory,
+					Repository: &podVolumes[i].GitRepo.Repository,
+					Revision:   &podVolumes[i].GitRepo.Revision,
 				},
 			})
 			continue
 		}
 
 		// Handle the case for Secret volume.
-		if v.Secret != nil {
+		if podVolumes[i].Secret != nil {
 			paths := make(map[string]*string)
-			secret, err := p.resourceManager.GetSecret(v.Secret.SecretName, pod.Namespace)
-			if v.Secret.Optional != nil && !*v.Secret.Optional && k8serr.IsNotFound(err) {
-				return nil, fmt.Errorf("Secret %s is required by Pod %s and does not exist", v.Secret.SecretName, pod.Name)
+			secret, err := p.resourceManager.GetSecret(podVolumes[i].Secret.SecretName, pod.Namespace)
+			if podVolumes[i].Secret.Optional != nil && !*podVolumes[i].Secret.Optional && k8serr.IsNotFound(err) {
+				return nil, fmt.Errorf("Secret %s is required by Pod %s and does not exist", podVolumes[i].Secret.SecretName, pod.Name)
 			}
 			if secret == nil {
 				continue
@@ -1844,7 +1858,7 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 
 			if len(paths) != 0 {
 				volumes = append(volumes, azaci.Volume{
-					Name:   &v.Name,
+					Name:   &podVolumes[i].Name,
 					Secret: paths,
 				})
 			}
@@ -1852,11 +1866,11 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 		}
 
 		// Handle the case for ConfigMap volume.
-		if v.ConfigMap != nil {
+		if podVolumes[i].ConfigMap != nil {
 			paths := make(map[string]*string)
-			configMap, err := p.resourceManager.GetConfigMap(v.ConfigMap.Name, pod.Namespace)
-			if v.ConfigMap.Optional != nil && !*v.ConfigMap.Optional && k8serr.IsNotFound(err) {
-				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", v.ConfigMap.Name, pod.Name)
+			configMap, err := p.resourceManager.GetConfigMap(podVolumes[i].ConfigMap.Name, pod.Namespace)
+			if podVolumes[i].ConfigMap.Optional != nil && !*podVolumes[i].ConfigMap.Optional && k8serr.IsNotFound(err) {
+				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", podVolumes[i].ConfigMap.Name, pod.Name)
 			}
 			if configMap == nil {
 				continue
@@ -1873,18 +1887,18 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 
 			if len(paths) != 0 {
 				volumes = append(volumes, azaci.Volume{
-					Name:   &v.Name,
+					Name:   &podVolumes[i].Name,
 					Secret: paths,
 				})
 			}
 			continue
 		}
 
-		if v.Projected != nil {
+		if podVolumes[i].Projected != nil {
 			log.G(context.TODO()).Info("Found projected volume")
 			paths := make(map[string]*string)
 
-			for _, source := range v.Projected.Sources {
+			for _, source := range podVolumes[i].Projected.Sources {
 				switch {
 				case source.ServiceAccountToken != nil:
 					// This is still stored in a secret, hence the dance to figure out what secret.
@@ -1975,16 +1989,15 @@ func (p *ACIProvider) getVolumes(pod *v1.Pod) ([]azaci.Volume, error) {
 			}
 			if len(paths) != 0 {
 				volumes = append(volumes, azaci.Volume{
-					Name:   &v.Name,
+					Name:   &podVolumes[i].Name,
 					Secret: paths,
 				})
 			}
-
 			continue
 		}
 
 		// If we've made it this far we have found a volume type that isn't supported
-		return nil, fmt.Errorf("Pod %s requires volume %s which is of an unsupported type", pod.Name, v.Name)
+		return nil, fmt.Errorf("pod %s requires volume %s which is of an unsupported type", pod.Name, podVolumes[i].Name)
 	}
 
 	return volumes, nil

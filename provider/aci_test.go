@@ -1,6 +1,6 @@
 /**
 * Copyright (c) Microsoft.  All rights reserved.
-	*/
+ */
 
 package provider
 
@@ -16,21 +16,16 @@ import (
 	"strings"
 	"testing"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/google/uuid"
 	azure "github.com/virtual-kubelet/azure-aci/client"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
-
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
-	"github.com/golang/mock/gomock"
-	. "github.com/onsi/ginkgo"
 )
 
 const (

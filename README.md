@@ -1,5 +1,10 @@
 # Kubernetes Virtual Kubelet with ACI
 
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/virtual-kubelet/azure-aci)](https://github.com/virtual-kubelet/azure-aci/releases)
+![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/virtual-kubelet/azure-aci/e2e-tests/master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/virtual-kubelet/azure-aci)](https://goreportcard.com/report/github.com/virtual-kubelet/azure-aci)
+[![codecov](https://codecov.io/gh/virtual-kubelet/azure-aci/branch/master/graph/badge.svg?token=XHb1xbrki0)](https://codecov.io/gh/virtual-kubelet/azure-aci)
+
 Azure Container Instances (ACI) provide a hosted environment for running containers in Azure. When using ACI, there is no need to manage the underlying compute infrastructure, Azure handles this management for you. When running containers in ACI, you are charged by the second for each running container.
 
 The Azure Container Instances provider for the Virtual Kubelet configures an ACI instance as a node in any Kubernetes cluster. When using the Virtual Kubelet ACI provider, pods can be scheduled on an ACI instance as if the ACI instance is a standard Kubernetes node. This configuration allows you to take advantage of both the capabilities of Kubernetes and the management value and cost benefit of ACI.
@@ -24,7 +29,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 
 ### Features
 
-* Volumes: empty dir, github repo, Azure Files
+* Volumes: empty dir, github repo, projection, Azure Files, Azure Files CSI drivers
 * Secure env variables, config maps
 * Bring your own virtual network (VNet)
 * Network security group support
@@ -42,6 +47,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Argument support for exec
 * Init containers
 * [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support
+* downward APIs (i.e podIP)
 
 ## Prerequisites
 
@@ -779,8 +785,7 @@ If you used Virtual Nodes, can follow the steps [here](https://docs.microsoft.co
 
 
 <!-- LINKS -->
-[kubectl-create]: https://kubernetes.io/docs/user-guide/kubectl/v1.6/#create
-[kubectl-get]: https://kubernetes.io/docs/user-guide/kubectl/v1.8/#get
+[kubectl-create]: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#create
+[kubectl-get]: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#get
 [az-container-list]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_list
 [az-container-show]: https://docs.microsoft.com/cli/azure/container?view=azure-cli-latest#az_container_show
-

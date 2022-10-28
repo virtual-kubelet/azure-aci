@@ -1,12 +1,16 @@
 name: e2e-tests
 
+concurrency:
+  group:  ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 on:
   pull_request_target:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
   push:
     branches: [master]
-    paths-ignore: [ docs/**, "**.md", "**.mdx", "**.png", "**.jpg" ]
+    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
 
 permissions:
    id-token: write
@@ -14,25 +18,12 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  # Common versions
+  GO_VERSION: '1.18'
 
 jobs:
-  detect-noop:
-    runs-on: ubuntu-latest
-    outputs:
-      noop: ${{ steps.noop.outputs.should_skip  }}
-    steps:
-      - name: Detect No-op Changes
-        id: noop
-        uses: fkirc/skip-duplicate-actions@v4.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN  }}
-          do_not_skip: '["workflow_dispatch", "schedule", "push"]'
-          concurrent_skipping: false
-
   export-registry:
     runs-on: ubuntu-20.04
-    needs: detect-noop
-    if: needs.detect-noop.outputs.noop != 'true'
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -46,13 +37,13 @@ jobs:
     environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      E2E_IMG_TAG:  "e2e-ci"
-    runs-on: ubuntu-latest
+      E2E_IMG_TAG: "e2e-ci"
+    runs-on: ubuntu-20.04
     steps:
-      - name: Set up Go
+      - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v3
         with:
-          go-version: ${{ secrets.GO_VERSION  }}
+          go-version: ${{ env.GO_VERSION  }}
 
       - name: Checkout
         uses: actions/checkout@v3
@@ -79,7 +70,7 @@ jobs:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
 
-      - uses: azure/login@v1.4.5
+      - uses: azure/login@v1.4.6
         with:
           client-id: ${{ secrets.CLIENTID }}
           tenant-id: ${{ secrets.TENANT_ID }}
