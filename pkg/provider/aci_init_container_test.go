@@ -3,7 +3,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
