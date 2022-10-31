@@ -65,21 +65,6 @@ type Container struct {
 	ContainerProperties `json:"properties,omitempty"`
 }
 
-// InitContainerDefinition is a initContainer instance.
-type InitContainerDefinition struct {
-	Name                    string `json:"name,omitempty"`
-	InitContainerProperties `json:"properties,omitempty"`
-}
-
-// InitContainerProperties is the initContainer instance properties.
-type InitContainerProperties struct {
-	Image                string                          `json:"image,omitempty"`
-	Command              []string                        `json:"command,omitempty"`
-	EnvironmentVariables []EnvironmentVariable           `json:"environmentVariables,omitempty"`
-	InstanceView         ContainerPropertiesInstanceView `json:"instanceView,omitempty"`
-	VolumeMounts         []VolumeMount                   `json:"volumeMounts,omitempty"`
-}
-
 // ContainerGroup is a container group.
 type ContainerGroup struct {
 	api.ResponseMetadata     `json:"-"`
@@ -95,7 +80,6 @@ type ContainerGroup struct {
 type ContainerGroupProperties struct {
 	ProvisioningState        string                               `json:"provisioningState,omitempty"`
 	Containers               []Container                          `json:"containers,omitempty"`
-	InitContainers           []InitContainerDefinition            `json:"initContainers,omitempty"`
 	ImageRegistryCredentials []ImageRegistryCredential            `json:"imageRegistryCredentials,omitempty"`
 	RestartPolicy            ContainerGroupRestartPolicy          `json:"restartPolicy,omitempty"`
 	IPAddress                *IPAddress                           `json:"ipAddress,omitempty"`

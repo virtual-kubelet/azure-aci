@@ -680,11 +680,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	containerGroup.RestartPolicy = aci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 	containerGroup.ContainerGroupProperties.OsType = aci.OperatingSystemTypes(p.operatingSystem)
 
-	// get initContainers
-	initContainers, err := p.getInitContainers(pod)
-	if err != nil {
-		return err
-	}
 	// get containers
 	containers, err := p.getContainers(pod)
 	if err != nil {
@@ -701,7 +696,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		return err
 	}
 	// assign all the things
-	containerGroup.ContainerGroupProperties.InitContainers = initContainers
 	containerGroup.ContainerGroupProperties.Containers = containers
 	containerGroup.ContainerGroupProperties.Volumes = volumes
 	containerGroup.ContainerGroupProperties.ImageRegistryCredentials = creds
@@ -1467,103 +1461,22 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []aci.ImageRegistryCreden
 	return ips, err
 }
 
-//verify if Container is properly declared for the use on ACI
-//this method is used for both initConainers and containers
-func (p *ACIProvider) verifyContainer(container *v1.Container) error {
-	if len(container.Command) == 0 && len(container.Args) > 0 {
-		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
-	}
-	return nil
-}
-
-//get the command declared on Container
-//this method is used for both initConainers and containers
-func (p *ACIProvider) getCommand(container *v1.Container) []string {
-	return append(container.Command, container.Args...)
-}
-
-//get VolumeMounts declared on Container as []aci.VolumeMount
-//this method is used for both initConainers and containers
-func (p *ACIProvider) getVolumeMounts(container *v1.Container) []aci.VolumeMount {
-	volumeMounts := make([]aci.VolumeMount, 0, len(container.VolumeMounts))
-	for _, v := range container.VolumeMounts {
-		volumeMounts = append(volumeMounts, aci.VolumeMount{
-			Name:      v.Name,
-			MountPath: v.MountPath,
-			ReadOnly:  v.ReadOnly,
-		})
-	}
-	return volumeMounts
-}
-
-//get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
-//this method is used for both initConainers and containers
-func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) []aci.EnvironmentVariable {
-	environmentVariable := make([]aci.EnvironmentVariable, 0, len(container.Env))
-	for _, e := range container.Env {
-		if e.Value != "" {
-			envVar := getACIEnvVar(e)
-			environmentVariable = append(environmentVariable, envVar)
-		}
-	}
-	return environmentVariable
-}
-
-//get InitContainers defined in Pod as []aci.InitContainerDefinition
-func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]aci.InitContainerDefinition, error) {
-	initContainers := make([]aci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
-	for _, initContainer := range pod.Spec.InitContainers {
-		err := p.verifyContainer(&initContainer)
-		if err != nil {
-			return nil, err
-		}
-
-		if initContainer.Ports != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support ports.")
-		}
-		if initContainer.Resources.Requests != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support resources requests.")
-		}
-		if initContainer.Resources.Limits != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support resources limits.")
-		}
-		if initContainer.LivenessProbe != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support livenessProbe.")
-		}
-		if initContainer.ReadinessProbe != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support readinessProbe.")
-		}
-
-		newInitContainer := aci.InitContainerDefinition{
-			Name: initContainer.Name,
-		}
-		newInitContainer.Image = initContainer.Image
-		newInitContainer.Command = p.getCommand(&initContainer)
-
-		newInitContainer.VolumeMounts = p.getVolumeMounts(&initContainer)
-		newInitContainer.EnvironmentVariables = p.getEnvironmentVariables(&initContainer)
-
-		initContainers = append(initContainers, newInitContainer)
-	}
-	return initContainers, nil
-}
-
-//get Containers defined in Pod as []aci.Container type
 func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 	containers := make([]aci.Container, 0, len(pod.Spec.Containers))
 	for _, container := range pod.Spec.Containers {
-		err := p.verifyContainer(&container)
-		if err != nil {
-			return nil, err
-		}
 
+		if len(container.Command) == 0 && len(container.Args) > 0 {
+			return nil, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+		}
 		c := aci.Container{
 			Name: container.Name,
+			ContainerProperties: aci.ContainerProperties{
+				Image:   container.Image,
+				Command: append(container.Command, container.Args...),
+				Ports:   make([]aci.ContainerPort, 0, len(container.Ports)),
+			},
 		}
-		c.Image = container.Image
-		c.Command = p.getCommand(&container)
 
-		c.Ports = make([]aci.ContainerPort, 0, len(container.Ports))
 		for _, p := range container.Ports {
 			c.Ports = append(c.Ports, aci.ContainerPort{
 				Port:     p.ContainerPort,
@@ -1571,8 +1484,22 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]aci.Container, error) {
 			})
 		}
 
-		c.VolumeMounts = p.getVolumeMounts(&container)
-		c.EnvironmentVariables = p.getEnvironmentVariables(&container)
+		c.VolumeMounts = make([]aci.VolumeMount, 0, len(container.VolumeMounts))
+		for _, v := range container.VolumeMounts {
+			c.VolumeMounts = append(c.VolumeMounts, aci.VolumeMount{
+				Name:      v.Name,
+				MountPath: v.MountPath,
+				ReadOnly:  v.ReadOnly,
+			})
+		}
+
+		c.EnvironmentVariables = make([]aci.EnvironmentVariable, 0, len(container.Env))
+		for _, e := range container.Env {
+			if e.Value != "" {
+				envVar := getACIEnvVar(e)
+				c.EnvironmentVariables = append(c.EnvironmentVariables, envVar)
+			}
+		}
 
 		// NOTE(robbiezhang): ACI CPU request must be times of 10m
 		cpuRequest := 1.00
