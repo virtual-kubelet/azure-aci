@@ -1263,7 +1263,7 @@ func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) *[]azaci.
 //get InitContainers defined in Pod as []aci.InitContainerDefinition
 func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]azaci.InitContainerDefinition, error) {
 	initContainers := make([]azaci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
-	for _, initContainer := range pod.Spec.InitContainers {
+	for i, initContainer := range pod.Spec.InitContainers {
 		err := p.verifyContainer(&initContainer)
 		if err != nil {
 			return nil, err
@@ -1286,9 +1286,9 @@ func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]azaci.InitContainerDefin
 		}
 
 		newInitContainer := azaci.InitContainerDefinition{
-			Name: &initContainer.Name,
+			Name: &pod.Spec.InitContainers[i].Name,
 			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition {
-				Image: &initContainer.Image,
+				Image: &pod.Spec.InitContainers[i].Image,
 				Command: p.getCommand(&initContainer),
 				VolumeMounts: p.getVolumeMounts(&initContainer),
 				EnvironmentVariables: p.getEnvironmentVariables(&initContainer),

@@ -19,6 +19,8 @@ import (
 
 func TestCreatePodWithInitContainers(t *testing.T) {
 
+	initContainerName1 := "init-container-1"
+	initContainerName2 := "init-container-2"
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -35,6 +37,8 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 		assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
 		assert.Check(t, initContainers[0].Command != nil, "Command mount should be present")
 		assert.Check(t, initContainers[0].Image != nil, "Image should be present")
+		assert.Check(t, *initContainers[0].Name == initContainerName1, "Name should be correct")
+		assert.Check(t, *initContainers[1].Name == initContainerName2, "Name should be correct")
 
 		return nil
 	}
@@ -63,7 +67,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			expectedError: nil,
 			initContainers: []v1.Container{
 				v1.Container{
-					Name:  "initContainer 01",
+					Name: initContainerName1,
 					Image: "alpine",
 					VolumeMounts: []v1.VolumeMount{
 						v1.VolumeMount{
@@ -81,7 +85,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 					},
 				},
 				v1.Container{
-					Name:  "initContainer 02",
+					Name:  initContainerName2,
 					Image: "alpine",
 				},
 			},
