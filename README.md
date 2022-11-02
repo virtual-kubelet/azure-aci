@@ -45,7 +45,6 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet
 * VNet peering
 * Argument support for exec
-* Init containers
 * [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support
 * downward APIs (i.e podIP)
 
