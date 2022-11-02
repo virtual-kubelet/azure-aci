@@ -30,6 +30,7 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 	azureFileVolumeName1 := "azurefile1"
 	azureFileVolumeName2 := "azurefile2"
 	fakeSecretName := "fake-secret"
+	initContainerName := "init-container"
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -37,6 +38,7 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
 		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+		initContainers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
@@ -46,6 +48,11 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 		assert.Check(t, is.Equal(fakeShareName1, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[1].AzureFile.ShareName), "volume share name is not matched")
 		assert.Check(t, is.Equal(azureFileVolumeName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].Name), "volume name is not matched")
 		assert.Check(t, is.Equal(fakeShareName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].AzureFile.ShareName), "volume share name is not matched")
+		assert.Check(t, initContainers[0].VolumeMounts != nil, "Volume mount should be present")
+		assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
+		assert.Check(t, initContainers[0].Command != nil, "Command mount should be present")
+		assert.Check(t, initContainers[0].Image != nil, "Image should be present")
+		assert.Check(t, *initContainers[0].Name == initContainerName, "Name should be correct")
 
 		return nil
 	}
@@ -160,6 +167,26 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 								TimeoutSeconds:      60,
 								SuccessThreshold:    3,
 								FailureThreshold:    5,
+							},
+						},
+					},
+					InitContainers: []v1.Container{
+						v1.Container{
+							Name: initContainerName,
+							Image: "alpine",
+							VolumeMounts: []v1.VolumeMount{
+								v1.VolumeMount{
+									Name:      "fakeVolumeName",
+									MountPath: "/mnt/azure",
+								},
+							},
+							Command: []string{"/bin/bash"},
+							Args: []string{"-c echo test"},
+							Env: []v1.EnvVar{
+								v1.EnvVar{
+									Name: "TEST_ENV",
+									Value: "testvalue",
+								},
 							},
 						},
 					},

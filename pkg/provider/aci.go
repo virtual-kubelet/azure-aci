@@ -486,7 +486,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	// get initContainers
-	initContainers, err := p.getInitContainers(pod)
+	initContainers, err := p.getInitContainers(ctx, pod)
 	if err != nil {
 		return err
 	}
@@ -1261,28 +1261,34 @@ func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) *[]azaci.
 }
 
 //get InitContainers defined in Pod as []aci.InitContainerDefinition
-func (p *ACIProvider) getInitContainers(pod *v1.Pod) ([]azaci.InitContainerDefinition, error) {
+func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]azaci.InitContainerDefinition, error) {
 	initContainers := make([]azaci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for i, initContainer := range pod.Spec.InitContainers {
 		err := p.verifyContainer(&initContainer)
 		if err != nil {
+			log.G(ctx).Errorf("couldn't verify container %v", err)
 			return nil, err
 		}
 
 		if initContainer.Ports != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support ports.")
+			log.G(ctx).Errorf("azure container instances initcontainers do not support ports")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support ports")
 		}
 		if initContainer.Resources.Requests != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support resources requests.")
+			log.G(ctx).Errorf("azure container instances initcontainers do not support resources requests")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support resources requests")
 		}
 		if initContainer.Resources.Limits != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support resources limits.")
+			log.G(ctx).Errorf("azure container instances initcontainers do not support resources limits")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support resources limits")
 		}
 		if initContainer.LivenessProbe != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support livenessProbe.")
+			log.G(ctx).Errorf("azure container instances initcontainers do not support livenessProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support livenessProbe")
 		}
 		if initContainer.ReadinessProbe != nil {
-			return nil, errdefs.InvalidInput("ACI initContainers does not support readinessProbe.")
+			log.G(ctx).Errorf("azure container instances initcontainers do not support readinessProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
 		}
 
 		newInitContainer := azaci.InitContainerDefinition{

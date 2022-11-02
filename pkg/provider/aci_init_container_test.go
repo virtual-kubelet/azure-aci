@@ -31,7 +31,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, initContainers != nil, "Container group is nil")
-		assert.Check(t, is.Equal(len(containers), 1), "1 Container is expected")
+		assert.Check(t, is.Equal(len(containers), 2), "1 Container is expected")
 		assert.Check(t, is.Equal(len(initContainers), 2), "2 init containers are expected")
 		assert.Check(t, initContainers[0].VolumeMounts != nil, "Volume mount should be present")
 		assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
@@ -52,7 +52,12 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name: "container name",
+					Name: "container-name-01",
+					Image: "alpine",
+				},
+				{
+					Name: "container-name-02",
+					Image: "alpine",
 				},
 			},
 		},
@@ -105,7 +110,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errdefs.InvalidInput("ACI initContainers does not support ports."),
+			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support ports"),
 		},
 		{
 			description:  "Init Containers with liveness probe",
@@ -127,7 +132,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errdefs.InvalidInput("ACI initContainers does not support livenessProbe."),
+			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support livenessProbe"),
 		},
 		{
 			description:  "Init Containers with readiness probe",
@@ -149,7 +154,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errdefs.InvalidInput("ACI initContainers does not support readinessProbe."),
+			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe"),
 		},
 		{
 			description:  "Init Containers with resource request",
@@ -167,7 +172,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errdefs.InvalidInput("ACI initContainers does not support resources requests."),
+			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support resources requests"),
 		},
 	}
 	for _, tc := range cases {
