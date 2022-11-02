@@ -71,7 +71,10 @@ func TestPodWithInitContainers(t *testing.T) {
 		t.Fatal(string(out))
 	}
 
-	cmd = kubectl("apply", "-f", "fixtures/initcontainers_pod.yml", "--namespace=vk-test")
+	testStorageAccount := os.Getenv("CSI_DRIVER_STORAGE_ACCOUNT_NAME")
+	testStorageKey := os.Getenv("CSI_DRIVER_STORAGE_ACCOUNT_KEY")
+
+	cmd = kubectl("create", "secret", "generic", "csidriversecret", "--from-literal", "azurestorageaccountname="+testStorageAccount, "--from-literal", "azurestorageaccountkey="+testStorageKey, "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}

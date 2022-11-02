@@ -26,6 +26,9 @@ spec:
       requests:
         memory: 1G
         cpu: 1
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
   nodeSelector:
     kubernetes.io/role: agent
     beta.kubernetes.io/os: linux
@@ -33,3 +36,10 @@ spec:
   tolerations:
   - key: virtual-kubelet.io/provider
     operator: Exists
+  volumes:
+  - name: azure
+    csi:
+      driver: file.csi.azure.com
+      volumeAttributes:
+        secretName: csidriversecret  # required
+        shareName: vncsidriversharename  # required
