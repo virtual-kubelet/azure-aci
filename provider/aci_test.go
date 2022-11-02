@@ -1,6 +1,6 @@
 /**
 * Copyright (c) Microsoft.  All rights reserved.
-	*/
+ */
 
 package provider
 
@@ -29,14 +29,17 @@ import (
 )
 
 const (
-	fakeSubscription  = "a88d9e8f-3cb3-456f-8f10-27395c1e122a"
-	fakeResourceGroup = "vk-rg"
-	fakeClientID      = "f14193ad-4c4c-4876-a18a-c0badb3bbd40"
-	fakeClientSecret  = "VGhpcyBpcyBhIHNlY3JldAo="
-	fakeTenantID      = "8cb81aca-83fe-4c6f-b667-4ec09c45a8bf"
-	fakeNodeName      = "vk"
-	fakeRegion        = "eastus"
-	fakeUserIdentity  = "00000000-0000-0000-0000-000000000000"
+	fakeSubscription    = "a88d9e8f-3cb3-456f-8f10-27395c1e122a"
+	fakeResourceGroup   = "vk-rg"
+	fakeClientID        = "f14193ad-4c4c-4876-a18a-c0badb3bbd40"
+	fakeClientSecret    = "VGhpcyBpcyBhIHNlY3JldAo="
+	fakeTenantID        = "8cb81aca-83fe-4c6f-b667-4ec09c45a8bf"
+	fakeNodeName        = "vk"
+	fakeRegion          = "eastus"
+	fakeUserIdentity    = "00000000-0000-0000-0000-000000000000"
+	fakeCluster         = "AKSCluster-a88d9e8f"
+	fakeLogAnalyticsId  = "9a7c6791-e18d-4e62-b10f-aa792493f12b"
+	fakeLogAnalyticsKey = "SgVkYp3s6v9y$B&E)H@MbQeThWmZq4t7w!z%C*F-JaNdRfUjXn2r5u8x/A?D(G+K"
 )
 
 // Test make registry credential
@@ -833,6 +836,9 @@ func createTestProvider(aadServerMocker *AADMock, aciServerMocker *ACIMock, reso
 	os.Setenv("AZURE_AUTH_LOCATION", file.Name())
 	os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	os.Setenv("ACI_REGION", fakeRegion)
+	os.Setenv("LOG_ANALYTICS_ID", fakeLogAnalyticsId)
+	os.Setenv("LOG_ANALYTICS_KEY", fakeLogAnalyticsKey)
+	os.Setenv("CLUSTER_RESOURCE_ID", fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerService/managedClusters/%s", fakeSubscription, fakeResourceGroup, fakeCluster))
 
 	if resourceManager == nil {
 		resourceManager, err = manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
@@ -1054,6 +1060,132 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 						TimeoutSeconds:      60,
 						SuccessThreshold:    3,
 						FailureThreshold:    5,
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
+	}
+}
+
+// Tests create pod with Log Analytics ID and Key provided as annotations
+func TestCreatePodWithLogAnalyticsId(t *testing.T) {
+	aadServerMocker := NewAADMock()
+	aciServerMocker := NewACIMock()
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	logAnalyticsId := "9a7c6791-e18d-4e62-b10f-aa792493f12b"
+	logAnalyticsKey := "SgVkYp3s6v9y$B&E)H@MbQeThWmZq4t7w!z%C*F-JaNdRfUjXn2r5u8x/A?D(G+K"
+
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil)
+	if err != nil {
+		t.Fatalf("failed to create the test provider. %s", err.Error())
+		return
+	}
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Equal(cg.ContainerGroupProperties.Diagnostics.LogAnalytics.WorkspaceID, logAnalyticsId), "Workspace Id doesn't match")
+		assert.Check(t, is.Equal(cg.ContainerGroupProperties.Diagnostics.LogAnalytics.WorkspaceKey, logAnalyticsKey), "Workspace Key doesn't match")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+			Annotations: map[string]string{
+				virtualKubeletLogAnalyticsWorkspaceId:  logAnalyticsId,
+				virtualKubeletLogAnalyticsWorkspaceKey: logAnalyticsKey,
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							"cpu":    resource.MustParse("1.981"),
+							"memory": resource.MustParse("3.49G"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("Failed to create pod", err)
+	}
+}
+
+// Tests create pod with custom columns and their values provided as annotations
+func TestCreatePodWithCustomColumns(t *testing.T) {
+	aadServerMocker := NewAADMock()
+	aciServerMocker := NewACIMock()
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	revisionId := "test-1"
+	orchestrationId := "01"
+
+	provider, err := createTestProvider(aadServerMocker, aciServerMocker, nil)
+	if err != nil {
+		t.Fatalf("failed to create the test provider. %s", err.Error())
+		return
+	}
+
+	aciServerMocker.OnCreate = func(subscription, resourceGroup, containerGroup string, cg *aci.ContainerGroup) (int, interface{}) {
+		assert.Check(t, is.Equal(fakeSubscription, subscription), "Subscription doesn't match")
+		assert.Check(t, is.Equal(fakeResourceGroup, resourceGroup), "Resource group doesn't match")
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, is.Equal(podNamespace+"-"+podName, containerGroup), "Container group name is not expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(cg.ContainerGroupProperties.Containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", cg.ContainerGroupProperties.Containers[0].Name), "Container nginx is expected")
+		assert.Check(t, cg.ContainerGroupProperties.Containers[0].Resources.Requests != nil, "Container resource requests should not be nil")
+
+		var customColumns = cg.ContainerGroupProperties.Extensions[0].Properties.Settings["custom_metadata"]
+		var customColumnsMap map[string]string
+		json.Unmarshal([]byte(customColumns), &customColumnsMap)
+
+		assert.Check(t, is.Equal(customColumnsMap["podName"], podName), "Custom column podName doesn't match")
+		assert.Check(t, is.Equal(customColumnsMap["revisionId"], revisionId), "Custom column revisionId doesn't match")
+		assert.Check(t, is.Equal(customColumnsMap["orchestrationId"], orchestrationId), "Custom column orchestrationId doesn't match")
+
+		return http.StatusOK, cg
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+			Annotations: map[string]string{
+				virtualKubeletACILoggerCustomColumns: fmt.Sprintf("{\"revisionId\": \"%s\", \"orchestrationId\": \"%s\" }", revisionId, orchestrationId),
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+					Name: "nginx",
+					Resources: v1.ResourceRequirements{
+						Requests: v1.ResourceList{
+							"cpu":    resource.MustParse("1.981"),
+							"memory": resource.MustParse("3.49G"),
+						},
 					},
 				},
 			},
