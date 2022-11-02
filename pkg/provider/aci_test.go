@@ -1,12 +1,13 @@
 /**
 * Copyright (c) Microsoft.  All rights reserved.
- */
+	*/
 
 package provider
 
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/Azure/go-autorest/autorest/date"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -261,7 +263,6 @@ func TestCreatePodWithGPU(t *testing.T) {
 }
 
 // Tests create pod with GPU SKU in annotation.
-
 func TestCreatePodWithGPUSKU(t *testing.T) {
 	t.Skip("Skipping GPU tests until Location API is fixed")
 
@@ -1151,5 +1152,134 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
+	}
+}
+
+func TestCreatedPodWithContainerPort(t *testing.T) {
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	cases := []struct {
+		description   string
+		containerList []v1.Container
+		expectError   bool
+	}{
+		{
+			description: "Container with port and other without port",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+				},
+			},
+			expectError: false,
+		},
+		{
+			description: "Two containers with different ports",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 4040,
+						},
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			description: "Two containers with the same port",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+			},
+			expectError: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: podNamespace,
+				},
+				Spec: v1.PodSpec{},
+			}
+
+			aciMocks := createNewACIMock()
+			aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
+				containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+				assert.Check(t, cg != nil, "Container group is nil")
+				assert.Check(t, containers != nil, "Containers should not be nil")
+				assert.Check(t, is.Equal(2, len(containers)), "2 Containers is expected")
+
+				container1Ports := *(containers)[0].Ports
+				container2Ports := *(containers)[1].Ports
+				if len(container1Ports) > 0 && len(container2Ports) > 0 {
+					if *container1Ports[0].Port == *container2Ports[0].Port {
+						fmt.Println("should return error")
+						return errors.New("DuplicateContainerPorts")
+					}
+				}
+				return nil
+			}
+
+			pod.Spec.Containers = tc.containerList
+			resourceManager, err := manager.NewResourceManager(
+				NewMockPodLister(mockCtrl),
+				NewMockSecretLister(mockCtrl),
+				NewMockConfigMapLister(mockCtrl),
+				NewMockServiceLister(mockCtrl),
+				NewMockPersistentVolumeClaimLister(mockCtrl),
+				NewMockPersistentVolumeLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to prepare the mocks for resourceManager", err)
+			}
+
+			provider, err := createTestProvider(aciMocks, resourceManager)
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			err = provider.CreatePod(context.Background(), pod)
+
+			if !tc.expectError {
+				assert.NilError(t, err, "Not expected to return error")
+			} else {
+				assert.Check(t, err != nil, "Expected to return error")
+			}
+
+		})
 	}
 }
