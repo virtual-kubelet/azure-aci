@@ -499,11 +499,11 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		count = count + len(*container.Ports)
 	}
 	ports := make([]azaci.Port, 0, count)
-	for _, container := range *containers {
-		for _, containerPort := range *container.Ports {
-
+	for c := range *containers {
+		container := ((*containers)[c]).Ports
+		for p := range *container {
 			ports = append(ports, azaci.Port{
-				Port:     containerPort.Port,
+				Port:     (*container)[p].Port,
 				Protocol: "TCP",
 			})
 		}
@@ -533,7 +533,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	p.amendVnetResources(*cg, pod)
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
-	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
+	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
 }
 
@@ -1149,11 +1149,11 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			},
 		}
 
-		for _, p := range podContainers[c].Ports {
+		for i := range podContainers[c].Ports {
 			containerPorts := aciContainer.Ports
 			containerPortsList := append(*containerPorts, azaci.ContainerPort{
-				Port:     &p.ContainerPort,
-				Protocol: getProtocol(p.Protocol),
+				Port:     &podContainers[c].Ports[i].ContainerPort,
+				Protocol: getProtocol(podContainers[c].Ports[i].Protocol),
 			})
 			aciContainer.Ports = &containerPortsList
 		}
