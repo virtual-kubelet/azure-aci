@@ -1,6 +1,6 @@
 /**
 * Copyright (c) Microsoft.  All rights reserved.
- */
+	*/
 
 package provider
 
@@ -15,6 +15,7 @@ import (
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/Azure/go-autorest/autorest/date"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -261,7 +262,6 @@ func TestCreatePodWithGPU(t *testing.T) {
 }
 
 // Tests create pod with GPU SKU in annotation.
-
 func TestCreatePodWithGPUSKU(t *testing.T) {
 	t.Skip("Skipping GPU tests until Location API is fixed")
 
@@ -1151,5 +1151,145 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
+	}
+}
+
+func TestCreatedPodWithContainerPort(t *testing.T) {
+	port4040 := int32(4040)
+	port5050 := int32(5050)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	cases := []struct {
+		description   string
+		containerList []v1.Container
+	}{
+		{
+			description: "Container with port and other without port",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+				},
+			},
+		},
+		{
+			description: "Two containers with multiple same ports",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+						{
+							ContainerPort: 443,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port4040,
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "Two containers with different ports",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port4040,
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "Two containers with the same port",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: podNamespace,
+				},
+				Spec: v1.PodSpec{},
+			}
+			pod.Spec.Containers = tc.containerList
+
+			aciMocks := createNewACIMock()
+			aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
+				containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+				container1Ports := *(containers)[0].Ports
+				container2Ports := *(containers)[1].Ports
+				assert.Check(t, cg != nil, "Container group is nil")
+				assert.Check(t, containers != nil, "Containers should not be nil")
+				assert.Check(t, is.Equal(2, len(containers)), "2 Containers is expected")
+				assert.Check(t, is.Equal(len(container1Ports), len(tc.containerList[0].Ports)))
+				assert.Check(t, is.Equal(len(container2Ports), len(tc.containerList[1].Ports)))
+				return nil
+			}
+
+			resourceManager, err := manager.NewResourceManager(
+				NewMockPodLister(mockCtrl),
+				NewMockSecretLister(mockCtrl),
+				NewMockConfigMapLister(mockCtrl),
+				NewMockServiceLister(mockCtrl),
+				NewMockPersistentVolumeClaimLister(mockCtrl),
+				NewMockPersistentVolumeLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to prepare the mocks for resourceManager", err)
+			}
+
+			provider, err := createTestProvider(aciMocks, resourceManager)
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			err = provider.CreatePod(context.Background(), pod)
+			assert.Check(t, err == nil, "Not expected to return error")
+
+		})
 	}
 }
