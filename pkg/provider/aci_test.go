@@ -7,7 +7,6 @@ package provider
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -1156,14 +1155,14 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 }
 
 func TestCreatedPodWithContainerPort(t *testing.T) {
-
+	port4040 := int32(4040)
+	port5050 := int32(5050)
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	cases := []struct {
 		description   string
 		containerList []v1.Container
-		expectError   bool
 	}{
 		{
 			description: "Container with port and other without port",
@@ -1172,7 +1171,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 					Name: "container1",
 					Ports: []v1.ContainerPort{
 						{
-							ContainerPort: 5050,
+							ContainerPort: port5050,
 						},
 					},
 				},
@@ -1180,7 +1179,30 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 					Name: "container2",
 				},
 			},
-			expectError: false,
+		},
+		{
+			description: "Two containers with multiple same ports",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+						{
+							ContainerPort: 443,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port4040,
+						},
+					},
+				},
+			},
 		},
 		{
 			description: "Two containers with different ports",
@@ -1197,12 +1219,11 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 					Name: "container2",
 					Ports: []v1.ContainerPort{
 						{
-							ContainerPort: 4040,
+							ContainerPort: port4040,
 						},
 					},
 				},
 			},
-			expectError: false,
 		},
 		{
 			description: "Two containers with the same port",
@@ -1224,7 +1245,6 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 					},
 				},
 			},
-			expectError: true,
 		},
 	}
 	for _, tc := range cases {
@@ -1236,26 +1256,21 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				Spec: v1.PodSpec{},
 			}
+			pod.Spec.Containers = tc.containerList
 
 			aciMocks := createNewACIMock()
 			aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
 				containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+				container1Ports := *(containers)[0].Ports
+				container2Ports := *(containers)[1].Ports
 				assert.Check(t, cg != nil, "Container group is nil")
 				assert.Check(t, containers != nil, "Containers should not be nil")
 				assert.Check(t, is.Equal(2, len(containers)), "2 Containers is expected")
-
-				container1Ports := *(containers)[0].Ports
-				container2Ports := *(containers)[1].Ports
-				if len(container1Ports) > 0 && len(container2Ports) > 0 {
-					if *container1Ports[0].Port == *container2Ports[0].Port {
-						fmt.Println("should return error")
-						return errors.New("DuplicateContainerPorts")
-					}
-				}
+				assert.Check(t, is.Equal(len(container1Ports), len(tc.containerList[0].Ports)))
+				assert.Check(t, is.Equal(len(container2Ports), len(tc.containerList[1].Ports)))
 				return nil
 			}
 
-			pod.Spec.Containers = tc.containerList
 			resourceManager, err := manager.NewResourceManager(
 				NewMockPodLister(mockCtrl),
 				NewMockSecretLister(mockCtrl),
@@ -1273,12 +1288,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 			}
 
 			err = provider.CreatePod(context.Background(), pod)
-
-			if !tc.expectError {
-				assert.NilError(t, err, "Not expected to return error")
-			} else {
-				assert.Check(t, err != nil, "Expected to return error")
-			}
+			assert.Check(t, err == nil, "Not expected to return error")
 
 		})
 	}

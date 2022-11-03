@@ -499,9 +499,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 	ports := make([]azaci.Port, 0, count)
 	for _, container := range *containers {
-		for p := range *container.Ports {
+		for _, containerPort := range *container.Ports {
+
 			ports = append(ports, azaci.Port{
-				Port:     (*container.Ports)[p].Port,
+				Port:     containerPort.Port,
 				Protocol: "TCP",
 			})
 		}
@@ -531,7 +532,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	p.amendVnetResources(*cg, pod)
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
-	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
+	// TODO: Run in a go routine to not block workers, and use taracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
 }
 
