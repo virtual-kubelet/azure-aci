@@ -5,10 +5,30 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"context"
+	"os"
+
+	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// ConfigureNode enables a provider to configure the node object that
+// will be used for Kubernetes.
+func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
+	node.Status.Capacity = p.capacity()
+	node.Status.Allocatable = p.capacity()
+	node.Status.Conditions = p.nodeConditions()
+	node.Status.Addresses = p.nodeAddresses()
+	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
+	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
+	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
+	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
+
+	// Virtual node would be skipped for cloud provider operations (e.g. CP should not add route).
+	node.ObjectMeta.Labels["kubernetes.azure.com/managed"] = "false"
+}
 
 // capacity returns a resource list containing the capacity limits set for ACI.
 func (p *ACIProvider) capacity() v1.ResourceList {
@@ -93,4 +113,45 @@ func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
 			Port: p.daemonEndpointPort,
 		},
 	}
+}
+
+func (p *ACIProvider) setupNodeCapacity(ctx context.Context) error {
+	ctx, span := trace.StartSpan(ctx, "aci.setupNodeCapacity")
+	defer span.End()
+	_ = addAzureAttributes(ctx, span, p)
+
+	// Set sane defaults for Capacity in case config is not supplied
+	p.cpu = "10000"
+	p.memory = "4Ti"
+	p.pods = "5000"
+
+	if cpuQuota := os.Getenv("ACI_QUOTA_CPU"); cpuQuota != "" {
+		p.cpu = cpuQuota
+	}
+
+	if memoryQuota := os.Getenv("ACI_QUOTA_MEMORY"); memoryQuota != "" {
+		p.memory = memoryQuota
+	}
+
+	if podsQuota := os.Getenv("ACI_QUOTA_POD"); podsQuota != "" {
+		p.pods = podsQuota
+	}
+
+	//TODO To be uncommented after Location API fix
+	//capabilities, err := p.azClientsAPIs.ListCapabilities(ctx, p.region)
+	//if err != nil {
+	//	return errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", p.region)
+	//}
+	//
+	//for _, capability := range *capabilities {
+	//	if strings.EqualFold(*capability.Location, p.region) && *capability.Gpu != "" {
+	//		p.gpu = "100"
+	//		if gpu := os.Getenv("ACI_QUOTA_GPU"); gpu != "" {
+	//			p.gpu = gpu
+	//		}
+	//		p.gpuSKUs = append(p.gpuSKUs, azaci.GpuSku(*capability.Gpu))
+	//	}
+	//}
+
+	return nil
 }

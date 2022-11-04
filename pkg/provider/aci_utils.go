@@ -50,3 +50,16 @@ func getContainerID(cgID, containerName string) string {
 	hashBytes := h.Sum(nil)
 	return fmt.Sprintf("aci://%s", hex.EncodeToString(hashBytes))
 }
+
+func omitDuplicates(strs []string) []string {
+	uniqueStrs := make(map[string]bool)
+
+	var ret []string
+	for _, str := range strs {
+		if !uniqueStrs[str] {
+			ret = append(ret, str)
+			uniqueStrs[str] = true
+		}
+	}
+	return ret
+}
