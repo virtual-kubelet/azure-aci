@@ -1,10 +1,12 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package provider
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +33,6 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
-	k8serr "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -490,7 +491,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
 
-	filterServiceAccountSecretVolume(p.operatingSystem, cg)
+	filterWindowsServiceAccountSecretVolume(p.operatingSystem, cg)
 
 	// create ipaddress if containerPort is used
 	count := 0
@@ -907,7 +908,7 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	return podStatusFromContainerGroup(cg), nil
+	return getPodStatusFromContainerGroup(cg), nil
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
@@ -994,91 +995,6 @@ func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
 // Ping checks if the node is still active/ready.
 func (p *ACIProvider) Ping(ctx context.Context) error {
 	return nil
-}
-
-// capacity returns a resource list containing the capacity limits set for ACI.
-func (p *ACIProvider) capacity() v1.ResourceList {
-	resourceList := v1.ResourceList{
-		v1.ResourceCPU:    resource.MustParse(p.cpu),
-		v1.ResourceMemory: resource.MustParse(p.memory),
-		v1.ResourcePods:   resource.MustParse(p.pods),
-	}
-
-	if p.gpu != "" {
-		resourceList[gpuResourceName] = resource.MustParse(p.gpu)
-	}
-
-	return resourceList
-}
-
-// nodeConditions returns a list of conditions (Ready, OutOfDisk, etc), for updates to the node status
-// within Kubernetes.
-func (p *ACIProvider) nodeConditions() []v1.NodeCondition {
-	// TODO: Make these dynamic and augment with custom ACI specific conditions of interest
-	return []v1.NodeCondition{
-		{
-			Type:               "Ready",
-			Status:             v1.ConditionTrue,
-			LastHeartbeatTime:  metav1.Now(),
-			LastTransitionTime: metav1.Now(),
-			Reason:             "KubeletReady",
-			Message:            "kubelet is ready.",
-		},
-		{
-			Type:               "OutOfDisk",
-			Status:             v1.ConditionFalse,
-			LastHeartbeatTime:  metav1.Now(),
-			LastTransitionTime: metav1.Now(),
-			Reason:             "KubeletHasSufficientDisk",
-			Message:            "kubelet has sufficient disk space available",
-		},
-		{
-			Type:               "MemoryPressure",
-			Status:             v1.ConditionFalse,
-			LastHeartbeatTime:  metav1.Now(),
-			LastTransitionTime: metav1.Now(),
-			Reason:             "KubeletHasSufficientMemory",
-			Message:            "kubelet has sufficient memory available",
-		},
-		{
-			Type:               "DiskPressure",
-			Status:             v1.ConditionFalse,
-			LastHeartbeatTime:  metav1.Now(),
-			LastTransitionTime: metav1.Now(),
-			Reason:             "KubeletHasNoDiskPressure",
-			Message:            "kubelet has no disk pressure",
-		},
-		{
-			Type:               "NetworkUnavailable",
-			Status:             v1.ConditionFalse,
-			LastHeartbeatTime:  metav1.Now(),
-			LastTransitionTime: metav1.Now(),
-			Reason:             "RouteCreated",
-			Message:            "RouteController created a route",
-		},
-	}
-}
-
-// nodeAddresses returns a list of addresses for the node status
-// within Kubernetes.
-func (p *ACIProvider) nodeAddresses() []v1.NodeAddress {
-	// TODO: Make these dynamic and augment with custom ACI specific conditions of interest
-	return []v1.NodeAddress{
-		{
-			Type:    "InternalIP",
-			Address: p.internalIP,
-		},
-	}
-}
-
-// nodeDaemonEndpoints returns NodeDaemonEndpoints for the node status
-// within Kubernetes.
-func (p *ACIProvider) nodeDaemonEndpoints() v1.NodeDaemonEndpoints {
-	return v1.NodeDaemonEndpoints{
-		KubeletEndpoint: v1.DaemonEndpoint{
-			Port: p.daemonEndpointPort,
-		},
-	}
 }
 
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) (*[]azaci.ImageRegistryCredential, error) {
@@ -1425,277 +1341,6 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe,
 	}, nil
 }
 
-func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azaci.Volume, error) {
-	var secretName, shareName string
-	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
-		for k, v := range volume.CSI.VolumeAttributes {
-			switch k {
-			case azureFileSecretName:
-				secretName = v
-			case azureFileShareName:
-				shareName = v
-			}
-		}
-	} else {
-		return nil, fmt.Errorf("secret volume attribute for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
-	}
-
-	if shareName == "" {
-		return nil, fmt.Errorf("share name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
-	}
-
-	if secretName == "" {
-		return nil, fmt.Errorf("secret name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
-	}
-
-	secret, err := p.resourceManager.GetSecret(secretName, namespace)
-
-	if err != nil || secret == nil {
-		return nil, fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name)
-	}
-
-	storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
-	storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
-
-	return &azaci.Volume{
-		Name: &volume.Name,
-		AzureFile: &azaci.AzureFileVolume{
-			ShareName:          &shareName,
-			StorageAccountName: &storageAccountNameStr,
-			StorageAccountKey:  &storageAccountKeyStr,
-		}}, nil
-}
-
-func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]azaci.Volume, error) {
-	volumes := make([]azaci.Volume, 0, len(pod.Spec.Volumes))
-	podVolumes := pod.Spec.Volumes
-	for i := range podVolumes {
-		// Handle the case for Azure File CSI driver
-		if podVolumes[i].CSI != nil {
-			// Check if the CSI driver is file (Disk is not supported by ACI)
-			if podVolumes[i].CSI.Driver == AzureFileDriverName {
-				csiVolume, err := p.getAzureFileCSI(podVolumes[i], pod.Namespace)
-				if err != nil {
-					return nil, err
-				}
-				volumes = append(volumes, *csiVolume)
-				continue
-			} else {
-				return nil, fmt.Errorf("pod %s requires volume %s which is of an unsupported type %s", pod.Name, podVolumes[i].Name, podVolumes[i].CSI.Driver)
-			}
-		}
-
-		// Handle the case for the AzureFile volume.
-		if podVolumes[i].AzureFile != nil {
-			secret, err := p.resourceManager.GetSecret(podVolumes[i].AzureFile.SecretName, pod.Namespace)
-			if err != nil {
-				return volumes, err
-			}
-
-			if secret == nil {
-				return nil, fmt.Errorf("getting secret for AzureFile volume returned an empty secret")
-			}
-			storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
-			storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
-
-			volumes = append(volumes, azaci.Volume{
-				Name: &podVolumes[i].Name,
-				AzureFile: &azaci.AzureFileVolume{
-					ShareName:          &podVolumes[i].AzureFile.ShareName,
-					ReadOnly:           &podVolumes[i].AzureFile.ReadOnly,
-					StorageAccountName: &storageAccountNameStr,
-					StorageAccountKey:  &storageAccountKeyStr,
-				},
-			})
-			continue
-		}
-
-		// Handle the case for the EmptyDir.
-		if podVolumes[i].EmptyDir != nil {
-			log.G(ctx).Info("empty volume name ", podVolumes[i].Name)
-			volumes = append(volumes, azaci.Volume{
-				Name:     &podVolumes[i].Name,
-				EmptyDir: map[string]interface{}{},
-			})
-			continue
-		}
-
-		// Handle the case for GitRepo volume.
-		if podVolumes[i].GitRepo != nil {
-			volumes = append(volumes, azaci.Volume{
-				Name: &podVolumes[i].Name,
-				GitRepo: &azaci.GitRepoVolume{
-					Directory:  &podVolumes[i].GitRepo.Directory,
-					Repository: &podVolumes[i].GitRepo.Repository,
-					Revision:   &podVolumes[i].GitRepo.Revision,
-				},
-			})
-			continue
-		}
-
-		// Handle the case for Secret volume.
-		if podVolumes[i].Secret != nil {
-			paths := make(map[string]*string)
-			secret, err := p.resourceManager.GetSecret(podVolumes[i].Secret.SecretName, pod.Namespace)
-			if podVolumes[i].Secret.Optional != nil && !*podVolumes[i].Secret.Optional && k8serr.IsNotFound(err) {
-				return nil, fmt.Errorf("Secret %s is required by Pod %s and does not exist", podVolumes[i].Secret.SecretName, pod.Name)
-			}
-			if secret == nil {
-				continue
-			}
-
-			for k, v := range secret.Data {
-				strV := base64.StdEncoding.EncodeToString(v)
-				paths[k] = &strV
-			}
-
-			if len(paths) != 0 {
-				volumes = append(volumes, azaci.Volume{
-					Name:   &podVolumes[i].Name,
-					Secret: paths,
-				})
-			}
-			continue
-		}
-
-		// Handle the case for ConfigMap volume.
-		if podVolumes[i].ConfigMap != nil {
-			paths := make(map[string]*string)
-			configMap, err := p.resourceManager.GetConfigMap(podVolumes[i].ConfigMap.Name, pod.Namespace)
-			if podVolumes[i].ConfigMap.Optional != nil && !*podVolumes[i].ConfigMap.Optional && k8serr.IsNotFound(err) {
-				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", podVolumes[i].ConfigMap.Name, pod.Name)
-			}
-			if configMap == nil {
-				continue
-			}
-
-			for k, v := range configMap.Data {
-				strV := base64.StdEncoding.EncodeToString([]byte(v))
-				paths[k] = &strV
-			}
-			for k, v := range configMap.BinaryData {
-				strV := base64.StdEncoding.EncodeToString(v)
-				paths[k] = &strV
-			}
-
-			if len(paths) != 0 {
-				volumes = append(volumes, azaci.Volume{
-					Name:   &podVolumes[i].Name,
-					Secret: paths,
-				})
-			}
-			continue
-		}
-
-		if podVolumes[i].Projected != nil {
-			log.G(ctx).Info("Found projected volume")
-			paths := make(map[string]*string)
-
-			for _, source := range podVolumes[i].Projected.Sources {
-				switch {
-				case source.ServiceAccountToken != nil:
-					// This is still stored in a secret, hence the dance to figure out what secret.
-					secrets, err := p.resourceManager.GetSecrets(pod.Namespace)
-					if err != nil {
-						return nil, err
-					}
-				Secrets:
-					for _, secret := range secrets {
-						if secret.Type != v1.SecretTypeServiceAccountToken {
-							continue
-						}
-						// annotation now needs to match the pod.ServiceAccountName
-						for k, a := range secret.ObjectMeta.Annotations {
-							if k == "kubernetes.io/service-account.name" && a == pod.Spec.ServiceAccountName {
-								for k, v := range secret.StringData {
-									data, err := base64.StdEncoding.DecodeString(v)
-									if err != nil {
-										return nil, err
-									}
-									dataStr := string(data)
-									paths[k] = &dataStr
-								}
-
-								for k, v := range secret.Data {
-									strV := base64.StdEncoding.EncodeToString(v)
-									paths[k] = &strV
-								}
-
-								break Secrets
-							}
-						}
-					}
-
-				case source.Secret != nil:
-					secret, err := p.resourceManager.GetSecret(source.Secret.Name, pod.Namespace)
-					if source.Secret.Optional != nil && !*source.Secret.Optional && k8serr.IsNotFound(err) {
-						return nil, fmt.Errorf("projected secret %s is required by pod %s and does not exist", source.Secret.Name, pod.Name)
-					}
-					if secret == nil {
-						continue
-					}
-
-					for _, keyToPath := range source.Secret.Items {
-						for k, v := range secret.StringData {
-							if keyToPath.Key == k {
-								data, err := base64.StdEncoding.DecodeString(v)
-								if err != nil {
-									return nil, err
-								}
-								dataStr := string(data)
-								paths[k] = &dataStr
-							}
-						}
-
-						for k, v := range secret.Data {
-							if keyToPath.Key == k {
-								strV := base64.StdEncoding.EncodeToString(v)
-								paths[k] = &strV
-							}
-						}
-					}
-
-				case source.ConfigMap != nil:
-					configMap, err := p.resourceManager.GetConfigMap(source.ConfigMap.Name, pod.Namespace)
-					if source.ConfigMap.Optional != nil && !*source.ConfigMap.Optional && k8serr.IsNotFound(err) {
-						return nil, fmt.Errorf("projected configMap %s is required by pod %s and does not exist", source.ConfigMap.Name, pod.Name)
-					}
-					if configMap == nil {
-						continue
-					}
-
-					for _, keyToPath := range source.ConfigMap.Items {
-						for k, v := range configMap.Data {
-							if keyToPath.Key == k {
-								strV := base64.StdEncoding.EncodeToString([]byte(v))
-								paths[k] = &strV
-							}
-						}
-						for k, v := range configMap.BinaryData {
-							if keyToPath.Key == k {
-								strV := base64.StdEncoding.EncodeToString(v)
-								paths[k] = &strV
-							}
-						}
-					}
-				}
-			}
-			if len(paths) != 0 {
-				volumes = append(volumes, azaci.Volume{
-					Name:   &podVolumes[i].Name,
-					Secret: paths,
-				})
-			}
-			continue
-		}
-
-		// If we've made it this far we have found a volume type that isn't supported
-		return nil, fmt.Errorf("pod %s requires volume %s which is of an unsupported type", pod.Name, podVolumes[i].Name)
-	}
-
-	return volumes, nil
-}
-
 func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
 	switch pro {
 	case v1.ProtocolUDP:
@@ -1706,7 +1351,7 @@ func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
 }
 
 func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
-	_, creationTime := aciResourceMetaFromContainerGroup(cg)
+	_, creationTime := getACIResourceMetaFromContainerGroup(cg)
 
 	containers := make([]v1.Container, 0, len(*cg.Containers))
 	containersList := *cg.Containers
@@ -1760,212 +1405,16 @@ func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
 			Volumes:    []v1.Volume{},
 			Containers: containers,
 		},
-		Status: *podStatusFromContainerGroup(cg),
+		Status: *getPodStatusFromContainerGroup(cg),
 	}
 
 	return &p, nil
 }
 
-func aciResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, metav1.Time) {
-	// Use the Provisioning State if it's not Succeeded,
-	// otherwise use the state of the instance.
-	aciState := cg.ContainerGroupProperties.ProvisioningState
-	if *aciState == "Succeeded" {
-		aciState = cg.ContainerGroupProperties.InstanceView.State
-	}
-
-	var creationTime metav1.Time
-	ts := *cg.Tags["CreationTimestamp"]
-
-	if ts != "" {
-		t, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", ts)
-		if err == nil {
-			creationTime = metav1.NewTime(t)
-		}
-	}
-
-	return aciState, creationTime
-}
-
-func podStatusFromContainerGroup(cg *azaci.ContainerGroup) *v1.PodStatus {
-	allReady := true
-
-	aciState, creationTime := aciResourceMetaFromContainerGroup(cg)
-	containerStatuses := make([]v1.ContainerStatus, 0, len(*cg.Containers))
-
-	lastUpdateTime := creationTime
-	firstContainerStartTime := creationTime
-	containerStartTime := creationTime
-	containerStatus := v1.ContainerStatus{}
-	if *aciState == "Succeeded" {
-		aciState = cg.ContainerGroupProperties.InstanceView.State
-		firstContainerStartTime = metav1.NewTime((*cg.Containers)[0].ContainerProperties.InstanceView.CurrentState.StartTime.Time)
-		lastUpdateTime = firstContainerStartTime
-
-		for _, c := range *cg.Containers {
-			containerStartTime = metav1.NewTime(c.ContainerProperties.InstanceView.CurrentState.StartTime.Time)
-			containerStatus = v1.ContainerStatus{
-				Name:                 *c.Name,
-				State:                aciContainerStateToContainerState(*c.InstanceView.CurrentState),
-				LastTerminationState: aciContainerStateToContainerState(*c.InstanceView.PreviousState),
-				Ready:                aciStateToPodPhase(*c.InstanceView.CurrentState.State) == v1.PodRunning,
-				RestartCount:         *c.InstanceView.RestartCount,
-				Image:                *c.Image,
-				ImageID:              "",
-				ContainerID:          getContainerID(*cg.ID, *c.Name),
-			}
-
-			if aciStateToPodPhase(*c.InstanceView.CurrentState.State) != v1.PodRunning &&
-				aciStateToPodPhase(*c.InstanceView.CurrentState.State) != v1.PodSucceeded {
-				allReady = false
-			}
-		}
-		if containerStartTime.Time.After(lastUpdateTime.Time) {
-			lastUpdateTime = containerStartTime
-		}
-
-		// Add to containerStatuses
-		containerStatuses = append(containerStatuses, containerStatus)
-	}
-
-	ip := ""
-	if cg.IPAddress != nil {
-		ip = *cg.IPAddress.IP
-	}
-
-	return &v1.PodStatus{
-		Phase:             aciStateToPodPhase(*aciState),
-		Conditions:        aciStateToPodConditions(*aciState, creationTime, lastUpdateTime, allReady),
-		Message:           "",
-		Reason:            "",
-		HostIP:            "",
-		PodIP:             ip,
-		StartTime:         &firstContainerStartTime,
-		ContainerStatuses: containerStatuses,
-	}
-}
-
-func getContainerID(cgID, containerName string) string {
-	if cgID == "" {
-		return ""
-	}
-
-	containerResourceID := fmt.Sprintf("%s/containers/%s", cgID, containerName)
-
-	h := sha256.New()
-	if _, err := h.Write([]byte(strings.ToUpper(containerResourceID))); err != nil {
-		panic(err)
-	}
-	hashBytes := h.Sum(nil)
-	return fmt.Sprintf("aci://%s", hex.EncodeToString(hashBytes))
-}
-
-func aciStateToPodPhase(state string) v1.PodPhase {
-	switch state {
-	case "Running":
-		return v1.PodRunning
-	case "Succeeded":
-		return v1.PodSucceeded
-	case "Failed":
-		return v1.PodFailed
-	case "Canceled":
-		return v1.PodFailed
-	case "Creating":
-		return v1.PodPending
-	case "Repairing":
-		return v1.PodPending
-	case "Pending":
-		return v1.PodPending
-	case "Accepted":
-		return v1.PodPending
-	}
-
-	return v1.PodUnknown
-}
-
-func aciStateToPodConditions(state string, creationTime, lastUpdateTime metav1.Time, allReady bool) []v1.PodCondition {
-	switch state {
-	case "Running", "Succeeded":
-		readyConditionStatus := v1.ConditionFalse
-		readyConditionTime := creationTime
-		if allReady {
-			readyConditionStatus = v1.ConditionTrue
-			readyConditionTime = lastUpdateTime
-		}
-
-		return []v1.PodCondition{
-			{
-				Type:               v1.PodReady,
-				Status:             readyConditionStatus,
-				LastTransitionTime: readyConditionTime,
-			}, {
-				Type:               v1.PodInitialized,
-				Status:             v1.ConditionTrue,
-				LastTransitionTime: creationTime,
-			}, {
-				Type:               v1.PodScheduled,
-				Status:             v1.ConditionTrue,
-				LastTransitionTime: creationTime,
-			},
-		}
-	}
-	return []v1.PodCondition{}
-}
-
-func aciContainerStateToContainerState(cs azaci.ContainerState) v1.ContainerState {
-	startTime := metav1.NewTime(cs.StartTime.Time)
-	state := *cs.State
-	// Handle the case where the container is running.
-	if state == "Running" {
-		return v1.ContainerState{
-			Running: &v1.ContainerStateRunning{
-				StartedAt: startTime,
-			},
-		}
-	}
-
-	// Handle the case of completion.
-	if state == "Succeeded" {
-		return v1.ContainerState{
-			Terminated: &v1.ContainerStateTerminated{
-				StartedAt:  startTime,
-				Reason:     "Completed",
-				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
-			},
-		}
-	}
-
-	// Handle the case where the container failed.
-	if state == "Failed" || state == "Canceled" {
-		return v1.ContainerState{
-			Terminated: &v1.ContainerStateTerminated{
-				ExitCode:   *cs.ExitCode,
-				Reason:     *cs.State,
-				Message:    *cs.DetailStatus,
-				StartedAt:  startTime,
-				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
-			},
-		}
-	}
-
-	if state == "" {
-		state = "Creating"
-	}
-
-	// Handle the case where the container is pending.
-	// Which should be all other aci states.
-	return v1.ContainerState{
-		Waiting: &v1.ContainerStateWaiting{
-			Reason:  state,
-			Message: *cs.DetailStatus,
-		},
-	}
-}
-
 // Filters service account secret volume for Windows.
 // Service account secret volume gets automatically turned on if not specified otherwise.
 // ACI doesn't support secret volume for Windows, so we need to filter it.
-func filterServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroupWrapper) {
+func filterWindowsServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroupWrapper) {
 	if strings.EqualFold(osType, "Windows") {
 		serviceAccountSecretVolumeName := make(map[string]bool)
 

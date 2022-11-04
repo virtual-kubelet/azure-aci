@@ -1,7 +1,7 @@
-/**
-* Copyright (c) Microsoft.  All rights reserved.
-	*/
-
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package provider
 
 import (
