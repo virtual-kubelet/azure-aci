@@ -500,10 +500,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 	ports := make([]azaci.Port, 0, count)
 	for c := range *containers {
-		container := ((*containers)[c]).Ports
-		for p := range *container {
+		containerPorts := ((*containers)[c]).Ports
+		for p := range *containerPorts {
 			ports = append(ports, azaci.Port{
-				Port:     (*container)[p].Port,
+				Port:     (*containerPorts)[p].Port,
 				Protocol: "TCP",
 			})
 		}
