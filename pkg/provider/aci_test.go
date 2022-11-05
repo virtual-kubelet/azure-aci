@@ -1268,6 +1268,12 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				assert.Check(t, is.Equal(2, len(containers)), "2 Containers is expected")
 				assert.Check(t, is.Equal(len(container1Ports), len(tc.containerList[0].Ports)))
 				assert.Check(t, is.Equal(len(container2Ports), len(tc.containerList[1].Ports)))
+				for i := range tc.containerList[0].Ports {
+					assert.Equal(t, tc.containerList[0].Ports[i].ContainerPort, *(container1Ports[i]).Port, "Container ports are not equal")
+				}
+				for i := range tc.containerList[1].Ports {
+					assert.Equal(t, tc.containerList[0].Ports[i].ContainerPort, *(container1Ports[i]).Port, "Container ports are not equal")
+				}
 				return nil
 			}
 
