@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
+
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
 	"github.com/virtual-kubelet/azure-aci/client/network"
@@ -18,6 +20,13 @@ import (
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
+)
+
+// DNS configuration settings
+const (
+	maxDNSNameservers     = 3
+	maxDNSSearchPaths     = 6
+	maxDNSSearchListChars = 256
 )
 
 func (p *ACIProvider) setVNETConfig(ctx context.Context, azConfig *auth.Config) error {
@@ -75,7 +84,6 @@ func (p *ACIProvider) setVNETConfig(ctx context.Context, azConfig *auth.Config) 
 			p.containerGroupExtensions = append(p.containerGroupExtensions, realtimeExtension)
 		}
 
-		p.kubeDNSIP = "10.0.0.10"
 		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
 			p.kubeDNSIP = kubeDNSIP
 		}
@@ -156,7 +164,7 @@ func (p *ACIProvider) setupNetwork(ctx context.Context, azConfig *auth.Config) e
 	return nil
 }
 
-func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *v1.Pod) {
+func (p *ACIProvider) amendVnetResources(ctx context.Context, cg client2.ContainerGroupWrapper, pod *v1.Pod) {
 	if p.subnetName == "" {
 		return
 	}
@@ -164,21 +172,16 @@ func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *
 	subnetID := "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName
 	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = p.getDNSConfig(ctx, pod)
 	cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
 }
 
-func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *azaci.DNSConfiguration {
+func (p *ACIProvider) getDNSConfig(ctx context.Context, pod *v1.Pod) *azaci.DNSConfiguration {
 	nameServers := make([]string, 0)
 	searchDomains := make([]string, 0)
 
-	// Adding default Azure dns name explicitly
-	// if any other dns names are provided by the user ACI will use those instead of azure dns
-	// which may cause issues while looking up other Azure resources
-	AzureDNSIP := "168.63.129.16"
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
 		nameServers = append(nameServers, p.kubeDNSIP)
-		nameServers = append(nameServers, AzureDNSIP)
 		searchDomains = p.generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod)
 	}
 
@@ -200,8 +203,8 @@ func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *azaci.DNSConfiguration {
 	if len(nameServers) == 0 {
 		return nil
 	}
-	nameServers = formDNSNameserversFitsLimits(nameServers)
-	domain := formDNSSearchFitsLimits(searchDomains)
+	nameServers = formDNSNameserversFitsLimits(ctx, nameServers)
+	domain := formDNSSearchFitsLimits(ctx, searchDomains)
 	opt := strings.Join(options, " ")
 	result := azaci.DNSConfiguration{
 		NameServers:   &nameServers,
@@ -231,16 +234,17 @@ func (p *ACIProvider) generateSearchesForDNSClusterFirst(dnsConfig *v1.PodDNSCon
 	return omitDuplicates(append(clusterSearch, hostSearch...))
 }
 
-func formDNSNameserversFitsLimits(nameservers []string) []string {
+// https://github.com/kubernetes/kubernetes/blob/4276ed36282405d026d8072e0ebed4f1da49070d/pkg/kubelet/network/dns/dns.go#L101-L149
+func formDNSNameserversFitsLimits(ctx context.Context, nameservers []string) []string {
 	if len(nameservers) > maxDNSNameservers {
 		nameservers = nameservers[:maxDNSNameservers]
 		msg := fmt.Sprintf("Nameserver limits were exceeded, some nameservers have been omitted, the applied nameserver line is: %s", strings.Join(nameservers, ";"))
-		log.G(context.TODO()).WithField("method", "formDNSNameserversFitsLimits").Warn(msg)
+		log.G(ctx).WithField("method", "formDNSNameserversFitsLimits").Warn(msg)
 	}
 	return nameservers
 }
 
-func formDNSSearchFitsLimits(searches []string) string {
+func formDNSSearchFitsLimits(ctx context.Context, searches []string) string {
 	limitsExceeded := false
 
 	if len(searches) > maxDNSSearchPaths {
@@ -248,14 +252,27 @@ func formDNSSearchFitsLimits(searches []string) string {
 		limitsExceeded = true
 	}
 
-	if resolvSearchLineStrLen := len(strings.Join(searches, " ")); resolvSearchLineStrLen > maxDNSSearchListChars {
+	// In some DNS resolvers(e.g. glibc 2.28), DNS resolving causes abort() if there is a
+	// search path exceeding 255 characters. We have to filter them out.
+	l := 0
+	for _, search := range searches {
+		if len(search) > utilvalidation.DNS1123SubdomainMaxLength {
+			limitsExceeded = true
+			continue
+		}
+		searches[l] = search
+		l++
+	}
+	searches = searches[:l]
+
+	if resolveSearchLineStrLen := len(strings.Join(searches, " ")); resolveSearchLineStrLen > maxDNSSearchListChars {
 		cutDomainsNum := 0
 		cutDomainsLen := 0
 		for i := len(searches) - 1; i >= 0; i-- {
 			cutDomainsLen += len(searches[i]) + 1
 			cutDomainsNum++
 
-			if (resolvSearchLineStrLen - cutDomainsLen) <= maxDNSSearchListChars {
+			if (resolveSearchLineStrLen - cutDomainsLen) <= maxDNSSearchListChars {
 				break
 			}
 		}
@@ -266,7 +283,7 @@ func formDNSSearchFitsLimits(searches []string) string {
 
 	if limitsExceeded {
 		msg := fmt.Sprintf("Search Line limits were exceeded, some search paths have been omitted, the applied search line is: %s", strings.Join(searches, ";"))
-		log.G(context.TODO()).WithField("method", "formDNSSearchFitsLimits").Warn(msg)
+		log.G(ctx).WithField("method", "formDNSSearchFitsLimits").Warn(msg)
 	}
 
 	return strings.Join(searches, " ")
