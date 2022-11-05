@@ -5,10 +5,75 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"fmt"
+
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
+
+func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
+	_, creationTime := getACIResourceMetaFromContainerGroup(cg)
+
+	containers := make([]v1.Container, 0, len(*cg.Containers))
+	containersList := *cg.Containers
+	for i := range containersList {
+		container := &v1.Container{
+			Name:  *containersList[i].Name,
+			Image: *containersList[i].Image,
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%g", *containersList[i].Resources.Requests.CPU)),
+					v1.ResourceMemory: resource.MustParse(fmt.Sprintf("%gG", *containersList[i].Resources.Requests.MemoryInGB)),
+				},
+			},
+		}
+		if containersList[i].Command != nil {
+			container.Command = *containersList[i].Command
+		}
+
+		if containersList[i].Resources.Requests.Gpu != nil {
+			container.Resources.Requests[gpuResourceName] = resource.MustParse(fmt.Sprintf("%d", *containersList[i].Resources.Requests.Gpu.Count))
+		}
+
+		if containersList[i].Resources.Limits != nil {
+			container.Resources.Limits = v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%g", *containersList[i].Resources.Limits.CPU)),
+				v1.ResourceMemory: resource.MustParse(fmt.Sprintf("%gG", *containersList[i].Resources.Limits.MemoryInGB)),
+			}
+
+			if containersList[i].Resources.Limits.Gpu != nil {
+				container.Resources.Limits[gpuResourceName] = resource.MustParse(fmt.Sprintf("%d", *containersList[i].Resources.Requests.Gpu.Count))
+			}
+		}
+
+		containers = append(containers, *container)
+	}
+
+	p := v1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              *cg.Tags["PodName"],
+			Namespace:         *cg.Tags["Namespace"],
+			ClusterName:       *cg.Tags["ClusterName"],
+			UID:               types.UID(*cg.Tags["UID"]),
+			CreationTimestamp: creationTime,
+		},
+		Spec: v1.PodSpec{
+			NodeName:   *cg.Tags["NodeName"],
+			Volumes:    []v1.Volume{},
+			Containers: containers,
+		},
+		Status: *getPodStatusFromContainerGroup(cg),
+	}
+
+	return &p, nil
+}
 
 func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) *v1.PodStatus {
 	allReady := true

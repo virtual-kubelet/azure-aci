@@ -11,18 +11,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"os"
 	"reflect"
 	"strings"
 	"time"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/client/aci"
-	"github.com/virtual-kubelet/azure-aci/client/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/analytics"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -33,9 +30,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -262,186 +257,16 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		return nil, errors.New(unsupportedRegionMessage)
 	}
 
-	if err := p.setupCapacity(ctx); err != nil {
+	if err := p.setupNodeCapacity(ctx); err != nil {
 		return nil, err
 	}
 
-	// the VNET subscription ID defaultly is authentication subscription ID.
-	// We need to override when using cross subscription virtual network resource
-	p.vnetSubscriptionID = azConfig.AuthConfig.SubscriptionID
-	if vnetSubscriptionID := os.Getenv("ACI_VNET_SUBSCRIPTION_ID"); vnetSubscriptionID != "" {
-		p.vnetSubscriptionID = vnetSubscriptionID
-	}
-	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
-		p.vnetName = vnetName
-	}
-	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
-		p.vnetResourceGroup = vnetResourceGroup
-	}
-	if subnetName := os.Getenv("ACI_SUBNET_NAME"); p.vnetName != "" && subnetName != "" {
-		p.subnetName = subnetName
-	}
-	if subnetCIDR := os.Getenv("ACI_SUBNET_CIDR"); subnetCIDR != "" {
-		if p.subnetName == "" {
-			return nil, fmt.Errorf("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR")
-		}
-		if _, _, err := net.ParseCIDR(subnetCIDR); err != nil {
-			return nil, fmt.Errorf("error parsing provided subnet range: %v", err)
-		}
-		p.subnetCIDR = subnetCIDR
-	}
-
-	if p.subnetName != "" {
-		if err := p.setupNetwork(ctx, &azConfig); err != nil {
-			return nil, fmt.Errorf("error setting up network: %v", err)
-		}
-
-		masterURI := os.Getenv("MASTER_URI")
-		if masterURI == "" {
-			masterURI = "10.0.0.1"
-		}
-
-		clusterCIDR := os.Getenv("CLUSTER_CIDR")
-		if clusterCIDR == "" {
-			clusterCIDR = "10.240.0.0/16"
-		}
-
-		// setup aci extensions
-		kubeExtensions, err := client2.GetKubeProxyExtension(serviceAccountSecretMountPath, masterURI, clusterCIDR)
-		if err != nil {
-			return nil, fmt.Errorf("error creating kube proxy extension: %v", err)
-		}
-
-		p.containerGroupExtensions = append(p.containerGroupExtensions, kubeExtensions)
-
-		enableRealTimeMetricsExtension := os.Getenv("ENABLE_REAL_TIME_METRICS")
-		if enableRealTimeMetricsExtension == "true" {
-			realtimeExtension := client2.GetRealtimeMetricsExtension()
-			p.containerGroupExtensions = append(p.containerGroupExtensions, realtimeExtension)
-		}
-
-		p.kubeDNSIP = "10.0.0.10"
-		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
-			p.kubeDNSIP = kubeDNSIP
-		}
+	if err := p.setVNETConfig(ctx, &azConfig); err != nil {
+		return nil, err
 	}
 
 	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.azClientsAPIs)
 	return &p, err
-}
-
-func (p *ACIProvider) setupCapacity(ctx context.Context) error {
-	ctx, span := trace.StartSpan(ctx, "aci.setupCapacity")
-	defer span.End()
-	_ = addAzureAttributes(ctx, span, p)
-
-	// Set sane defaults for Capacity in case config is not supplied
-	p.cpu = "10000"
-	p.memory = "4Ti"
-	p.pods = "5000"
-
-	if cpuQuota := os.Getenv("ACI_QUOTA_CPU"); cpuQuota != "" {
-		p.cpu = cpuQuota
-	}
-
-	if memoryQuota := os.Getenv("ACI_QUOTA_MEMORY"); memoryQuota != "" {
-		p.memory = memoryQuota
-	}
-
-	if podsQuota := os.Getenv("ACI_QUOTA_POD"); podsQuota != "" {
-		p.pods = podsQuota
-	}
-
-	//TODO To be uncommented after Location API fix
-	//capabilities, err := p.azClientsAPIs.ListCapabilities(ctx, p.region)
-	//if err != nil {
-	//	return errors.Wrapf(err, "Unable to fetch the ACI capabilities for the location %s, skipping GPU availability check. GPU capacity will be disabled", p.region)
-	//}
-	//
-	//for _, capability := range *capabilities {
-	//	if strings.EqualFold(*capability.Location, p.region) && *capability.Gpu != "" {
-	//		p.gpu = "100"
-	//		if gpu := os.Getenv("ACI_QUOTA_GPU"); gpu != "" {
-	//			p.gpu = gpu
-	//		}
-	//		p.gpuSKUs = append(p.gpuSKUs, azaci.GpuSku(*capability.Gpu))
-	//	}
-	//}
-
-	return nil
-}
-
-func (p *ACIProvider) setupNetwork(ctx context.Context, azConfig *auth.Config) error {
-	c := aznetwork.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID)
-	c.Authorizer = azConfig.Authorizer
-
-	createSubnet := true
-	subnet, err := c.Get(ctx, p.vnetResourceGroup, p.vnetName, p.subnetName, "")
-	if err != nil && !network.IsNotFound(err) {
-		return fmt.Errorf("error while looking up subnet: %v", err)
-	}
-	if network.IsNotFound(err) && p.subnetCIDR == "" {
-		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", p.subnetName, p.vnetName, p.vnetResourceGroup, p.vnetSubscriptionID)
-	}
-	if err == nil {
-		if p.subnetCIDR == "" {
-			p.subnetCIDR = *subnet.SubnetPropertiesFormat.AddressPrefix
-		}
-		if p.subnetCIDR != *subnet.SubnetPropertiesFormat.AddressPrefix {
-			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", p.subnetName, *subnet.SubnetPropertiesFormat.AddressPrefix, p.subnetCIDR)
-		}
-		if subnet.SubnetPropertiesFormat.RouteTable != nil {
-			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", p.subnetName, *subnet.SubnetPropertiesFormat.RouteTable.ID)
-		}
-		if subnet.SubnetPropertiesFormat.ServiceAssociationLinks != nil {
-			for _, l := range *subnet.SubnetPropertiesFormat.ServiceAssociationLinks {
-				if l.ServiceAssociationLinkPropertiesFormat != nil {
-					if *l.ServiceAssociationLinkPropertiesFormat.LinkedResourceType == subnetDelegationService {
-						createSubnet = false
-						break
-					} else {
-						return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", p.subnetName, l)
-					}
-				}
-			}
-		} else {
-			for _, d := range *subnet.SubnetPropertiesFormat.Delegations {
-				if d.ServiceDelegationPropertiesFormat != nil && *d.ServiceDelegationPropertiesFormat.ServiceName == subnetDelegationService {
-					createSubnet = false
-					break
-				}
-			}
-		}
-	}
-
-	if createSubnet {
-		var (
-			delegationName = "aciDelegation"
-			serviceName    = "Microsoft.ContainerInstance/containerGroups"
-			subnetAction   = "Microsoft.Network/virtualNetworks/subnets/action"
-		)
-
-		subnet = aznetwork.Subnet{
-			Name: &p.subnetName,
-			SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{
-				AddressPrefix: &p.subnetCIDR,
-				Delegations: &[]aznetwork.Delegation{
-					{
-						Name: &delegationName,
-						ServiceDelegationPropertiesFormat: &aznetwork.ServiceDelegationPropertiesFormat{
-							ServiceName: &serviceName,
-							Actions:     &[]string{subnetAction},
-						},
-					},
-				},
-			},
-		}
-		_, err = c.CreateOrUpdate(ctx, p.vnetResourceGroup, p.vnetName, p.subnetName, subnet)
-		if err != nil {
-			return fmt.Errorf("error creating subnet: %v", err)
-		}
-	}
-	return nil
 }
 
 func addAzureAttributes(ctx context.Context, span trace.Span, p *ACIProvider) context.Context {
@@ -535,135 +360,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
-}
-
-func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *v1.Pod) {
-	if p.subnetName == "" {
-		return
-	}
-
-	subnetID := "/subscriptions/" + p.vnetSubscriptionID + "/resourceGroups/" + p.vnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + p.vnetName + "/subnets/" + p.subnetName
-	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = p.getDNSConfig(pod)
-	cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
-}
-
-func (p *ACIProvider) getDNSConfig(pod *v1.Pod) *azaci.DNSConfiguration {
-	nameServers := make([]string, 0)
-	searchDomains := make([]string, 0)
-
-	// Adding default Azure dns name explicitly
-	// if any other dns names are provided by the user ACI will use those instead of azure dns
-	// which may cause issues while looking up other Azure resources
-	AzureDNSIP := "168.63.129.16"
-	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
-		nameServers = append(nameServers, p.kubeDNSIP)
-		nameServers = append(nameServers, AzureDNSIP)
-		searchDomains = p.generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod)
-	}
-
-	options := make([]string, 0)
-
-	if pod.Spec.DNSConfig != nil {
-		nameServers = omitDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
-		searchDomains = omitDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
-
-		for _, option := range pod.Spec.DNSConfig.Options {
-			op := option.Name
-			if option.Value != nil && *(option.Value) != "" {
-				op = op + ":" + *(option.Value)
-			}
-			options = append(options, op)
-		}
-	}
-
-	if len(nameServers) == 0 {
-		return nil
-	}
-	nameServers = formDNSNameserversFitsLimits(nameServers)
-	domain := formDNSSearchFitsLimits(searchDomains)
-	opt := strings.Join(options, " ")
-	result := azaci.DNSConfiguration{
-		NameServers:   &nameServers,
-		SearchDomains: &domain,
-		Options:       &opt,
-	}
-
-	return &result
-}
-
-// This is taken from the kubelet equivalent -  https://github.com/kubernetes/kubernetes/blob/d24fe8a801748953a5c34fd34faa8005c6ad1770/pkg/kubelet/network/dns/dns.go#L141-L151
-func (p *ACIProvider) generateSearchesForDNSClusterFirst(dnsConfig *v1.PodDNSConfig, pod *v1.Pod) []string {
-
-	hostSearch := make([]string, 0)
-
-	if dnsConfig != nil {
-		hostSearch = dnsConfig.Searches
-	}
-	if p.clusterDomain == "" {
-		return hostSearch
-	}
-
-	nsSvcDomain := fmt.Sprintf("%s.svc.%s", pod.Namespace, p.clusterDomain)
-	svcDomain := fmt.Sprintf("svc.%s", p.clusterDomain)
-	clusterSearch := []string{nsSvcDomain, svcDomain, p.clusterDomain}
-
-	return omitDuplicates(append(clusterSearch, hostSearch...))
-}
-
-func omitDuplicates(strs []string) []string {
-	uniqueStrs := make(map[string]bool)
-
-	var ret []string
-	for _, str := range strs {
-		if !uniqueStrs[str] {
-			ret = append(ret, str)
-			uniqueStrs[str] = true
-		}
-	}
-	return ret
-}
-
-func formDNSNameserversFitsLimits(nameservers []string) []string {
-	if len(nameservers) > maxDNSNameservers {
-		nameservers = nameservers[:maxDNSNameservers]
-		msg := fmt.Sprintf("Nameserver limits were exceeded, some nameservers have been omitted, the applied nameserver line is: %s", strings.Join(nameservers, ";"))
-		log.G(context.TODO()).WithField("method", "formDNSNameserversFitsLimits").Warn(msg)
-	}
-	return nameservers
-}
-
-func formDNSSearchFitsLimits(searches []string) string {
-	limitsExceeded := false
-
-	if len(searches) > maxDNSSearchPaths {
-		searches = searches[:maxDNSSearchPaths]
-		limitsExceeded = true
-	}
-
-	if resolvSearchLineStrLen := len(strings.Join(searches, " ")); resolvSearchLineStrLen > maxDNSSearchListChars {
-		cutDomainsNum := 0
-		cutDomainsLen := 0
-		for i := len(searches) - 1; i >= 0; i-- {
-			cutDomainsLen += len(searches[i]) + 1
-			cutDomainsNum++
-
-			if (resolvSearchLineStrLen - cutDomainsLen) <= maxDNSSearchListChars {
-				break
-			}
-		}
-
-		searches = searches[:(len(searches) - cutDomainsNum)]
-		limitsExceeded = true
-	}
-
-	if limitsExceeded {
-		msg := fmt.Sprintf("Search Line limits were exceeded, some search paths have been omitted, the applied search line is: %s", strings.Join(searches, ";"))
-		log.G(context.TODO()).WithField("method", "formDNSSearchFitsLimits").Warn(msg)
-	}
-
-	return strings.Join(searches, " ")
 }
 
 func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *azaci.ContainerGroupDiagnostics {
@@ -878,22 +574,6 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	return ctx.Err()
-}
-
-// ConfigureNode enables a provider to configure the node object that
-// will be used for Kubernetes.
-func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
-	node.Status.Capacity = p.capacity()
-	node.Status.Allocatable = p.capacity()
-	node.Status.Conditions = p.nodeConditions()
-	node.Status.Addresses = p.nodeAddresses()
-	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
-	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
-	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
-	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
-
-	// Virtual node would be skipped for cloud provider operations (e.g. CP should not add route).
-	node.ObjectMeta.Labels["kubernetes.azure.com/managed"] = "false"
 }
 
 // GetPodStatus returns the status of a pod by name that is running inside ACI
@@ -1348,67 +1028,6 @@ func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
 	default:
 		return azaci.ContainerNetworkProtocolTCP
 	}
-}
-
-func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
-	_, creationTime := getACIResourceMetaFromContainerGroup(cg)
-
-	containers := make([]v1.Container, 0, len(*cg.Containers))
-	containersList := *cg.Containers
-	for i := range containersList {
-		container := &v1.Container{
-			Name:  *containersList[i].Name,
-			Image: *containersList[i].Image,
-			Resources: v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%g", *containersList[i].Resources.Requests.CPU)),
-					v1.ResourceMemory: resource.MustParse(fmt.Sprintf("%gG", *containersList[i].Resources.Requests.MemoryInGB)),
-				},
-			},
-		}
-		if containersList[i].Command != nil {
-			container.Command = *containersList[i].Command
-		}
-
-		if containersList[i].Resources.Requests.Gpu != nil {
-			container.Resources.Requests[gpuResourceName] = resource.MustParse(fmt.Sprintf("%d", *containersList[i].Resources.Requests.Gpu.Count))
-		}
-
-		if containersList[i].Resources.Limits != nil {
-			container.Resources.Limits = v1.ResourceList{
-				v1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%g", *containersList[i].Resources.Limits.CPU)),
-				v1.ResourceMemory: resource.MustParse(fmt.Sprintf("%gG", *containersList[i].Resources.Limits.MemoryInGB)),
-			}
-
-			if containersList[i].Resources.Limits.Gpu != nil {
-				container.Resources.Limits[gpuResourceName] = resource.MustParse(fmt.Sprintf("%d", *containersList[i].Resources.Requests.Gpu.Count))
-			}
-		}
-
-		containers = append(containers, *container)
-	}
-
-	p := v1.Pod{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Pod",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              *cg.Tags["PodName"],
-			Namespace:         *cg.Tags["Namespace"],
-			ClusterName:       *cg.Tags["ClusterName"],
-			UID:               types.UID(*cg.Tags["UID"]),
-			CreationTimestamp: creationTime,
-		},
-		Spec: v1.PodSpec{
-			NodeName:   *cg.Tags["NodeName"],
-			Volumes:    []v1.Volume{},
-			Containers: containers,
-		},
-		Status: *getPodStatusFromContainerGroup(cg),
-	}
-
-	return &p, nil
 }
 
 // Filters service account secret volume for Windows.
