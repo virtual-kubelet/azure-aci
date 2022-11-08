@@ -54,13 +54,6 @@ const (
 	LogAnalyticsMetadataKeyClusterResourceID string = "cluster-resource-id"
 )
 
-// DNS configuration settings
-const (
-	maxDNSNameservers     = 3
-	maxDNSSearchPaths     = 6
-	maxDNSSearchListChars = 256
-)
-
 const (
 	gpuResourceName   = "nvidia.com/gpu"
 	gpuTypeAnnotation = "virtual-kubelet.io/gpu-type"
@@ -316,7 +309,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
 
-	filterWindowsServiceAccountSecretVolume(p.operatingSystem, cg)
+	filterWindowsServiceAccountSecretVolume(ctx, p.operatingSystem, cg)
 
 	// create ipaddress if containerPort is used
 	count := 0
@@ -355,7 +348,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"CreationTimestamp": &podCreationTimestamp,
 	}
 
-	p.amendVnetResources(*cg, pod)
+	p.amendVnetResources(ctx, *cg, pod)
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
@@ -1033,7 +1026,7 @@ func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
 // Filters service account secret volume for Windows.
 // Service account secret volume gets automatically turned on if not specified otherwise.
 // ACI doesn't support secret volume for Windows, so we need to filter it.
-func filterWindowsServiceAccountSecretVolume(osType string, cgw *client2.ContainerGroupWrapper) {
+func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string, cgw *client2.ContainerGroupWrapper) {
 	if strings.EqualFold(osType, "Windows") {
 		serviceAccountSecretVolumeName := make(map[string]bool)
 
@@ -1053,7 +1046,7 @@ func filterWindowsServiceAccountSecretVolume(osType string, cgw *client2.Contain
 			return
 		}
 
-		l := log.G(context.TODO()).WithField("containerGroup", cgw.Name)
+		l := log.G(ctx).WithField("containerGroup", cgw.Name)
 		l.Infof("Ignoring service account secret volumes '%v' for Windows", reflect.ValueOf(serviceAccountSecretVolumeName).MapKeys())
 
 		volumes := make([]azaci.Volume, 0, len(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes))
