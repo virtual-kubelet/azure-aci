@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/golang/mock/gomock"
@@ -483,6 +484,8 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 	aciMocks.MockGetContainerGroupInfo =
 		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
 			return &azaci.ContainerGroup{
+				Name: &name,
+				ID:   &name,
 				Tags: map[string]*string{
 					"CreationTimestamp": &creationTime,
 					"PodName":           &podName,
@@ -497,6 +500,10 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 						{
 							Name: &containerName,
 							ContainerProperties: &azaci.ContainerProperties{
+								InstanceView: &azaci.ContainerPropertiesInstanceView{
+									CurrentState: getContainerState("Running", metav1.NewTime(cgCreationTime), metav1.NewTime(cgCreationTime.Add(time.Second*3)), 0),
+									RestartCount: &restartCount,
+								},
 								Image:   &containerName,
 								Command: &[]string{"nginx", "-g", "daemon off;"},
 								Ports: &[]azaci.ContainerPort{
@@ -595,6 +602,8 @@ func TestGetPodWithGPU(t *testing.T) {
 
 	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
 		return &azaci.ContainerGroup{
+			Name: &name,
+			ID:   &name,
 			Tags: map[string]*string{
 				"CreationTimestamp": &creationTime,
 				"PodName":           &podName,
@@ -609,6 +618,10 @@ func TestGetPodWithGPU(t *testing.T) {
 					{
 						Name: &containerName,
 						ContainerProperties: &azaci.ContainerProperties{
+							InstanceView: &azaci.ContainerPropertiesInstanceView{
+								CurrentState: getContainerState("Running", metav1.NewTime(cgCreationTime), metav1.NewTime(cgCreationTime.Add(time.Second*3)), 0),
+								RestartCount: &restartCount,
+							},
 							Image:   &containerName,
 							Command: &[]string{"nginx", "-g", "daemon off;"},
 							Ports: &[]azaci.ContainerPort{

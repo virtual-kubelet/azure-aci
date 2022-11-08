@@ -581,7 +581,7 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	return getPodStatusFromContainerGroup(cg), nil
+	return getPodStatusFromContainerGroup(cg)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
