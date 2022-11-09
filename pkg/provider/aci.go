@@ -37,9 +37,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice"
 	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
-	azidentity "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 )
 
 const (
@@ -492,12 +490,12 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	// if no username credentials are provided use agentpool MI if for pulling images from ACR
 	if len(*creds) == 0 {
-		agentPoolKubeletIdentity, err := p.getAgentPoolKubeletIdentity(ctx)
+		agentPoolKubeletIdentity, err := GetAgentPoolKubeletIdentity(ctx, p.resourceGroup, p.vnetSubscriptionID)
 		if err != nil {
 			log.G(ctx).Infof("Could not find Agent pool identity %v", err)
 		}
 
-		p.setContainerGroupIdentity(agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
+		SetContainerGroupIdentity(agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
 		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
 	}
 
@@ -588,101 +586,6 @@ func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, id
 	}
 	return &ips
 
-}
-
-func (p *ACIProvider) setContainerGroupIdentity(identity *armmsi.Identity, identityType azaci.ResourceIdentityType, containerGroup *client2.ContainerGroupWrapper) {
-	if identity == nil || identityType != azaci.ResourceIdentityTypeUserAssigned {
-		return
-	}
-
-	cgIdentity := azaci.ContainerGroupIdentity{
-		Type: identityType,
-		UserAssignedIdentities: map[string]*azaci.ContainerGroupIdentityUserAssignedIdentitiesValue{
-			*identity.ID: &azaci.ContainerGroupIdentityUserAssignedIdentitiesValue{
-				PrincipalID: identity.Properties.PrincipalID,
-				ClientID: identity.Properties.ClientID,
-			},
-		},
-	}
-	containerGroup.Identity = &cgIdentity
-}
-
-func (p *ACIProvider) getAgentPoolKubeletIdentity(ctx context.Context) (*armmsi.Identity, error) {
-
-	// initialize msi  credentials move this to setup
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		return nil, err
-	}
-	client, err := armmsi.NewUserAssignedIdentitiesClient(p.vnetSubscriptionID, cred, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// default MC_ resource group
-	if strings.HasPrefix(p.resourceGroup, "MC_") {
-		// use sdk to list identities by RG
-		pager := client.NewListByResourceGroupPager(p.resourceGroup, nil)
-		for pager.More() {
-			// pick the agent pool identity
-			nextResult, err := pager.NextPage(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, v := range nextResult.Value {
-				if strings.HasSuffix(*v.ID, "agentpool") {
-					return v, nil
-				}
-			}
-		}
-	}
-
-	// Resource group provided by user or a non default kubelet identity is used on the cluster
-	// list AKS clusters by resource group, and filter on fqdn to get fkubelet identity
-	rg := p.resourceGroup
-	if strings.HasPrefix(p.resourceGroup, "MC_") {
-		rg = strings.Split(p.resourceGroup, "_")[1]
-	}
-	masterURI := os.Getenv("MASTER_URI")
-	t := regexp.MustCompile(`[:/]`)
-	masterURISplit := t.Split(masterURI, -1)
-	clusterFqdn := ""
-	if len(masterURISplit) > 1 {
-		clusterFqdn = masterURISplit[3]
-	}
-
-	log.G(ctx).Infof("looking for cluster in resource group: %s \n", rg)
-
-	aksClient, err := armcontainerservice.NewManagedClustersClient(p.vnetSubscriptionID, cred, nil)
-	if err != nil {
-		return nil, err
-	}
-	clusterPager := aksClient.NewListByResourceGroupPager(rg, nil)
-	for clusterPager.More() {
-		nextResult, err := clusterPager.NextPage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// pick the cluster based on fqdn
-		for _, cluster := range nextResult.Value {
-			if (*cluster.Properties.Fqdn == clusterFqdn) {
-				kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
-				if !ok || kubeletIdentity == nil {
-					return nil, fmt.Errorf("could not get kubelet identity from cluster")
-				}
-				// get armmsi identity object using identity resource name
-				identityResourceName := strings.SplitAfter(*kubeletIdentity.ResourceID, "userAssignedIdentities/")[1]
-				userAssignedIdentityGetResponse, err := client.Get(ctx, rg, identityResourceName, nil)
-				if err != nil {
-					return nil, err
-				}
-				return &userAssignedIdentityGetResponse.Identity, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("Could not find an agent pool identity for cluster under resource group %s", p.resourceGroup)
 }
 
 func (p *ACIProvider) amendVnetResources(cg client2.ContainerGroupWrapper, pod *v1.Pod) {

@@ -141,23 +141,6 @@ func TestSetContainerGroupIdentity(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			// create new provider
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-			    NewMockSecretLister(mockCtrl),
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare mocks for resourceManager", err)
-			}
-
-			aciMocks := createNewACIMock()
-			provider, err := createTestProvider(aciMocks, resourceManager)
-			if err != nil {
-				t.Fatal("Unable to create test provider", err)
-			}
 
 			testContainerGroup := &client.ContainerGroupWrapper{
 				ContainerGroupPropertiesWrapper: &client.ContainerGroupPropertiesWrapper{
@@ -165,7 +148,7 @@ func TestSetContainerGroupIdentity(t *testing.T) {
 				},
 			}
 
-			provider.setContainerGroupIdentity(tc.identity, tc.identityType, testContainerGroup)
+			SetContainerGroupIdentity(tc.identity, tc.identityType, testContainerGroup)
 			if tc.identityType == azaci.ResourceIdentityTypeUserAssigned && tc.identity != nil{
 				// identity uri, clientID, principalID should match
 				assert.Check(t, testContainerGroup.Identity != nil, "container group identity should be populated")
