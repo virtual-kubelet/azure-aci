@@ -1,7 +1,7 @@
-/**
-* Copyright (c) Microsoft.  All rights reserved.
- */
-
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package provider
 
 import (
@@ -11,10 +11,9 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	"github.com/Azure/go-autorest/autorest/date"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -261,7 +260,6 @@ func TestCreatePodWithGPU(t *testing.T) {
 }
 
 // Tests create pod with GPU SKU in annotation.
-
 func TestCreatePodWithGPUSKU(t *testing.T) {
 	t.Skip("Skipping GPU tests until Location API is fixed")
 
@@ -730,108 +728,6 @@ func TestGetPodWithGPU(t *testing.T) {
 		"Containers[0].Resources.Limits.GPU.Count doesn't match")
 }
 
-func TestGetPodWithContainerID(t *testing.T) {
-	podName := "pod-" + uuid.New().String()
-	podNamespace := "ns-" + uuid.New().String()
-	containerName := "c-" + uuid.New().String()
-	containerImage := "ci-" + uuid.New().String()
-
-	err := azConfig.SetAuthConfig()
-	if err != nil {
-		t.Fatal("failed to get auth configuration", err)
-	}
-
-	cgID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerInstance/containerGroups/%s-%s", azConfig.AuthConfig.SubscriptionID, fakeResourceGroup, podNamespace, podName)
-
-	provisioning := "Creating"
-	port := int32(80)
-	cpu := float64(0.99)
-	memory := float64(1.5)
-	count := int32(5)
-	successState := "Succeeded"
-	currentTime := date.Time{
-		Time: time.Now(),
-	}
-
-	aciMocks := createNewACIMock()
-
-	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
-		node := fakeNodeName
-		return &azaci.ContainerGroup{
-			ID: &cgID,
-			Tags: map[string]*string{
-				"CreationTimestamp": &creationTime,
-				"PodName":           &podName,
-				"Namespace":         &podNamespace,
-				"ClusterName":       &node,
-				"NodeName":          &node,
-				"UID":               &podName,
-			},
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{
-				ProvisioningState: &successState,
-				InstanceView: &azaci.ContainerGroupPropertiesInstanceView{
-					State: &successState,
-				},
-				Containers: &[]azaci.Container{
-					{
-						Name: &containerName,
-						ContainerProperties: &azaci.ContainerProperties{
-							InstanceView: &azaci.ContainerPropertiesInstanceView{
-								CurrentState: &azaci.ContainerState{
-									State:        &successState,
-									StartTime:    &currentTime,
-									FinishTime:   &currentTime,
-									DetailStatus: &podName,
-								},
-								PreviousState: &azaci.ContainerState{
-									State:        &provisioning,
-									StartTime:    &currentTime,
-									DetailStatus: &podName,
-								},
-								RestartCount: &count,
-							},
-							Image:   &containerImage,
-							Command: &[]string{"nginx", "-g", "daemon off;"},
-							Ports: &[]azaci.ContainerPort{
-								{
-									Protocol: azaci.ContainerNetworkProtocolTCP,
-									Port:     &port,
-								},
-							},
-							Resources: &azaci.ResourceRequirements{
-								Requests: &azaci.ResourceRequests{
-									CPU:        &cpu,
-									MemoryInGB: &memory,
-									Gpu: &azaci.GpuResource{
-										Count: &count,
-										Sku:   azaci.GpuSkuP100,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}, nil
-	}
-
-	provider, err := createTestProvider(aciMocks, nil)
-	if err != nil {
-		t.Fatal("failed to create the test provider", err)
-	}
-
-	pod, err := provider.GetPod(context.Background(), podNamespace, podName)
-	if err != nil {
-		t.Fatal("Failed to get pod", err)
-	}
-
-	assert.Check(t, &pod != nil, "Response pod should not be nil")
-	assert.Check(t, is.Equal(1, len(pod.Status.ContainerStatuses)), "1 container status is expected")
-	assert.Check(t, is.Equal(containerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
-	assert.Check(t, is.Equal(containerImage, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
-	assert.Check(t, is.Equal(getContainerID(cgID, containerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
-}
-
 func TestPodToACISecretEnvVar(t *testing.T) {
 
 	testKey := "testVar"
@@ -1151,5 +1047,151 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
+	}
+}
+
+func TestCreatedPodWithContainerPort(t *testing.T) {
+	port4040 := int32(4040)
+	port5050 := int32(5050)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	cases := []struct {
+		description   string
+		containerList []v1.Container
+	}{
+		{
+			description: "Container with port and other without port",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+				},
+			},
+		},
+		{
+			description: "Two containers with multiple same ports",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+						{
+							ContainerPort: 443,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port4040,
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "Two containers with different ports",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: port4040,
+						},
+					},
+				},
+			},
+		},
+		{
+			description: "Two containers with the same port",
+			containerList: []v1.Container{
+				{
+					Name: "container1",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+				{
+					Name: "container2",
+					Ports: []v1.ContainerPort{
+						{
+							ContainerPort: 5050,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: podNamespace,
+				},
+				Spec: v1.PodSpec{},
+			}
+			pod.Spec.Containers = tc.containerList
+
+			aciMocks := createNewACIMock()
+			aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
+				containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+				container1Ports := *(containers)[0].Ports
+				container2Ports := *(containers)[1].Ports
+				assert.Check(t, cg != nil, "Container group is nil")
+				assert.Check(t, containers != nil, "Containers should not be nil")
+				assert.Check(t, is.Equal(2, len(containers)), "2 Containers is expected")
+				assert.Check(t, is.Equal(len(container1Ports), len(tc.containerList[0].Ports)))
+				assert.Check(t, is.Equal(len(container2Ports), len(tc.containerList[1].Ports)))
+				for i := range tc.containerList[0].Ports {
+					assert.Equal(t, tc.containerList[0].Ports[i].ContainerPort, *(container1Ports[i]).Port, "Container ports are not equal")
+				}
+				for i := range tc.containerList[1].Ports {
+					assert.Equal(t, tc.containerList[0].Ports[i].ContainerPort, *(container1Ports[i]).Port, "Container ports are not equal")
+				}
+				return nil
+			}
+
+			resourceManager, err := manager.NewResourceManager(
+				NewMockPodLister(mockCtrl),
+				NewMockSecretLister(mockCtrl),
+				NewMockConfigMapLister(mockCtrl),
+				NewMockServiceLister(mockCtrl),
+				NewMockPersistentVolumeClaimLister(mockCtrl),
+				NewMockPersistentVolumeLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to prepare the mocks for resourceManager", err)
+			}
+
+			provider, err := createTestProvider(aciMocks, resourceManager)
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			err = provider.CreatePod(context.Background(), pod)
+			assert.Check(t, err == nil, "Not expected to return error")
+
+		})
 	}
 }
