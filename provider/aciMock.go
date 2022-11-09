@@ -23,7 +23,6 @@ const (
 	containerGroupsRoute  = "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.ContainerInstance/containerGroups"
 	containerGroupRoute   = containerGroupsRoute + "/{containerGroup}"
 	resourceProviderRoute = "/providers/Microsoft.ContainerInstance"
-	aksClustersListURLRoute = "/subscriptions/{{.subscriptionId}}/resourceGroups/{{.resourceGroup}}/providers/Microsoft.ContainerService/managedClusters"
 )
 
 // NewACIMock creates a new Azure Container Instance mock server.
@@ -136,34 +135,6 @@ func (mock *ACIMock) start() {
 			w.WriteHeader(http.StatusNotImplemented)
 		}).Methods("GET")
 
-	router.HandleFunc(
-		aksClustersListURLRoute,
-		func(w http.ResponseWriter, r *http.Request) {
-			statusCode := http.StatusOK
-			response := &aci.AKSClusterListResult{
-				Value: []aci.AKSCluster{
-					aci.AKSCluster{
-						Properties: aci.AKSClusterPropertiesTruncated{
-							Fqdn: "fake.cluster.uri",
-							IdentityProfile: aci.AKSIdentityProfile{
-								KubeletIdentity: aci.AzIdentity{
-									ResourceId: "fakeKubeletIdentityResourceId",
-								},
-							},
-						},
-					},
-				},
-			}
-			w.WriteHeader(statusCode)
-			b := new(bytes.Buffer)
-			if err := json.NewEncoder(b).Encode(response); err != nil {
-				panic(err)
-			}
-			if _, err := w.Write(b.Bytes()); err != nil {
-				panic(err)
-			}
-
-		}).Methods("GET")
 	mock.server = httptest.NewServer(router)
 }
 

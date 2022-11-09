@@ -14,7 +14,6 @@ import (
 const (
 	defaultUserAgent = "virtual-kubelet/azure-arm-aci/2021-07-01"
 	apiVersion       = "2021-07-01"
-	aksApiVersion	 = "2022-04-01"
 
 	containerGroupURLPath                    = "subscriptions/{{.subscriptionId}}/resourceGroups/{{.resourceGroup}}/providers/Microsoft.ContainerInstance/containerGroups/{{.containerGroupName}}"
 	containerGroupListURLPath                = "subscriptions/{{.subscriptionId}}/providers/Microsoft.ContainerInstance/containerGroups"
@@ -22,7 +21,6 @@ const (
 	containerLogsURLPath                     = containerGroupURLPath + "/containers/{{.containerName}}/logs"
 	containerExecURLPath                     = containerGroupURLPath + "/containers/{{.containerName}}/exec"
 	containerGroupMetricsURLPath             = containerGroupURLPath + "/providers/microsoft.Insights/metrics"
-	aksClustersListURLPath                   = "subscriptions/{{.subscriptionId}}/resourceGroups/{{.resourceGroup}}/providers/Microsoft.ContainerService/managedClusters"
 )
 
 // Client is a client for interacting with Azure Container Instances.
