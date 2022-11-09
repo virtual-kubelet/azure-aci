@@ -311,7 +311,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if len(*creds) == 0 {
 		agentPoolKubeletIdentity, err := GetAgentPoolKubeletIdentity(ctx, p.resourceGroup, p.vnetSubscriptionID)
 		if err != nil {
-			log.G(ctx).Infof("Could not find Agent pool identity %v", err)
+			log.G(ctx).Infof("could not find Agent pool identity %v", err)
 		}
 
 		SetContainerGroupIdentity(agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
