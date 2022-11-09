@@ -107,5 +107,5 @@ func GetAgentPoolKubeletIdentity(ctx context.Context, providerResourceGroup stri
 		}
 	}
 
-	return nil, fmt.Errorf("Could not find an agent pool identity for cluster under resource group %s", providerResourceGroup)
+	return nil, fmt.Errorf("could not find an agent pool identity for cluster under resource group %s", providerResourceGroup)
 }
