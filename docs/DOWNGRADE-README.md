@@ -55,7 +55,7 @@ related objects. To compare, the built-in ACI virtual kubelet is deployed in the
 # pod running in kube-system namespace and reuse the id.
 export VIRTUALNODE_USER_IDENTITY_CLIENTID=
 
-helm install "$CHART_NAME" \
+helm install "$CHART_NAME" "$CHART_URL" \
     --set provider=azure \
     --set providers.azure.masterUri=$MASTER_URI \
     --set nodeName=$NODE_NAME \
@@ -68,8 +68,7 @@ helm install "$CHART_NAME" \
     --set providers.azure.vnet.subnetCidr=$VIRTUAL_NODE_SUBNET_RANGE \
     --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
     --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
-    --set providers.azure.managedIdentityID=$VIRTUALNODE_USER_IDENTITY_CLIENTID \
-    ./charts/virtual-kubelet
+    --set providers.azure.managedIdentityID=$VIRTUALNODE_USER_IDENTITY_CLIENTID
 
 ```
 
@@ -90,6 +89,11 @@ export AZURE_CLIENT_SECRET=$(az ad sp create-for-rbac --name $VK_SP \
                          --query password -o tsv)
 
 export AZURE_CLIENT_ID=$(az ad sp list --display-name $VK_SP --query [$VK_SP].appId -o tsv)
+```
+
+You will need to update the `clientSecret` field in [secret.yaml](./../charts/virtual-kubelet/templates/secrets.yaml) with the value of service principal secret.
+```shell
+echo $AZURE_CLIENT_SECRET
 ```
 
 In case the AKS cluster is using a custom VNet, you will need to create the following role assignments for the VNet ID and ACI subnet ID:
@@ -116,34 +120,30 @@ Now, we can use the service principal we created to install the helm chart:
 ```shell
 # Note: in case you want to reset the Service Principal password, you can run "az ad sp credential reset --id $AZURE_CLIENT_ID --query password -o tsv"
 
-helm install "$CHART_NAME" \
+helm install "$CHART_NAME" "$CHART_URL" \
     --set provider=azure \
     --set providers.azure.masterUri=$MASTER_URI \
     --set nodeName=$NODE_NAME \
     --set image.repository=$IMG_URL  \
     --set image.name=$IMG_REPO \
     --set image.tag=$IMG_TAG \
-    --set  providers.azure.targetKey=true \
     --set  providers.azure.clientId=$AZURE_CLIENT_ID \
-    --set  providers.azure.targetAKS=$AZURE_CLIENT_SECRET \
     --set providers.azure.masterUri=$MASTER_URI \
     --set providers.azure.vnet.enabled=$ENABLE_VNET \
     --set providers.azure.vnet.subnetName=$VIRTUAL_NODE_SUBNET_NAME \
     --set providers.azure.vnet.subnetCidr=$VIRTUAL_NODE_SUBNET_RANGE \
     --set providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE \
-    --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP \
-    ./helm
+    --set providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP
 ```
 
 ### Verification
 
 ```shell
-$ kubectl get nodes
+kubectl get nodes
 
-```shell
-NAME                                   STATUS    ROLES     AGE       VERSION
-virtual-kubelet-aci-1.4.5             Ready     agent     2m        v1.19.10-vk-azure-aci-v1.4.5
-virtual-node-aci-linux                 Ready     agent   150m        v1.19.10-vk-azure-aci-v1.4.6-dev
+NAME                                   STATUS    ROLES     AGE        VERSION
+virtual-kubelet-aci-1.4.5              Ready     agent     2m         v1.19.10-vk-azure-aci-v1.4.5
+virtual-node-aci-linux                 Ready     agent     150m       v1.19.10-vk-azure-aci-v1.4.6-dev
 ```
 
 The `virtual-kubelet-aci-1.4.5` virtual node is managed by the downgraded version of ACI virtual kubelet.
@@ -155,6 +155,6 @@ template accordingly so that new Pods can be scheduled to the `virtual-kubelet-a
 Once the downgraded virtual kubelet is not needed anymore, run the following commands to undo the changes.
 
 ```shell
-helm uninstall virtual-kubelet-azure-aci-downgrade
-kubectl delete node virtual-kubelet-aci-1.4.5
+helm uninstall $CHART_NAME
+kubectl delete node $NODE_NAME
 ```
