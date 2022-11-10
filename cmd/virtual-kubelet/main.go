@@ -108,14 +108,11 @@ func main() {
 			return err
 		}
 
-		go func() {
-			err := node.Run(ctx)
-			if err != nil {
-
-			}
-		}()
-		<-ctx.Done()
-		return ctx.Err()
+		err = node.Run(ctx)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
 	if err := run(ctx); err != nil {
