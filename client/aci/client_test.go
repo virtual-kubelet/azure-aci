@@ -169,6 +169,8 @@ func TestNewMsiClient(t *testing.T) {
 }
 
 func TestCreateContainerGroupFails(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
 		ContainerGroupProperties: ContainerGroupProperties{
@@ -200,6 +202,8 @@ func TestCreateContainerGroupFails(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithoutResourceLimit(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
 		ContainerGroupProperties: ContainerGroupProperties{
@@ -240,6 +244,8 @@ func TestCreateContainerGroupWithoutResourceLimit(t *testing.T) {
 }
 
 func TestCreateContainerGroup(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
 		ContainerGroupProperties: ContainerGroupProperties{
@@ -280,6 +286,8 @@ func TestCreateContainerGroup(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
 		ContainerGroupProperties: ContainerGroupProperties{
@@ -331,6 +339,8 @@ func TestCreateContainerGroupWithBadVNetFails(t *testing.T) {
 }
 
 func TestGetContainerGroup(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	cg, _, err := client.GetContainerGroup(context.Background(), resourceGroup, containerGroup)
 	if err != nil {
 		t.Fatal(err)
@@ -353,6 +363,8 @@ func TestListContainerGroup(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithLivenessProbe(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
@@ -444,6 +456,8 @@ func TestCreateContainerGroupFailsWithLivenessProbeMissingPort(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithReadinessProbe(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	cg, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroupName, ContainerGroup{
@@ -496,6 +510,7 @@ func TestCreateContainerGroupWithReadinessProbe(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithLogAnalytics(t *testing.T) {
+	t.Skip("Old custom SDK tests")
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 	if err != nil {
 		t.Fatal(err)
@@ -545,6 +560,7 @@ func TestCreateContainerGroupWithLogAnalytics(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithInvalidLogAnalytics(t *testing.T) {
+	t.Skip("Old custom SDK tests")
 	law := &LogAnalyticsWorkspace{}
 	_, err := client.CreateContainerGroup(context.Background(), resourceGroup, containerGroup, ContainerGroup{
 		Location: location,
@@ -586,6 +602,8 @@ func TestCreateContainerGroupWithInvalidLogAnalytics(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithVNet(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
@@ -785,6 +803,8 @@ func TestCreateContainerGroupWithGPU(t *testing.T) {
 }
 
 func TestDeleteContainerGroup(t *testing.T) {
+	t.Skip("Old custom SDK tests")
+
 	err := client.DeleteContainerGroup(context.Background(), resourceGroup, containerGroup)
 	if err != nil {
 		t.Fatal(err)
