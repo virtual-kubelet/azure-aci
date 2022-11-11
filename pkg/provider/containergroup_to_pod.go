@@ -17,18 +17,21 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
+var (
+	emptyStr = ""
+)
+
+func (p *ACIProvider) containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
+	err := validateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
+
 	_, creationTime, err := getACIResourceMetaFromContainerGroup(cg)
 	if err != nil {
 		return nil, err
 	}
 
-	if cg == nil {
-		return nil, errors.Errorf("container group %s cannot be nil", *cg.Name)
-	}
-	if cg.Containers == nil {
-		return nil, errors.Errorf("containers list cannot be nil for container group %s", *cg.Name)
-	}
 	containers := make([]v1.Container, 0, len(*cg.Containers))
 	containersList := *cg.Containers
 
@@ -64,12 +67,12 @@ func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
 		containers = append(containers, *container)
 	}
 
-	podState, err := getPodStatusFromContainerGroup(cg)
+	podState, err := getPodStatusFromContainerGroup(cg, p.internalIP, p.podQOS)
 	if err != nil {
 		return nil, err
 	}
 
-	p := v1.Pod{
+	pod := v1.Pod{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Pod",
 			APIVersion: "v1",
@@ -89,16 +92,14 @@ func containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
 		Status: *podState,
 	}
 
-	return &p, nil
+	return &pod, nil
 }
 
-func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, error) {
+func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup, hostIP string, podQOS v1.PodQOSClass) (*v1.PodStatus, error) {
+	// cg is validated
 	allReady := true
 	var firstContainerStartTime, lastUpdateTime metav1.Time
 
-	if cg.Containers == nil {
-		return nil, errors.Errorf("containers list cannot be nil for container group %s", *cg.Name)
-	}
 	containerStatuses := make([]v1.ContainerStatus, 0, len(*cg.Containers))
 	containersList := *cg.Containers
 
@@ -135,11 +136,6 @@ func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, er
 		containerStatuses = append(containerStatuses, containerStatus)
 	}
 
-	ip := ""
-	if cg.IPAddress != nil {
-		ip = *cg.IPAddress.IP
-	}
-
 	aciState, creationTime, err := getACIResourceMetaFromContainerGroup(cg)
 	if err != nil {
 		return nil, err
@@ -150,10 +146,11 @@ func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, er
 		Conditions:        getPodConditionsFromACIState(*aciState, creationTime, lastUpdateTime, allReady),
 		Message:           "",
 		Reason:            "",
-		HostIP:            "",
-		PodIP:             ip,
+		HostIP:            hostIP,
+		PodIP:             *cg.IPAddress.IP,
 		StartTime:         &firstContainerStartTime,
 		ContainerStatuses: containerStatuses,
+		QOSClass:          podQOS,
 	}, nil
 }
 
@@ -250,12 +247,7 @@ func getPodConditionsFromACIState(state string, creationTime, lastUpdateTime met
 }
 
 func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, metav1.Time, error) {
-	if cg == nil {
-		return nil, metav1.Now(), errors.Errorf("container group %s cannot be nil", *cg.Name)
-	}
-	if cg.ContainerGroupProperties == nil {
-		return nil, metav1.Now(), errors.Errorf("container group properties %s cannot be nil", *cg.Name)
-	}
+	// cg is validated
 
 	// Use the Provisioning State if it's not Succeeded,
 	// otherwise use the state of the instance.
@@ -266,9 +258,7 @@ func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, me
 
 	var creationTime metav1.Time
 
-	if cg.Tags == nil {
-		return nil, metav1.Now(), errors.Errorf("container group tags %s cannot be nil", *cg.Name)
-	}
+	// cg tags is validated
 	ts := *cg.Tags["CreationTimestamp"]
 
 	if ts != "" {
@@ -282,8 +272,33 @@ func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, me
 	return aciState, creationTime, nil
 }
 
+func validateContainerGroup(cg *azaci.ContainerGroup) error {
+	if cg == nil {
+		return errors.Errorf("container group cannot be nil")
+	}
+	if cg.Name == nil {
+		return errors.Errorf("container group Name cannot be nil")
+	}
+	if cg.ID == nil {
+		return errors.Errorf("container group ID cannot be nil, name: %s", *cg.Name)
+	}
+	if cg.ContainerGroupProperties == nil {
+		return errors.Errorf("container group properties cannot be nil, name: %s", *cg.Name)
+	}
+	if cg.Containers == nil {
+		return errors.Errorf("containers list cannot be nil for container group %s", *cg.Name)
+	}
+	if cg.Tags == nil {
+		return errors.Errorf("tags list cannot be nil for container group %s", *cg.Name)
+	}
+	if cg.IPAddress == nil {
+		return errors.Errorf("IPAddress cannot be nil for container group %s", *cg.Name)
+	}
+	return nil
+}
+
 func validateContainer(container azaci.Container) error {
-	emptyStr := ""
+
 	if container.Name == nil {
 		return errors.Errorf("container name cannot be nil")
 	}

@@ -90,6 +90,7 @@ type ACIProvider struct {
 	vnetResourceGroup  string
 	clusterDomain      string
 	kubeDNSIP          string
+	podQOS             v1.PodQOSClass
 	tracker            *PodsTracker
 
 	*metrics.ACIPodMetricsProvider
@@ -276,6 +277,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	ctx, span := trace.StartSpan(ctx, "aci.CreatePod")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
+	p.podQOS = pod.Status.QOSClass
 
 	cg := &client2.ContainerGroupWrapper{
 		ContainerGroupPropertiesWrapper: &client2.ContainerGroupPropertiesWrapper{
@@ -444,7 +446,7 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	return containerGroupToPod(cg)
+	return p.containerGroupToPod(cg)
 }
 
 // GetContainerLogs returns the logs of a pod by name that is running inside ACI.
@@ -581,7 +583,7 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	return getPodStatusFromContainerGroup(cg)
+	return getPodStatusFromContainerGroup(cg, p.internalIP, p.podQOS)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
@@ -602,7 +604,7 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 			continue
 		}
 
-		p, err := containerGroupToPod(&cg)
+		p, err := p.containerGroupToPod(&cg)
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
 				"name": cg.Name,

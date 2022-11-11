@@ -445,6 +445,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 					"UID":               &podName,
 				},
 				ContainerGroupProperties: &azaci.ContainerGroupProperties{
+					IPAddress:         &azaci.IPAddress{IP: &testsutil.FakeIP},
 					ProvisioningState: &provisioning,
 					Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 				},
@@ -513,6 +514,7 @@ func TestGetPodWithGPU(t *testing.T) {
 				"UID":               &podName,
 			},
 			ContainerGroupProperties: &azaci.ContainerGroupProperties{
+				IPAddress:         &azaci.IPAddress{IP: &testsutil.FakeIP},
 				ProvisioningState: &provisioning,
 				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true),
 			},

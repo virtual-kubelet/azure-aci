@@ -22,19 +22,21 @@ const (
 var (
 	CgCreationTime, _ = time.Parse(TimeLayout, time.Now().String())
 	RestartCount      = int32(0)
+	FakeIP            = "127.0.0.1"
+	TestContainerName = "testContainer"
+	TestImageNginx    = "nginx"
 
 	emptyStr          = ""
 	cgCreationTime, _ = time.Parse(TimeLayout, time.Now().String())
-	fakeIP            = "127.0.0.1"
-	containerName     = "testContainer"
-	cpu               = float64(0.99)
-	memory            = float64(1.5)
-	port              = int32(80)
+
+	cpu    = float64(0.99)
+	memory = float64(1.5)
+	port   = int32(80)
 )
 
 func CreateContainerGroupObj(cgName, cgState string, containers *[]azaci.Container, provisioningState string) *azaci.ContainerGroup {
 	fakeIPAddress := azaci.IPAddress{
-		IP: &fakeIP,
+		IP: &FakeIP,
 	}
 	timeAsString := v1.NewTime(cgCreationTime).String()
 
@@ -62,9 +64,9 @@ func CreateACIContainersListObj(currentState, PrevState string, startTime, finis
 
 func CreateACIContainerObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) *azaci.Container {
 	return &azaci.Container{
-		Name: &containerName,
+		Name: &TestContainerName,
 		ContainerProperties: &azaci.ContainerProperties{
-			Image: &containerName,
+			Image: &TestImageNginx,
 			Ports: &[]azaci.ContainerPort{
 				{
 					Protocol: azaci.ContainerNetworkProtocolTCP,

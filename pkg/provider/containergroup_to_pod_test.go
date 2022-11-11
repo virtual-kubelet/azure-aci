@@ -45,7 +45,7 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			expectedStatus, err := getPodStatusFromContainerGroup(tc.containerGroup)
+			expectedStatus, err := getPodStatusFromContainerGroup(tc.containerGroup, "", "")
 			assert.NilError(t, err, "no errors should be returned")
 			assert.Equal(t, tc.expectedPodPhase, expectedStatus.Phase, "Pod phase is not as expected as current container group phase")
 			assert.Equal(t, len(tc.expectedPodConditions), len(expectedStatus.Conditions), "Pod conditions are not as expected")
