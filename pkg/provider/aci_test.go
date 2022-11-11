@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
+	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 
@@ -25,7 +26,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
@@ -344,29 +344,7 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 		return nil
 	}
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: podNamespace,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
-							"cpu":    resource.MustParse("1.981"),
-							"memory": resource.MustParse("3.49G"),
-						},
-						Limits: v1.ResourceList{
-							"cpu":    resource.MustParse("3999m"),
-							"memory": resource.MustParse("8010M"),
-						},
-					},
-				},
-			},
-		},
-	}
+	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, nil)
 	if err != nil {
@@ -409,10 +387,6 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 		cgName := "default-nginx"
 		node := fakeNodeName
 		provisioning := "Creating"
-		containerName := "nginx"
-		port := int32(80)
-		cpu := float64(0.99)
-		memory := float64(1.5)
 		var cg = azaci.ContainerGroup{
 			Name: &cgName,
 			Tags: map[string]*string{
@@ -425,27 +399,7 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 			},
 			ContainerGroupProperties: &azaci.ContainerGroupProperties{
 				ProvisioningState: &provisioning,
-				Containers: &[]azaci.Container{
-					{
-						Name: &containerName,
-						ContainerProperties: &azaci.ContainerProperties{
-							Image:   &containerName,
-							Command: &[]string{"nginx", "-g", "daemon off;"},
-							Ports: &[]azaci.ContainerPort{
-								{
-									Protocol: azaci.ContainerNetworkProtocolTCP,
-									Port:     &port,
-								},
-							},
-							Resources: &azaci.ResourceRequirements{
-								Requests: &azaci.ResourceRequests{
-									CPU:        &cpu,
-									MemoryInGB: &memory,
-								},
-							},
-						},
-					},
-				},
+				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 			},
 		}
 		var result []azaci.ContainerGroup
@@ -475,10 +429,6 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 
 	node := fakeNodeName
 	provisioning := "Creating"
-	containerName := "nginx"
-	port := int32(80)
-	cpu := float64(0.99)
-	memory := float64(1.5)
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockGetContainerGroupInfo =
@@ -496,35 +446,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 				},
 				ContainerGroupProperties: &azaci.ContainerGroupProperties{
 					ProvisioningState: &provisioning,
-					Containers: &[]azaci.Container{
-						{
-							Name: &containerName,
-							ContainerProperties: &azaci.ContainerProperties{
-								InstanceView: &azaci.ContainerPropertiesInstanceView{
-									CurrentState:  getContainerState("Running", cgCreationTime, cgCreationTime.Add(time.Second*3), 0),
-									RestartCount:  &restartCount,
-									PreviousState: getContainerState("Initializing", cgCreationTime, cgCreationTime.Add(time.Second*1), 0),
-									Events:        &[]azaci.Event{},
-								},
-								Image:   &containerName,
-								Command: &[]string{"nginx", "-g", "daemon off;"},
-								Ports: &[]azaci.ContainerPort{
-									{
-										Protocol: azaci.ContainerNetworkProtocolTCP,
-										Port:     &port,
-									},
-								},
-								Resources: &azaci.ResourceRequirements{
-									Requests: &azaci.ResourceRequests{
-										CPU:        &cpu,
-										MemoryInGB: &memory,
-									},
-								},
-								LivenessProbe:  &azaci.ContainerProbe{},
-								ReadinessProbe: &azaci.ContainerProbe{},
-							},
-						},
-					},
+					Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 				},
 			}, nil
 		}
@@ -541,32 +463,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 			},
 			ContainerGroupProperties: &azaci.ContainerGroupProperties{
 				ProvisioningState: &provisioning,
-				Containers: &[]azaci.Container{
-					{
-						Name: &containerName,
-						ContainerProperties: &azaci.ContainerProperties{
-							Image:   &containerName,
-							Command: &[]string{"nginx", "-g", "daemon off;"},
-							Ports: &[]azaci.ContainerPort{
-								{
-									Protocol: azaci.ContainerNetworkProtocolTCP,
-									Port:     &port,
-								},
-							},
-							Resources: &azaci.ResourceRequirements{
-								Requests: &azaci.ResourceRequests{
-									CPU:        &cpu,
-									MemoryInGB: &memory,
-								},
-							},
-							InstanceView: &azaci.ContainerPropertiesInstanceView{
-								PreviousState: &azaci.ContainerState{
-									State: &stateCreating,
-								},
-							},
-						},
-					},
-				},
+				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 			},
 		}
 		var result []azaci.ContainerGroup
@@ -601,14 +498,8 @@ func TestGetPodWithGPU(t *testing.T) {
 
 	node := fakeNodeName
 	provisioning := "Creating"
-	containerName := "nginx"
-	port := int32(80)
-	cpu := float64(0.99)
-	memory := float64(1.5)
-	count := int32(5)
 
 	aciMocks := createNewACIMock()
-
 	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
 		return &azaci.ContainerGroup{
 			Name: &name,
@@ -623,52 +514,11 @@ func TestGetPodWithGPU(t *testing.T) {
 			},
 			ContainerGroupProperties: &azaci.ContainerGroupProperties{
 				ProvisioningState: &provisioning,
-				Containers: &[]azaci.Container{
-					{
-						Name: &containerName,
-						ContainerProperties: &azaci.ContainerProperties{
-							InstanceView: &azaci.ContainerPropertiesInstanceView{
-								CurrentState:  getContainerState("Running", cgCreationTime, cgCreationTime.Add(time.Second*3), 0),
-								RestartCount:  &restartCount,
-								PreviousState: getContainerState("Initializing", cgCreationTime, cgCreationTime.Add(time.Second*1), 0),
-								Events:        &[]azaci.Event{},
-							},
-							Image:   &containerName,
-							Command: &[]string{"nginx", "-g", "daemon off;"},
-							Ports: &[]azaci.ContainerPort{
-								{
-									Protocol: azaci.ContainerNetworkProtocolTCP,
-									Port:     &port,
-								},
-							},
-							Resources: &azaci.ResourceRequirements{
-								Requests: &azaci.ResourceRequests{
-									CPU:        &cpu,
-									MemoryInGB: &memory,
-									Gpu: &azaci.GpuResource{
-										Count: &count,
-										Sku:   azaci.GpuSkuP100,
-									},
-								},
-								Limits: &azaci.ResourceLimits{
-									CPU:        &cpu,
-									MemoryInGB: &memory,
-									Gpu: &azaci.GpuResource{
-										Count: &count,
-										Sku:   azaci.GpuSkuP100,
-									},
-								},
-							},
-							LivenessProbe:  &azaci.ContainerProbe{},
-							ReadinessProbe: &azaci.ContainerProbe{},
-						},
-					},
-				},
+				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true),
 			},
 		}, nil
 	}
 	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) (*[]azaci.ContainerGroup, error) {
-
 		cg := azaci.ContainerGroup{
 			Tags: map[string]*string{
 				"CreationTimestamp": &creationTime,
@@ -680,39 +530,7 @@ func TestGetPodWithGPU(t *testing.T) {
 			},
 			ContainerGroupProperties: &azaci.ContainerGroupProperties{
 				ProvisioningState: &provisioning,
-				Containers: &[]azaci.Container{
-					{
-						Name: &containerName,
-						ContainerProperties: &azaci.ContainerProperties{
-							Image:   &containerName,
-							Command: &[]string{"nginx", "-g", "daemon off;"},
-							Ports: &[]azaci.ContainerPort{
-								{
-									Protocol: azaci.ContainerNetworkProtocolTCP,
-									Port:     &port,
-								},
-							},
-							Resources: &azaci.ResourceRequirements{
-								Requests: &azaci.ResourceRequests{
-									CPU:        &cpu,
-									MemoryInGB: &memory,
-									Gpu: &azaci.GpuResource{
-										Count: &count,
-										Sku:   azaci.GpuSkuP100,
-									},
-								},
-								Limits: &azaci.ResourceLimits{
-									Gpu: &azaci.GpuResource{
-										Count: &count,
-										Sku:   azaci.GpuSkuP100,
-									},
-								},
-							},
-							LivenessProbe:  &azaci.ContainerProbe{},
-							ReadinessProbe: &azaci.ContainerProbe{},
-						},
-					},
-				},
+				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true),
 			},
 		}
 		var result []azaci.ContainerGroup
@@ -916,38 +734,7 @@ func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 		return nil
 	}
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: podNamespace,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name: "nginx",
-					Ports: []v1.ContainerPort{
-						{
-							Name:          "http",
-							ContainerPort: 8080,
-						},
-					},
-					LivenessProbe: &v1.Probe{
-						Handler: v1.Handler{
-							HTTPGet: &v1.HTTPGetAction{
-								Port: intstr.FromString("http"),
-								Path: "/",
-							},
-						},
-						InitialDelaySeconds: 10,
-						PeriodSeconds:       5,
-						TimeoutSeconds:      60,
-						SuccessThreshold:    3,
-						FailureThreshold:    5,
-					},
-				},
-			},
-		},
-	}
+	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, nil)
 	if err != nil {
@@ -981,32 +768,7 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 		return nil
 	}
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: podNamespace,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name: "nginx",
-					LivenessProbe: &v1.Probe{
-						Handler: v1.Handler{
-							HTTPGet: &v1.HTTPGetAction{
-								Port: intstr.FromInt(8080),
-								Path: "/",
-							},
-						},
-						InitialDelaySeconds: 10,
-						PeriodSeconds:       5,
-						TimeoutSeconds:      60,
-						SuccessThreshold:    3,
-						FailureThreshold:    5,
-					},
-				},
-			},
-		},
-	}
+	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, nil)
 	if err != nil {
@@ -1041,32 +803,7 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 		return nil
 	}
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: podNamespace,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name: "nginx",
-					ReadinessProbe: &v1.Probe{
-						Handler: v1.Handler{
-							HTTPGet: &v1.HTTPGetAction{
-								Port: intstr.FromInt(8080),
-								Path: "/",
-							},
-						},
-						InitialDelaySeconds: 10,
-						PeriodSeconds:       5,
-						TimeoutSeconds:      60,
-						SuccessThreshold:    3,
-						FailureThreshold:    5,
-					},
-				},
-			},
-		},
-	}
+	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, nil)
 	if err != nil {
