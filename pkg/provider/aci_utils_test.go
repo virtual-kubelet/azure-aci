@@ -11,15 +11,25 @@ import (
 	"time"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
+	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
+	v1 "k8s.io/api/core/v1"
 )
 
 func TestGetPodWithContainerID(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	podLister := NewMockPodLister(mockCtrl)
+
+	podLister.EXPECT().List(gomock.Any()).
+		Return([]*v1.Pod{testsutil.CreatePodObj(podName, podNamespace)}, nil)
 
 	err := azConfig.SetAuthConfig()
 	if err != nil {
@@ -54,7 +64,18 @@ func TestGetPodWithContainerID(t *testing.T) {
 		}, nil
 	}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	resourceManager, err := manager.NewResourceManager(
+		podLister,
+		NewMockSecretLister(mockCtrl),
+		NewMockConfigMapLister(mockCtrl),
+		NewMockServiceLister(mockCtrl),
+		NewMockPersistentVolumeClaimLister(mockCtrl),
+		NewMockPersistentVolumeLister(mockCtrl))
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks for resourceManager", err)
+	}
+
+	provider, err := createTestProvider(aciMocks, resourceManager)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}

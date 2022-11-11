@@ -34,6 +34,7 @@ const (
 )
 
 var (
+	gpuSKU       = azaci.GpuSkuP100
 	fakeRegion   = getEnv("LOCATION", "westus2")
 	creationTime = "2006-01-02 15:04:05.999999999 -0700 MST"
 	azConfig     auth.Config
@@ -266,7 +267,6 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-	gpuSKU := azaci.GpuSkuP100
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
@@ -336,8 +336,8 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
 		assert.Check(t, (containers[0]).Resources.Requests != nil, "Container resource requests should not be nil")
-		assert.Check(t, is.Equal(1.98, *(containers[0]).Resources.Requests.CPU), "Request CPU is not expected")
-		assert.Check(t, is.Equal(3.4, *(containers[0]).Resources.Requests.MemoryInGB), "Request Memory is not expected")
+		assert.Check(t, is.Equal(0.99, *(containers[0]).Resources.Requests.CPU), "Request CPU is not expected")
+		assert.Check(t, is.Equal(1.5, *(containers[0]).Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, is.Equal(3.999, *(containers[0]).Resources.Limits.CPU), "Limit CPU is not expected")
 		assert.Check(t, is.Equal(8.0, *(containers[0]).Resources.Limits.MemoryInGB), "Limit Memory is not expected")
 
@@ -426,6 +426,13 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	podLister := NewMockPodLister(mockCtrl)
+
+	podLister.EXPECT().List(gomock.Any()).
+		Return([]*v1.Pod{testsutil.CreatePodObj(podName, podNamespace)}, nil)
 
 	node := fakeNodeName
 	provisioning := "Creating"
@@ -447,7 +454,9 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 				ContainerGroupProperties: &azaci.ContainerGroupProperties{
 					IPAddress:         &azaci.IPAddress{IP: &testsutil.FakeIP},
 					ProvisioningState: &provisioning,
-					Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
+					Containers: testsutil.CreateACIContainersListObj("Running",
+						"Initializing", testsutil.CgCreationTime.Add(time.Second*2),
+						testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 				},
 			}, nil
 		}
@@ -464,7 +473,9 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 			},
 			ContainerGroupProperties: &azaci.ContainerGroupProperties{
 				ProvisioningState: &provisioning,
-				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
+				Containers: testsutil.CreateACIContainersListObj("Running",
+					"Initializing", testsutil.CgCreationTime.Add(time.Second*2),
+					testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 			},
 		}
 		var result []azaci.ContainerGroup
@@ -472,7 +483,18 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 		return &result, nil
 	}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	resourceManager, err := manager.NewResourceManager(
+		podLister,
+		NewMockSecretLister(mockCtrl),
+		NewMockConfigMapLister(mockCtrl),
+		NewMockServiceLister(mockCtrl),
+		NewMockPersistentVolumeClaimLister(mockCtrl),
+		NewMockPersistentVolumeLister(mockCtrl))
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks for resourceManager", err)
+	}
+
+	provider, err := createTestProvider(aciMocks, resourceManager)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -482,98 +504,8 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 		t.Fatal("Failed to get pod", err)
 	}
 
-	assert.Check(t, pod != nil, "Response pod should not be nil")
-	assert.Check(t, pod.Spec.Containers != nil, "Containers should not be nil")
-	assert.Check(t, is.Nil(pod.Spec.Containers[0].Resources.Limits), "Containers[0].Resources.Limits should be nil")
-	assert.Check(t, pod.Spec.Containers[0].Resources.Requests != nil, "Containers[0].Resources.Requests should be nil")
-	assert.Check(t, is.Equal(ptrQuantity(resource.MustParse("0.99")).Value(),
-		pod.Spec.Containers[0].Resources.Requests.Cpu().Value()), "Containers[0].Resources.Requests.CPU doesn't match")
-	assert.Check(t, is.Equal(ptrQuantity(resource.MustParse("1.5G")).Value(),
-		pod.Spec.Containers[0].Resources.Requests.Memory().Value()), "Containers[0].Resources.Requests.Memory doesn't match")
-}
-
-// Tests get pod with GPU.
-func TestGetPodWithGPU(t *testing.T) {
-	podName := "pod-" + uuid.New().String()
-	podNamespace := "ns-" + uuid.New().String()
-
-	node := fakeNodeName
-	provisioning := "Creating"
-
-	aciMocks := createNewACIMock()
-	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
-		return &azaci.ContainerGroup{
-			Name: &name,
-			ID:   &name,
-			Tags: map[string]*string{
-				"CreationTimestamp": &creationTime,
-				"PodName":           &podName,
-				"Namespace":         &podNamespace,
-				"ClusterName":       &node,
-				"NodeName":          &node,
-				"UID":               &podName,
-			},
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{
-				IPAddress:         &azaci.IPAddress{IP: &testsutil.FakeIP},
-				ProvisioningState: &provisioning,
-				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true),
-			},
-		}, nil
-	}
-	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) (*[]azaci.ContainerGroup, error) {
-		cg := azaci.ContainerGroup{
-			Tags: map[string]*string{
-				"CreationTimestamp": &creationTime,
-				"PodName":           &podName,
-				"Namespace":         &podNamespace,
-				"ClusterName":       &node,
-				"NodeName":          &node,
-				"UID":               &podName,
-			},
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{
-				ProvisioningState: &provisioning,
-				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true),
-			},
-		}
-		var result []azaci.ContainerGroup
-		result = append(result, cg)
-		return &result, nil
-	}
-
-	provider, err := createTestProvider(aciMocks, nil)
-	if err != nil {
-		t.Fatal("failed to create the test provider", err)
-	}
-
-	pod, err := provider.GetPod(context.Background(), podNamespace, podName)
-	if err != nil {
-		t.Fatal("Failed to get pod", err)
-	}
-
-	assert.Check(t, pod != nil, "Response pod should not be nil")
-	assert.Check(t, pod.Spec.Containers != nil, "Containers should not be nil")
-	assert.Check(t, pod.Spec.Containers[0].Resources.Requests != nil, "Containers[0].Resources.Requests should not be nil")
-	assert.Check(
-		t,
-		is.Equal(ptrQuantity(resource.MustParse("0.99")).Value(), pod.Spec.Containers[0].Resources.Requests.Cpu().Value()),
-		"Containers[0].Resources.Requests.CPU doesn't match")
-	assert.Check(
-		t,
-		is.Equal(ptrQuantity(resource.MustParse("1.5G")).Value(), pod.Spec.Containers[0].Resources.Requests.Memory().Value()),
-		"Containers[0].Resources.Requests.Memory doesn't match")
-	gpuQuantity, ok := pod.Spec.Containers[0].Resources.Requests[gpuResourceName]
-	assert.Check(t, is.Equal(ok, true), "Containers[0].Resources.Requests.GPU should not be nil")
-	assert.Check(
-		t,
-		is.Equal(ptrQuantity(resource.MustParse("5")).Value(), ptrQuantity(gpuQuantity).Value()),
-		"Containers[0].Resources.Requests.GPU.Count doesn't match")
-	assert.Check(t, pod.Spec.Containers[0].Resources.Limits != nil, "Containers[0].Resources.Limits should not be nil")
-	gpuQuantity, ok = pod.Spec.Containers[0].Resources.Limits[gpuResourceName]
-	assert.Check(t, is.Equal(ok, true), "Containers[0].Resources.Requests.GPU should not be nil")
-	assert.Check(
-		t,
-		is.Equal(ptrQuantity(resource.MustParse("5")).Value(), ptrQuantity(gpuQuantity).Value()),
-		"Containers[0].Resources.Limits.GPU.Count doesn't match")
+	assert.Equal(t, ptrQuantity(resource.MustParse("0.99")).Value(), pod.Spec.Containers[0].Resources.Requests.Cpu().Value(), "Containers[0].Resources.Requests.CPU doesn't match")
+	assert.Equal(t, ptrQuantity(resource.MustParse("1.5G")).Value(), pod.Spec.Containers[0].Resources.Requests.Memory().Value(), "Containers[0].Resources.Requests.Memory doesn't match")
 }
 
 func TestPodToACISecretEnvVar(t *testing.T) {

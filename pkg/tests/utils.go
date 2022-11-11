@@ -11,7 +11,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/date"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -25,13 +25,14 @@ var (
 	FakeIP            = "127.0.0.1"
 	TestContainerName = "testContainer"
 	TestImageNginx    = "nginx"
+	testGPUCount      = int32(5)
 
 	emptyStr          = ""
 	cgCreationTime, _ = time.Parse(TimeLayout, time.Now().String())
 
-	cpu    = float64(0.99)
-	memory = float64(1.5)
-	port   = int32(80)
+	testCPU    = float64(0.99)
+	testMemory = float64(1.5)
+	port       = int32(80)
 )
 
 func CreateContainerGroupObj(cgName, cgState string, containers *[]azaci.Container, provisioningState string) *azaci.ContainerGroup {
@@ -91,8 +92,8 @@ func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaci.Resou
 	if hasResources {
 		return &azaci.ResourceRequirements{
 			Requests: &azaci.ResourceRequests{
-				CPU:        &cpu,
-				MemoryInGB: &memory,
+				CPU:        &testCPU,
+				MemoryInGB: &testMemory,
 				Gpu:        CreateGPUResource(hasGPU),
 			},
 			Limits: CreateResourceLimits(hasLimits, hasGPU),
@@ -104,8 +105,8 @@ func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaci.Resou
 func CreateResourceLimits(hasLimits, hasGPU bool) *azaci.ResourceLimits {
 	if hasLimits {
 		return &azaci.ResourceLimits{
-			CPU:        &cpu,
-			MemoryInGB: &memory,
+			CPU:        &testCPU,
+			MemoryInGB: &testMemory,
 			Gpu:        CreateGPUResource(hasGPU),
 		}
 	}
@@ -113,10 +114,9 @@ func CreateResourceLimits(hasLimits, hasGPU bool) *azaci.ResourceLimits {
 }
 
 func CreateGPUResource(hasGPU bool) *azaci.GpuResource {
-	count := int32(5)
 	if hasGPU {
 		return &azaci.GpuResource{
-			Count: &count,
+			Count: &testGPUCount,
 			Sku:   azaci.GpuSkuP100,
 		}
 	}
@@ -173,8 +173,8 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 					},
 					Resources: v12.ResourceRequirements{
 						Requests: v12.ResourceList{
-							"cpu":    resource.MustParse("1.981"),
-							"memory": resource.MustParse("3.49G"),
+							"cpu":    resource.MustParse("0.99"),
+							"memory": resource.MustParse("1.5G"),
 						},
 						Limits: v12.ResourceList{
 							"cpu":    resource.MustParse("3999m"),

@@ -90,7 +90,6 @@ type ACIProvider struct {
 	vnetResourceGroup  string
 	clusterDomain      string
 	kubeDNSIP          string
-	podQOS             v1.PodQOSClass
 	tracker            *PodsTracker
 
 	*metrics.ACIPodMetricsProvider
@@ -277,7 +276,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	ctx, span := trace.StartSpan(ctx, "aci.CreatePod")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
-	p.podQOS = pod.Status.QOSClass
 
 	cg := &client2.ContainerGroupWrapper{
 		ContainerGroupPropertiesWrapper: &client2.ContainerGroupPropertiesWrapper{
@@ -402,7 +400,7 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 
 	if p.tracker != nil {
 		// Delete is not a sync API on ACI yet, but will assume with current implementation that termination is completed. Also, till gracePeriod is supported.
-		updateErr := p.tracker.UpdatePodStatus(
+		updateErr := p.tracker.UpdatePodStatus(ctx,
 			podNS,
 			podName,
 			func(podStatus *v1.PodStatus) {
@@ -446,6 +444,10 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
+	validateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
 	return p.containerGroupToPod(cg)
 }
 
@@ -583,7 +585,11 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	return getPodStatusFromContainerGroup(cg, p.internalIP, p.podQOS)
+	err = validateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
+	return p.getPodStatusFromContainerGroup(cg)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
@@ -597,23 +603,32 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 		return nil, err
 	}
 
+	if cgs == nil {
+		log.G(ctx).Infof("no container groups found for resource group %s", p.resourceGroup)
+		return nil, nil
+	}
 	pods := make([]*v1.Pod, 0, len(*cgs))
 
-	for _, cg := range *cgs {
-		if cg.Tags["NodeName"] != &p.nodeName {
+	for cgIndex := range *cgs {
+		validateContainerGroup(&(*cgs)[cgIndex])
+		if err != nil {
+			return nil, err
+		}
+
+		if (*cgs)[cgIndex].Tags["NodeName"] != &p.nodeName {
 			continue
 		}
 
-		p, err := p.containerGroupToPod(&cg)
+		pod, err := p.containerGroupToPod(&(*cgs)[cgIndex])
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
-				"name": cg.Name,
-				"id":   cg.ID,
-			}).WithError(err).Error("error converting container group to pod")
+				"name": (*cgs)[cgIndex].Name,
+				"id":   (*cgs)[cgIndex].ID,
+			}).WithError(err).Errorf("error converting container group %s to pod", (*cgs)[cgIndex].Name)
 
 			continue
 		}
-		pods = append(pods, p)
+		pods = append(pods, pod)
 	}
 
 	return pods, nil
@@ -639,12 +654,9 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 // ListActivePods interface impl.
 func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, error) {
-	providerPods, err := p.GetPods(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+	providerPods := p.resourceManager.GetPods()
 	podsIdentifiers := make([]PodIdentifier, 0, len(providerPods))
+
 	for _, pod := range providerPods {
 		podsIdentifiers = append(
 			podsIdentifiers,
