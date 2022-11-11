@@ -9,7 +9,6 @@ import (
 	"time"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	"github.com/Azure/go-autorest/autorest/date"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -108,38 +107,33 @@ func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, er
 		return nil, errors.Errorf("containers list cannot be nil for container group %s", *cg.Name)
 	}
 	containerStatuses := make([]v1.ContainerStatus, 0, len(*cg.Containers))
+	containersList := *cg.Containers
 
-	firstContainerStartTime := metav1.NewTime((*cg.Containers)[0].InstanceView.CurrentState.StartTime.Time)
+	firstContainerStartTime := metav1.NewTime(containersList[0].InstanceView.CurrentState.StartTime.Time)
 	lastUpdateTime := firstContainerStartTime
-	for i := range *cg.Containers {
-		var prevState *azaci.ContainerState
-		prevState = (*cg.Containers)[i].InstanceView.PreviousState
-		if prevState == nil {
-			prevState = &azaci.ContainerState{
-				State: &stateCreating,
-				StartTime: &date.Time{
-					Time: time.Now(),
-				},
-				DetailStatus: &emptyStr,
-			}
-		}
-		containerStatus := v1.ContainerStatus{
-			Name:                 *(*cg.Containers)[i].Name,
-			State:                aciContainerStateToContainerState(*(*cg.Containers)[i].InstanceView.CurrentState),
-			LastTerminationState: aciContainerStateToContainerState(*prevState),
-			Ready:                getPodPhaseFromACIState(*(*cg.Containers)[i].InstanceView.CurrentState.State) == v1.PodRunning,
-			RestartCount:         *(*cg.Containers)[i].InstanceView.RestartCount,
-			Image:                *(*cg.Containers)[i].Image,
-			ImageID:              "",
-			ContainerID:          getContainerID(*cg.ID, *(*cg.Containers)[i].Name),
+	for i := range containersList {
+		err := validateContainer(containersList[i])
+		if err != nil {
+			return nil, err
 		}
 
-		if getPodPhaseFromACIState(*(*cg.Containers)[i].InstanceView.CurrentState.State) != v1.PodRunning &&
-			getPodPhaseFromACIState(*(*cg.Containers)[i].InstanceView.CurrentState.State) != v1.PodSucceeded {
+		containerStatus := v1.ContainerStatus{
+			Name:                 *containersList[i].Name,
+			State:                aciContainerStateToContainerState(containersList[i].InstanceView.CurrentState),
+			LastTerminationState: aciContainerStateToContainerState(containersList[i].InstanceView.PreviousState),
+			Ready:                getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) == v1.PodRunning,
+			RestartCount:         *containersList[i].InstanceView.RestartCount,
+			Image:                *containersList[i].Image,
+			ImageID:              "",
+			ContainerID:          getContainerID(cg.ID, containersList[i].Name),
+		}
+
+		if getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) != v1.PodRunning &&
+			getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) != v1.PodSucceeded {
 			allReady = false
 		}
 
-		containerStartTime := metav1.NewTime((*cg.Containers)[i].ContainerProperties.InstanceView.CurrentState.StartTime.Time)
+		containerStartTime := metav1.NewTime(containersList[i].ContainerProperties.InstanceView.CurrentState.StartTime.Time)
 		if containerStartTime.Time.After(lastUpdateTime.Time) {
 			lastUpdateTime = containerStartTime
 		}
@@ -170,20 +164,18 @@ func getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, er
 	}, nil
 }
 
-func aciContainerStateToContainerState(cs azaci.ContainerState) v1.ContainerState {
+func aciContainerStateToContainerState(cs *azaci.ContainerState) v1.ContainerState {
 	startTime := metav1.NewTime(cs.StartTime.Time)
-	state := *cs.State
-	// Handle the case where the container is running.
-	if state == "Running" {
+
+	switch *cs.State {
+	case "Running":
 		return v1.ContainerState{
 			Running: &v1.ContainerStateRunning{
 				StartedAt: startTime,
 			},
 		}
-	}
-
 	// Handle the case of completion.
-	if state == "Succeeded" {
+	case "Succeeded":
 		return v1.ContainerState{
 			Terminated: &v1.ContainerStateTerminated{
 				StartedAt:  startTime,
@@ -191,10 +183,8 @@ func aciContainerStateToContainerState(cs azaci.ContainerState) v1.ContainerStat
 				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
 			},
 		}
-	}
-
 	// Handle the case where the container failed.
-	if state == "Failed" || state == "Canceled" {
+	case "Failed", "Canceled":
 		return v1.ContainerState{
 			Terminated: &v1.ContainerStateTerminated{
 				ExitCode:   *cs.ExitCode,
@@ -204,15 +194,15 @@ func aciContainerStateToContainerState(cs azaci.ContainerState) v1.ContainerStat
 				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
 			},
 		}
-	}
-
-	// Handle the case where the container is pending.
-	// Which should be all other aci states.
-	return v1.ContainerState{
-		Waiting: &v1.ContainerStateWaiting{
-			Reason:  state,
-			Message: *cs.DetailStatus,
-		},
+	default:
+		// Handle the case where the container is pending.
+		// Which should be all other aci states.
+		return v1.ContainerState{
+			Waiting: &v1.ContainerStateWaiting{
+				Reason:  *cs.State,
+				Message: *cs.DetailStatus,
+			},
+		}
 	}
 }
 
@@ -299,4 +289,48 @@ func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, me
 	}
 
 	return aciState, creationTime, nil
+}
+
+func validateContainer(container azaci.Container) error {
+	if container.Name == nil {
+		return errors.Errorf("container name cannot be nil")
+	}
+	if container.ContainerProperties == nil {
+		return errors.Errorf("container %s properties cannot be nil", *container.Name)
+	}
+	if container.InstanceView == nil {
+		return errors.Errorf("container %s properties InstanceView cannot be nil", *container.Name)
+	}
+	if container.InstanceView.CurrentState == nil {
+		return errors.Errorf("container %s properties CurrentState cannot be nil", *container.Name)
+	}
+	if container.InstanceView.CurrentState.State == nil {
+		return errors.Errorf("container %s properties CurrentState state cannot be nil", *container.Name)
+	}
+	if container.InstanceView.CurrentState.StartTime == nil {
+		return errors.Errorf("container %s properties CurrentState startTime cannot be nil", *container.Name)
+	}
+	if container.InstanceView.PreviousState == nil {
+		return errors.Errorf("container %s properties PreviousState cannot be nil", *container.Name)
+	}
+	if container.InstanceView.RestartCount == nil {
+		return errors.Errorf("container %s properties RestartCount cannot be nil", *container.Name)
+	}
+	if container.InstanceView.Events == nil {
+		return errors.Errorf("container %s properties Events cannot be nil", *container.Name)
+	}
+	if container.Ports == nil {
+		return errors.Errorf("container %s Ports cannot be nil", *container.Name)
+	}
+	if container.Image == nil {
+		return errors.Errorf("container %s Image cannot be nil", *container.Name)
+	}
+	if container.LivenessProbe == nil {
+		return errors.Errorf("container %s LivenessProbe cannot be nil", *container.Name)
+	}
+	if container.ReadinessProbe == nil {
+		return errors.Errorf("container %s ReadinessProbe cannot be nil", *container.Name)
+	}
+
+	return nil
 }

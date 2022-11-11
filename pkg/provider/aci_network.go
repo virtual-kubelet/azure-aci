@@ -288,3 +288,12 @@ func formDNSSearchFitsLimits(ctx context.Context, searches []string) string {
 
 	return strings.Join(searches, " ")
 }
+
+func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
+	switch pro {
+	case v1.ProtocolUDP:
+		return azaci.ContainerNetworkProtocolUDP
+	default:
+		return azaci.ContainerNetworkProtocolTCP
+	}
+}

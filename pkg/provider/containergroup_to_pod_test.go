@@ -24,8 +24,8 @@ var (
 )
 
 func TestContainerGroupToPodStatus(t *testing.T) {
-	startTime := metav1.NewTime(cgCreationTime.Add(time.Second * 3))
-	finishTime := metav1.NewTime(startTime.Add(time.Second * 3))
+	startTime := cgCreationTime.Add(time.Second * 3)
+	finishTime := startTime.Add(time.Second * 3)
 
 	cases := []struct {
 		description           string
@@ -40,16 +40,20 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 					Name: &containerName,
 					ContainerProperties: &azaci.ContainerProperties{
 						Image: &containerName,
+						Ports: &[]azaci.ContainerPort{},
 						InstanceView: &azaci.ContainerPropertiesInstanceView{
 							CurrentState:  getContainerState("Succeeded", startTime, finishTime, 0),
-							PreviousState: getContainerState("Running", metav1.NewTime(cgCreationTime), startTime, 0),
+							PreviousState: getContainerState("Running", cgCreationTime, startTime, 0),
 							RestartCount:  &restartCount,
+							Events:        &[]azaci.Event{},
 						},
+						LivenessProbe:  &azaci.ContainerProbe{},
+						ReadinessProbe: &azaci.ContainerProbe{},
 					},
 				},
 			}, "Succeeded"),
 			expectedPodPhase:      getPodPhaseFromACIState("Succeeded"),
-			expectedPodConditions: getPodConditions(metav1.NewTime(cgCreationTime), finishTime, v1.ConditionTrue),
+			expectedPodConditions: getPodConditions(metav1.NewTime(cgCreationTime), metav1.NewTime(finishTime), v1.ConditionTrue),
 		},
 		{
 			description: "Container Failed",
@@ -58,11 +62,15 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 					Name: &containerName,
 					ContainerProperties: &azaci.ContainerProperties{
 						Image: &containerName,
+						Ports: &[]azaci.ContainerPort{},
 						InstanceView: &azaci.ContainerPropertiesInstanceView{
 							CurrentState:  getContainerState("Failed", startTime, finishTime, 0),
 							PreviousState: getContainerState("Running", startTime, finishTime, 400),
 							RestartCount:  &restartCount,
+							Events:        &[]azaci.Event{},
 						},
+						LivenessProbe:  &azaci.ContainerProbe{},
+						ReadinessProbe: &azaci.ContainerProbe{},
 					},
 				},
 			}, "Succeeded"),
@@ -103,12 +111,16 @@ func getContainerGroup(cgName, cgState string, containers *[]azaci.Container, pr
 	}
 }
 
-func getContainerState(state string, startTime, finishTime metav1.Time, exitCode int32) *azaci.ContainerState {
+func getContainerState(state string, startTime, finishTime time.Time, exitCode int32) *azaci.ContainerState {
 	return &azaci.ContainerState{
-		State:        &state,
-		StartTime:    (*date.Time)(&startTime),
-		ExitCode:     &exitCode,
-		FinishTime:   (*date.Time)(&finishTime),
+		State: &state,
+		StartTime: &date.Time{
+			Time: startTime,
+		},
+		ExitCode: &exitCode,
+		FinishTime: &date.Time{
+			Time: finishTime,
+		},
 		DetailStatus: &emptyStr,
 	}
 }

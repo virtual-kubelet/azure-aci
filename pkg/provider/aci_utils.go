@@ -11,12 +11,12 @@ import (
 	"strings"
 )
 
-func getContainerID(cgID, containerName string) string {
-	if cgID == "" {
+func getContainerID(cgID, containerName *string) string {
+	if cgID == nil {
 		return ""
 	}
 
-	containerResourceID := fmt.Sprintf("%s/containers/%s", cgID, containerName)
+	containerResourceID := fmt.Sprintf("%s/containers/%s", *cgID, *containerName)
 
 	h := sha256.New()
 	if _, err := h.Write([]byte(strings.ToUpper(containerResourceID))); err != nil {

@@ -501,8 +501,10 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 							Name: &containerName,
 							ContainerProperties: &azaci.ContainerProperties{
 								InstanceView: &azaci.ContainerPropertiesInstanceView{
-									CurrentState: getContainerState("Running", metav1.NewTime(cgCreationTime), metav1.NewTime(cgCreationTime.Add(time.Second*3)), 0),
-									RestartCount: &restartCount,
+									CurrentState:  getContainerState("Running", cgCreationTime, cgCreationTime.Add(time.Second*3), 0),
+									RestartCount:  &restartCount,
+									PreviousState: getContainerState("Initializing", cgCreationTime, cgCreationTime.Add(time.Second*1), 0),
+									Events:        &[]azaci.Event{},
 								},
 								Image:   &containerName,
 								Command: &[]string{"nginx", "-g", "daemon off;"},
@@ -518,6 +520,8 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 										MemoryInGB: &memory,
 									},
 								},
+								LivenessProbe:  &azaci.ContainerProbe{},
+								ReadinessProbe: &azaci.ContainerProbe{},
 							},
 						},
 					},
@@ -553,6 +557,11 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 								Requests: &azaci.ResourceRequests{
 									CPU:        &cpu,
 									MemoryInGB: &memory,
+								},
+							},
+							InstanceView: &azaci.ContainerPropertiesInstanceView{
+								PreviousState: &azaci.ContainerState{
+									State: &stateCreating,
 								},
 							},
 						},
@@ -619,8 +628,10 @@ func TestGetPodWithGPU(t *testing.T) {
 						Name: &containerName,
 						ContainerProperties: &azaci.ContainerProperties{
 							InstanceView: &azaci.ContainerPropertiesInstanceView{
-								CurrentState: getContainerState("Running", metav1.NewTime(cgCreationTime), metav1.NewTime(cgCreationTime.Add(time.Second*3)), 0),
-								RestartCount: &restartCount,
+								CurrentState:  getContainerState("Running", cgCreationTime, cgCreationTime.Add(time.Second*3), 0),
+								RestartCount:  &restartCount,
+								PreviousState: getContainerState("Initializing", cgCreationTime, cgCreationTime.Add(time.Second*1), 0),
+								Events:        &[]azaci.Event{},
 							},
 							Image:   &containerName,
 							Command: &[]string{"nginx", "-g", "daemon off;"},
@@ -648,6 +659,8 @@ func TestGetPodWithGPU(t *testing.T) {
 									},
 								},
 							},
+							LivenessProbe:  &azaci.ContainerProbe{},
+							ReadinessProbe: &azaci.ContainerProbe{},
 						},
 					},
 				},
@@ -695,6 +708,8 @@ func TestGetPodWithGPU(t *testing.T) {
 									},
 								},
 							},
+							LivenessProbe:  &azaci.ContainerProbe{},
+							ReadinessProbe: &azaci.ContainerProbe{},
 						},
 					},
 				},

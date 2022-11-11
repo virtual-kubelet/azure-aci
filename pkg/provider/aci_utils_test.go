@@ -76,6 +76,7 @@ func TestGetPodWithContainerID(t *testing.T) {
 									DetailStatus: &podName,
 								},
 								RestartCount: &count,
+								Events:       &[]azaci.Event{},
 							},
 							Image:   &containerImage,
 							Command: &[]string{"nginx", "-g", "daemon off;"},
@@ -95,6 +96,8 @@ func TestGetPodWithContainerID(t *testing.T) {
 									},
 								},
 							},
+							LivenessProbe:  &azaci.ContainerProbe{},
+							ReadinessProbe: &azaci.ContainerProbe{},
 						},
 					},
 				},
@@ -116,5 +119,5 @@ func TestGetPodWithContainerID(t *testing.T) {
 	assert.Check(t, is.Equal(1, len(pod.Status.ContainerStatuses)), "1 container status is expected")
 	assert.Check(t, is.Equal(containerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
 	assert.Check(t, is.Equal(containerImage, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
-	assert.Check(t, is.Equal(getContainerID(cgID, containerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
+	assert.Check(t, is.Equal(getContainerID(&cgID, &containerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
 }

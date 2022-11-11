@@ -1014,15 +1014,6 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe,
 	}, nil
 }
 
-func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
-	switch pro {
-	case v1.ProtocolUDP:
-		return azaci.ContainerNetworkProtocolUDP
-	default:
-		return azaci.ContainerNetworkProtocolTCP
-	}
-}
-
 // Filters service account secret volume for Windows.
 // Service account secret volume gets automatically turned on if not specified otherwise.
 // ACI doesn't support secret volume for Windows, so we need to filter it.
