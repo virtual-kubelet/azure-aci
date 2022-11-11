@@ -30,7 +30,6 @@ var (
 	location                 = "eastus2euap"
 	resourceGroup            = "virtual-node-test-rg"
 	containerGroup           = "virtual-kubelet-test-container-group"
-	virtualNetwork           = "virtual-kubelet-tests-vnet"
 	subscriptionID           string
 	testUserIdentityClientId = "d1464cac-2a02-4e77-a1e3-c6a9220e99b9"
 )
@@ -604,6 +603,7 @@ func TestCreateContainerGroupWithInvalidLogAnalytics(t *testing.T) {
 func TestCreateContainerGroupWithVNet(t *testing.T) {
 	t.Skip("Old custom SDK tests")
 
+	virtualNetwork := "virtual-kubelet-tests-vnet"
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 	fakeKubeConfig := base64.StdEncoding.EncodeToString([]byte(uid.String()))
