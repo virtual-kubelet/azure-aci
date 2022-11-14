@@ -24,7 +24,7 @@ func (p *ACIProvider) containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, er
 	podList := p.resourceManager.GetPods()
 	for i := range podList {
 		if podList[i].Name == *cg.Name && podList[i].Namespace == *cg.Tags["Namespace"] {
-			pod = *podList[i]
+			pod = *podList[i].DeepCopy()
 		}
 	}
 
