@@ -20,22 +20,21 @@ var (
 
 func (p *ACIProvider) containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
 	//cg is validated
-	var pod *v1.Pod
 	pod, err := p.resourceManager.GetPod(*cg.Name, *cg.Tags["Namespace"])
 	if err != nil {
 		return nil, err
 	}
 
-	pod.DeepCopy()
+	updatedPod := pod.DeepCopy()
 
 	podState, err := p.getPodStatusFromContainerGroup(cg)
 	if err != nil {
 		return nil, err
 	}
 
-	pod.Status = *podState
+	updatedPod.Status = *podState
 
-	return pod, nil
+	return updatedPod, nil
 }
 
 func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, error) {
