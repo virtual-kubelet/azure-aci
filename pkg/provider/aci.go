@@ -381,8 +381,12 @@ func (p *ACIProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	ctx = addAzureAttributes(ctx, span, p)
 
 	log.G(ctx).Infof("start deleting pod %v", pod.Name)
-	// TODO: Run in a go routine to not block workers.
-	return p.deleteContainerGroup(ctx, pod.Namespace, pod.Name)
+	var err error
+	go func() error {
+		err = p.deleteContainerGroup(ctx, pod.Namespace, pod.Name)
+		return err
+	}()
+	return err
 }
 
 func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName string) error {

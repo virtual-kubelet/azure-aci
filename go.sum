@@ -462,8 +462,8 @@ github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1
 github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGrc=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/vektah/gqlparser v1.1.2/go.mod h1:1ycwN7Ij5njmMkPPAOaRFY4rET2Enx7IkVv3vaXspKw=
-github.com/virtual-kubelet/node-cli v0.7.0 h1:a04KMO8dnf8TnAaOkaCWwnaSLYzTLMNmuClhY04fxa4=
-github.com/virtual-kubelet/node-cli v0.7.0/go.mod h1:kT/vPiu2h9peA/wbaTfbH3F2Eo/Rv3xXe0ZO+s0gXFY=
+github.com/virtual-kubelet/node-cli v0.8.0 h1:7pNBPn6nI7Ea/IoshwVBj0dH+31SejIkuTQfMXB5GLM=
+github.com/virtual-kubelet/node-cli v0.8.0/go.mod h1:kT/vPiu2h9peA/wbaTfbH3F2Eo/Rv3xXe0ZO+s0gXFY=
 github.com/virtual-kubelet/virtual-kubelet v1.6.0 h1:BJAsHB3ItrXVhzQszWiIqmwVkuxrtu4f0Xz5hjMPR7c=
 github.com/virtual-kubelet/virtual-kubelet v1.6.0/go.mod h1:Uf0+/KqEDz5Tz6TNQSok5B4A+guFZV6cs4JohQTHdEQ=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
