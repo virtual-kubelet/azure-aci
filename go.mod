@@ -22,7 +22,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
 	github.com/thoas/go-funk v0.9.1
-	github.com/virtual-kubelet/node-cli v0.7.0
+	github.com/virtual-kubelet/node-cli v0.8.0
 	github.com/virtual-kubelet/virtual-kubelet v1.6.0
 	go.opencensus.io v0.22.2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c

@@ -14,12 +14,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
+	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var (
@@ -143,32 +143,7 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			mockSecretLister := NewMockSecretLister(mockCtrl)
 
-			pod := &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      podName,
-					Namespace: podNamespace,
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							Name: "nginx",
-							ReadinessProbe: &v1.Probe{
-								Handler: v1.Handler{
-									HTTPGet: &v1.HTTPGetAction{
-										Port: intstr.FromInt(8080),
-										Path: "/",
-									},
-								},
-								InitialDelaySeconds: 10,
-								PeriodSeconds:       5,
-								TimeoutSeconds:      60,
-								SuccessThreshold:    3,
-								FailureThreshold:    5,
-							},
-						},
-					},
-				},
-			}
+			pod := testsutil.CreatePodObj(podName, podNamespace)
 
 			pod.Spec.Containers[0].VolumeMounts = fakeVolumeMount
 
@@ -307,72 +282,9 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		MountPath: "/mnt/azure1",
 	}
 
-	fakeVolumes := []v1.Volume{
-		{
-			Name: emptyVolumeName,
-			VolumeSource: v1.VolumeSource{
-				EmptyDir: &v1.EmptyDirVolumeSource{},
-			},
-		},
-		{
-			Name: azureFileVolumeName,
-			VolumeSource: v1.VolumeSource{
-				AzureFile: &v1.AzureFileVolumeSource{
-					ShareName:  fakeShareName1,
-					SecretName: fakeSecretName,
-					ReadOnly:   true,
-				},
-			},
-		}, {
-			Name: projectedVolumeName,
-			VolumeSource: v1.VolumeSource{
-				Projected: &v1.ProjectedVolumeSource{
-					Sources: []v1.VolumeProjection{
-						{
-							ConfigMap: &v1.ConfigMapProjection{
-								LocalObjectReference: v1.LocalObjectReference{
-									Name: "kube-root-ca.crt",
-								},
-								Items: []v1.KeyToPath{
-									{
-										Key:  "ca.crt",
-										Path: "ca.crt",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	fakeVolumes := testsutil.CreatePodVolumeObj(azureFileVolumeName, fakeSecretName, projectedVolumeName)
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: podNamespace,
-		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
-				{
-					Name: "nginx",
-					ReadinessProbe: &v1.Probe{
-						Handler: v1.Handler{
-							HTTPGet: &v1.HTTPGetAction{
-								Port: intstr.FromInt(8080),
-								Path: "/",
-							},
-						},
-						InitialDelaySeconds: 10,
-						PeriodSeconds:       5,
-						TimeoutSeconds:      60,
-						SuccessThreshold:    3,
-						FailureThreshold:    5,
-					},
-				},
-			},
-		},
-	}
+	pod := testsutil.CreatePodObj(podName, podNamespace)
 	pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)
 
 	for _, volume := range fakeVolumes {
@@ -547,33 +459,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			mockSecretLister := NewMockSecretLister(mockCtrl)
 
-			pod := &v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      podName,
-					Namespace: podNamespace,
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{
-						{
-							Name: "nginx",
-							ReadinessProbe: &v1.Probe{
-								Handler: v1.Handler{
-									HTTPGet: &v1.HTTPGetAction{
-										Port: intstr.FromInt(8080),
-										Path: "/",
-									},
-								},
-								InitialDelaySeconds: 10,
-								PeriodSeconds:       5,
-								TimeoutSeconds:      60,
-								SuccessThreshold:    3,
-								FailureThreshold:    5,
-							},
-						},
-					},
-				},
-			}
-
+			pod := testsutil.CreatePodObj(podName, podNamespace)
 			tc.callSecretMocks(mockSecretLister)
 
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)

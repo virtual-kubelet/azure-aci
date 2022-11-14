@@ -67,7 +67,7 @@ func (pt *PodsTracker) StartTracking(ctx context.Context) {
 }
 
 // UpdatePodStatus updates the status of a pod, by posting to update callback.
-func (pt *PodsTracker) UpdatePodStatus(ns, name string, updateHandler func(*v1.PodStatus), forceUpdate bool) error {
+func (pt *PodsTracker) UpdatePodStatus(ctx context.Context, ns, name string, updateHandler func(*v1.PodStatus), forceUpdate bool) error {
 	k8sPods := pt.rm.GetPods()
 	pod := getPodFromList(k8sPods, ns, name)
 
