@@ -36,13 +36,13 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	}{
 		{
 			description:           "Container is Running/Succeeded",
-			containerGroup:        testutil.CreateContainerGroupObj(cgName, "Succeeded", testutil.CreateACIContainersListObj("Running", "Initializing", startTime, finishTime, false, false, false), "Succeeded"),
+			containerGroup:        testutil.CreateContainerGroupObj(cgName, cgName, "Succeeded", testutil.CreateACIContainersListObj("Running", "Initializing", startTime, finishTime, false, false, false), "Succeeded"),
 			expectedPodPhase:      getPodPhaseFromACIState("Succeeded"),
 			expectedPodConditions: testutil.GetPodConditions(metav1.NewTime(cgCreationTime), metav1.NewTime(finishTime), v1.ConditionTrue),
 		},
 		{
 			description:           "Container Failed",
-			containerGroup:        testutil.CreateContainerGroupObj(cgName, "Failed", testutil.CreateACIContainersListObj("Failed", "Running", startTime, finishTime, false, false, false), "Succeeded"),
+			containerGroup:        testutil.CreateContainerGroupObj(cgName, cgName, "Failed", testutil.CreateACIContainersListObj("Failed", "Running", startTime, finishTime, false, false, false), "Succeeded"),
 			expectedPodPhase:      getPodPhaseFromACIState("Failed"),
 			expectedPodConditions: []v1.PodCondition{},
 		},

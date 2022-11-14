@@ -6,7 +6,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
-	v1 "k8s.io/api/core/v1"
 )
 
 func TestGetPodWithContainerID(t *testing.T) {
@@ -28,40 +26,24 @@ func TestGetPodWithContainerID(t *testing.T) {
 
 	podLister := NewMockPodLister(mockCtrl)
 
-	podLister.EXPECT().List(gomock.Any()).
-		Return([]*v1.Pod{testsutil.CreatePodObj(podName, podNamespace)}, nil)
+	mockPodsNamespaceLister := NewMockPodNamespaceLister(mockCtrl)
+	podLister.EXPECT().Pods(podNamespace).Return(mockPodsNamespaceLister)
+	mockPodsNamespaceLister.EXPECT().Get(podName).
+		Return(testsutil.CreatePodObj(podName, podNamespace), nil)
 
 	err := azConfig.SetAuthConfig()
 	if err != nil {
 		t.Fatal("failed to get auth configuration", err)
 	}
 
-	cgID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.ContainerInstance/containerGroups/%s-%s", azConfig.AuthConfig.SubscriptionID, fakeResourceGroup, podNamespace, podName)
-	successState := "Succeeded"
 	aciMocks := createNewACIMock()
-
+	cgID := ""
 	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
-		node := fakeNodeName
-		return &azaci.ContainerGroup{
-			Name: &name,
-			ID:   &cgID,
-			Tags: map[string]*string{
-				"CreationTimestamp": &creationTime,
-				"PodName":           &podName,
-				"Namespace":         &podNamespace,
-				"ClusterName":       &node,
-				"NodeName":          &node,
-				"UID":               &podName,
-			},
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{
-				IPAddress:         &azaci.IPAddress{IP: &testsutil.FakeIP},
-				ProvisioningState: &successState,
-				InstanceView: &azaci.ContainerGroupPropertiesInstanceView{
-					State: &successState,
-				},
-				Containers: testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
-			},
-		}, nil
+
+		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
+			testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), false, false, false), "Succeeded")
+		cgID = *cg.ID
+		return cg, nil
 	}
 
 	resourceManager, err := manager.NewResourceManager(

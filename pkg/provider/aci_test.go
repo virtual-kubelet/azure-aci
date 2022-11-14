@@ -431,55 +431,24 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 
 	podLister := NewMockPodLister(mockCtrl)
 
-	podLister.EXPECT().List(gomock.Any()).
-		Return([]*v1.Pod{testsutil.CreatePodObj(podName, podNamespace)}, nil)
-
-	node := fakeNodeName
-	provisioning := "Creating"
+	mockPodsNamespaceLister := NewMockPodNamespaceLister(mockCtrl)
+	podLister.EXPECT().Pods(podNamespace).Return(mockPodsNamespaceLister)
+	mockPodsNamespaceLister.EXPECT().Get(podName).
+		Return(testsutil.CreatePodObj(podName, podNamespace), nil)
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockGetContainerGroupInfo =
 		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
-			return &azaci.ContainerGroup{
-				Name: &name,
-				ID:   &name,
-				Tags: map[string]*string{
-					"CreationTimestamp": &creationTime,
-					"PodName":           &podName,
-					"Namespace":         &podNamespace,
-					"ClusterName":       &node,
-					"NodeName":          &node,
-					"UID":               &podName,
-				},
-				ContainerGroupProperties: &azaci.ContainerGroupProperties{
-					IPAddress:         &azaci.IPAddress{IP: &testsutil.FakeIP},
-					ProvisioningState: &provisioning,
-					Containers: testsutil.CreateACIContainersListObj("Running",
-						"Initializing", testsutil.CgCreationTime.Add(time.Second*2),
-						testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
-				},
-			}, nil
+			return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
+				testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), false, false, false), "Succeeded"), nil
 		}
 
 	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) (*[]azaci.ContainerGroup, error) {
-		cg := azaci.ContainerGroup{
-			Tags: map[string]*string{
-				"CreationTimestamp": &creationTime,
-				"PodName":           &podName,
-				"Namespace":         &podNamespace,
-				"ClusterName":       &node,
-				"NodeName":          &node,
-				"UID":               &podName,
-			},
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{
-				ProvisioningState: &provisioning,
-				Containers: testsutil.CreateACIContainersListObj("Running",
-					"Initializing", testsutil.CgCreationTime.Add(time.Second*2),
-					testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
-			},
-		}
+		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
+			testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), false, false, false), "Succeeded")
+
 		var result []azaci.ContainerGroup
-		result = append(result, cg)
+		result = append(result, *cg)
 		return &result, nil
 	}
 

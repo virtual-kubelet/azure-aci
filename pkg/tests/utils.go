@@ -35,15 +35,21 @@ var (
 	port       = int32(80)
 )
 
-func CreateContainerGroupObj(cgName, cgState string, containers *[]azaci.Container, provisioningState string) *azaci.ContainerGroup {
+func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers *[]azaci.Container, provisioningState string) *azaci.ContainerGroup {
 	fakeIPAddress := azaci.IPAddress{
 		IP: &FakeIP,
 	}
 	timeAsString := v1.NewTime(cgCreationTime).String()
+	nodeName := "vk"
 
 	return &azaci.ContainerGroup{
 		Tags: map[string]*string{
 			"CreationTimestamp": &timeAsString,
+			"PodName":           &cgName,
+			"Namespace":         &cgNamespace,
+			"ClusterName":       &nodeName,
+			"NodeName":          &nodeName,
+			"UID":               &cgName,
 		},
 		Name: &cgName,
 		ID:   &cgName,
