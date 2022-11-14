@@ -654,7 +654,10 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 // ListActivePods interface impl.
 func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, error) {
-	providerPods := p.resourceManager.GetPods()
+	providerPods, err := p.GetPods(ctx)
+	if err != nil {
+		return nil, err
+	}
 	podsIdentifiers := make([]PodIdentifier, 0, len(providerPods))
 
 	for _, pod := range providerPods {
