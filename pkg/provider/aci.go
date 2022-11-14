@@ -827,11 +827,12 @@ func (p *ACIProvider) getCommand(container *v1.Container) *[]string {
 //get VolumeMounts declared on Container as []aci.VolumeMount
 func (p *ACIProvider) getVolumeMounts(container *v1.Container) *[]azaci.VolumeMount {
 	volumeMounts := make([]azaci.VolumeMount, 0, len(container.VolumeMounts))
-	for _, v := range container.VolumeMounts {
+	fmt.Println(container.VolumeMounts)
+	for i := range container.VolumeMounts {
 		volumeMounts = append(volumeMounts, azaci.VolumeMount{
-			Name:      &v.Name,
-			MountPath: &v.MountPath,
-			ReadOnly:  &v.ReadOnly,
+			Name:      &container.VolumeMounts[i].Name,
+			MountPath: &container.VolumeMounts[i].MountPath,
+			ReadOnly:  &container.VolumeMounts[i].ReadOnly,
 		})
 	}
 	return &volumeMounts
@@ -884,9 +885,9 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]aza
 			Name: &pod.Spec.InitContainers[i].Name,
 			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition {
 				Image: &pod.Spec.InitContainers[i].Image,
-				Command: p.getCommand(&initContainer),
-				VolumeMounts: p.getVolumeMounts(&initContainer),
-				EnvironmentVariables: p.getEnvironmentVariables(&initContainer),
+				Command: p.getCommand(&pod.Spec.InitContainers[i]),
+				VolumeMounts: p.getVolumeMounts(&pod.Spec.InitContainers[i]),
+				EnvironmentVariables: p.getEnvironmentVariables(&pod.Spec.InitContainers[i]),
 			},
 		}
 
