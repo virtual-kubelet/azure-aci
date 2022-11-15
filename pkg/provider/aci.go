@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -322,14 +321,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		for p := range *containerPorts {
 			ports = append(ports, azaci.Port{
 				Port:     (*containerPorts)[p].Port,
-				Protocol: "TCP",
+				Protocol: azaci.ContainerGroupNetworkProtocolTCP,
 			})
 		}
 	}
 	if len(ports) > 0 && p.subnetName == "" {
 		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
 			Ports: &ports,
-			Type:  "Public",
+			Type:  azaci.ContainerGroupIPAddressTypePublic,
 		}
 
 		if dnsNameLabel := pod.Annotations[virtualKubeletDNSNameLabel]; dnsNameLabel != "" {
@@ -444,7 +443,7 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	validateContainerGroup(cg)
+	err = validateContainerGroup(cg)
 	if err != nil {
 		return nil, err
 	}
@@ -463,8 +462,15 @@ func (p *ACIProvider) GetContainerLogs(ctx context.Context, namespace, podName, 
 	}
 
 	// get logs from cg
-	logContent := p.azClientsAPIs.ListLogs(ctx, p.resourceGroup, *cg.Name, containerName, opts)
-	return ioutil.NopCloser(strings.NewReader(*logContent)), err
+	logContent, err := p.azClientsAPIs.ListLogs(ctx, p.resourceGroup, *cg.Name, containerName, opts)
+	if err != nil {
+		return nil, err
+	}
+	if logContent != nil {
+		logStr := *logContent
+		return io.NopCloser(strings.NewReader(logStr)), nil
+	}
+	return nil, nil
 }
 
 // GetPodFullName as defined in the provider context
@@ -475,6 +481,11 @@ func (p *ACIProvider) GetPodFullName(namespace string, pod string) string {
 // RunInContainer executes a command in a container in the pod, copying data
 // between in/out/err and the container's stdin/stdout/stderr.
 func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, container string, cmd []string, attach api.AttachIO) error {
+	logger := log.G(ctx).WithField("method", "RunInContainer")
+	ctx, span := trace.StartSpan(ctx, "aci.RunInContainer")
+	defer span.End()
+	ctx = addAzureAttributes(ctx, span, p)
+
 	out := attach.Stdout()
 	if out != nil {
 		defer out.Close()
@@ -486,21 +497,8 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	// Set default terminal size
-	size := api.TermSize{
-		Height: 60,
-		Width:  120,
-	}
-
-	resize := attach.Resize()
-	if resize != nil {
-		select {
-		case size = <-resize:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	cols := int32(size.Height)
-	rows := int32(size.Width)
+	cols := int32(60)
+	rows := int32(120)
 	cmdParam := strings.Join(cmd, " ")
 	req := azaci.ContainerExecRequest{
 		Command: &cmdParam,
@@ -515,12 +513,15 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 		return err
 	}
 
-	wsURI := xcrsp.WebSocketURI
-	password := xcrsp.Password
+	wsURI := *xcrsp.WebSocketURI
+	password := *xcrsp.Password
 
-	c, _, _ := websocket.DefaultDialer.Dial(*wsURI, nil)
-	if err := c.WriteMessage(websocket.TextMessage, []byte(*password)); err != nil { // Websocket password needs to be sent before WS terminal is active
-		panic(err)
+	c, _, err := websocket.DefaultDialer.Dial(wsURI, nil)
+	if err != nil {
+		return err
+	}
+	if err := c.WriteMessage(websocket.TextMessage, []byte(password)); err != nil { // Websocket password needs to be sent before WS terminal is active
+		return err
 	}
 
 	// Cleanup on exit
@@ -543,12 +544,16 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 					return
 				}
 				if n > 0 { // Only call WriteMessage if there is data to send
-					if err := c.WriteMessage(websocket.BinaryMessage, msg[:n]); err != nil {
-						panic(err)
+					if err = c.WriteMessage(websocket.BinaryMessage, msg[:n]); err != nil {
+						logger.Errorf("an error has occurred while trying to write message")
+						return
 					}
 				}
 			}
 		}()
+	}
+	if err != nil {
+		return err
 	}
 
 	if out != nil {
@@ -565,9 +570,13 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 				break
 			}
 			if _, err := io.Copy(out, cr); err != nil {
-				panic(err)
+				logger.Errorf("an error has occurred while trying to copy message")
+				break
 			}
 		}
+	}
+	if err != nil {
+		return err
 	}
 
 	return ctx.Err()
@@ -654,6 +663,9 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 // ListActivePods interface impl.
 func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, error) {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.ListActivePods")
+	defer span.End()
+
 	providerPods, err := p.GetPods(ctx)
 	if err != nil {
 		return nil, err
@@ -672,11 +684,19 @@ func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, erro
 	return podsIdentifiers, nil
 }
 
+// FetchPodStatus interface impl
 func (p *ACIProvider) FetchPodStatus(ctx context.Context, ns, name string) (*v1.PodStatus, error) {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.FetchPodStatus")
+	defer span.End()
+
 	return p.GetPodStatus(ctx, ns, name)
 }
 
+// CleanupPod interface impl
 func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.CleanupPod")
+	defer span.End()
+
 	return p.deleteContainerGroup(ctx, ns, name)
 }
 

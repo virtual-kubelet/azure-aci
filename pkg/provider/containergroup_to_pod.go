@@ -83,13 +83,17 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 		return nil, err
 	}
 
+	cgIP := ""
+	if cg.IPAddress != nil {
+		cgIP = *cg.IPAddress.IP
+	}
 	return &v1.PodStatus{
 		Phase:             getPodPhaseFromACIState(*aciState),
 		Conditions:        getPodConditionsFromACIState(*aciState, creationTime, lastUpdateTime, allReady),
 		Message:           "",
 		Reason:            "",
 		HostIP:            p.internalIP,
-		PodIP:             *cg.IPAddress.IP,
+		PodIP:             cgIP,
 		StartTime:         &firstContainerStartTime,
 		ContainerStatuses: containerStatuses,
 	}, nil
