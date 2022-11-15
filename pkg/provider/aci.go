@@ -408,7 +408,7 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 
 	if p.tracker != nil {
 		// Delete is not a sync API on ACI yet, but will assume with current implementation that termination is completed. Also, till gracePeriod is supported.
-		updateErr := p.tracker.UpdatePodStatus(
+		updateErr := p.tracker.UpdatePodStatus(ctx,
 			podNS,
 			podName,
 			func(podStatus *v1.PodStatus) {
@@ -452,7 +452,11 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	return containerGroupToPod(cg)
+	validateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
+	return p.containerGroupToPod(cg)
 }
 
 // GetContainerLogs returns the logs of a pod by name that is running inside ACI.
@@ -589,7 +593,11 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	return getPodStatusFromContainerGroup(cg), nil
+	err = validateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
+	return p.getPodStatusFromContainerGroup(cg)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
@@ -603,23 +611,32 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 		return nil, err
 	}
 
+	if cgs == nil {
+		log.G(ctx).Infof("no container groups found for resource group %s", p.resourceGroup)
+		return nil, nil
+	}
 	pods := make([]*v1.Pod, 0, len(*cgs))
 
-	for _, cg := range *cgs {
-		if cg.Tags["NodeName"] != &p.nodeName {
+	for cgIndex := range *cgs {
+		validateContainerGroup(&(*cgs)[cgIndex])
+		if err != nil {
+			return nil, err
+		}
+
+		if (*cgs)[cgIndex].Tags["NodeName"] != &p.nodeName {
 			continue
 		}
 
-		p, err := containerGroupToPod(&cg)
+		pod, err := p.containerGroupToPod(&(*cgs)[cgIndex])
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
-				"name": cg.Name,
-				"id":   cg.ID,
-			}).WithError(err).Error("error converting container group to pod")
+				"name": (*cgs)[cgIndex].Name,
+				"id":   (*cgs)[cgIndex].ID,
+			}).WithError(err).Errorf("error converting container group %s to pod", (*cgs)[cgIndex].Name)
 
 			continue
 		}
-		pods = append(pods, p)
+		pods = append(pods, pod)
 	}
 
 	return pods, nil
@@ -649,8 +666,8 @@ func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, erro
 	if err != nil {
 		return nil, err
 	}
-
 	podsIdentifiers := make([]PodIdentifier, 0, len(providerPods))
+
 	for _, pod := range providerPods {
 		podsIdentifiers = append(
 			podsIdentifiers,
@@ -1106,15 +1123,6 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe,
 		TimeoutSeconds:      &probe.TimeoutSeconds,
 		PeriodSeconds:       &probe.PeriodSeconds,
 	}, nil
-}
-
-func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
-	switch pro {
-	case v1.ProtocolUDP:
-		return azaci.ContainerNetworkProtocolUDP
-	default:
-		return azaci.ContainerNetworkProtocolTCP
-	}
 }
 
 // Filters service account secret volume for Windows.
