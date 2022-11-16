@@ -5,10 +5,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	emptyStr = ""
-)
-
 func ValidateContainer(container containerinstance.Container) error {
 
 	if container.Name == nil {
@@ -33,6 +29,7 @@ func ValidateContainer(container containerinstance.Container) error {
 		return errors.Errorf("container %s properties CurrentState StartTime cannot be nil", *container.Name)
 	}
 	if container.InstanceView.PreviousState == nil {
+		emptyStr := ""
 		container.InstanceView.PreviousState = &containerinstance.ContainerState{
 			State:        &emptyStr,
 			StartTime:    container.InstanceView.CurrentState.StartTime,
@@ -77,7 +74,8 @@ func ValidateContainerGroup(cg *containerinstance.ContainerGroup) error {
 			if aciState == "Running" {
 				return errors.Errorf("podIP cannot be nil for container group %s while state is %s ", *cg.Name, aciState)
 			} else {
-				cg.IPAddress.IP = &emptyStr
+				emptyIP := ""
+				cg.IPAddress.IP = &emptyIP
 			}
 		}
 	}
