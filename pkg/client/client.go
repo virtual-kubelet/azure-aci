@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
@@ -58,6 +59,13 @@ func (c *ContainerGroupsClientWrapper) CreateCG(ctx context.Context, resourceGro
 	if err != nil {
 		err = autorest.NewErrorWithError(err, "containerinstance.ContainerGroupsClient", "CreateOrUpdateSender", result.Response(), "Failure sending request")
 		return err
+	}
+
+	// 200 (OK) and 201 (Created) are a successful responses.
+	if result.Response() != nil {
+		if result.Response().StatusCode != http.StatusOK && result.Response().StatusCode != http.StatusCreated {
+			return fmt.Errorf("failed to create container group %s, status code %d ", *containerGroup.Name, result.Response().StatusCode)
+		}
 	}
 
 	logger.Infof("container group %s has created successfully", *containerGroup.Name)
