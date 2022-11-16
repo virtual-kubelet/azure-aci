@@ -23,6 +23,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics"
+	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -443,7 +444,7 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	err = validateContainerGroup(cg)
+	err = validation.ValidateContainerGroup(cg)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +595,7 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	err = validateContainerGroup(cg)
+	err = validation.ValidateContainerGroup(cg)
 	if err != nil {
 		return nil, err
 	}
@@ -619,7 +620,7 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	pods := make([]*v1.Pod, 0, len(*cgs))
 
 	for cgIndex := range *cgs {
-		validateContainerGroup(&(*cgs)[cgIndex])
+		validation.ValidateContainerGroup(&(*cgs)[cgIndex])
 		if err != nil {
 			return nil, err
 		}

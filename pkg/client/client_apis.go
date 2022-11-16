@@ -11,6 +11,7 @@ import (
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
+	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
@@ -133,16 +134,18 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 
 	cg, err := a.ContainerGroupClient.CGClient.Get(ctx, resourceGroup, cgName)
 	if err != nil {
-		if &cg != nil && cg.StatusCode == http.StatusNotFound {
+		if cg.StatusCode == http.StatusNotFound {
 			return nil, errors.Wrapf(err, "container group %s is not found", name)
 		}
 		return nil, err
 	}
 
-	if cg.Tags != nil {
-		if *cg.Tags["NodeName"] != nodeName {
-			return nil, errors.Wrapf(err, "container group %s found with mismatching node", name)
-		}
+	err = validation.ValidateContainerGroup(&cg)
+	if err != nil {
+		return nil, err
+	}
+	if *cg.Tags["NodeName"] != nodeName {
+		return nil, errors.Wrapf(err, "container group %s found with mismatching node", name)
 	}
 
 	return &cg, nil
@@ -214,7 +217,7 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 	logTail := int32(opts.Tail)
 
 	var err error
-	var cLogs, result azaci.Logs
+	var result azaci.Logs
 	err = retry.OnError(retry.DefaultBackoff,
 		func(err error) bool {
 			return ctx.Err() == nil
@@ -222,8 +225,9 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 			result, err = a.ContainersClient.ListLogs(ctx, resourceGroup, cgName, containerName, &logTail, &enableTimestamp)
 			if err != nil {
 				logger.Debug("error getting container logs, name: %s , container group:  %s, retrying", containerName, cgName)
+				return err
 			}
-			return err
+			return nil
 		})
 	if err != nil {
 		logger.Errorf("error getting container logs, name: %s , container group:  %s", containerName, cgName)
@@ -231,11 +235,7 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 	}
 	logger.Infof("ListLogs status code: %d", result.StatusCode)
 
-	if err := json.NewDecoder(result.Response.Body).Decode(&cLogs); err != nil {
-		logger.Errorf("decoding get container logs response body failed: %v", err)
-		return nil, err
-	}
-	return cLogs.Content, nil
+	return result.Content, nil
 }
 
 func (a *AzClientsAPIs) ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (*azaci.ContainerExecResponse, error) {
