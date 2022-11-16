@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
+	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
@@ -135,7 +136,7 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 	cg, err := a.ContainerGroupClient.CGClient.Get(ctx, resourceGroup, cgName)
 	if err != nil {
 		if cg.StatusCode == http.StatusNotFound {
-			return nil, errors.Wrapf(err, "container group %s is not found", name)
+			return nil, errdefs.NotFound(fmt.Sprintf("container group %s is not found", name))
 		}
 		return nil, err
 	}
