@@ -7,10 +7,10 @@ import (
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
 )
 
 const (
-	DefaultUserAgent      = "virtual-kubelet/azure-arm-aci"
 	APIVersion            = "2021-10-01"
 	containerGroupURLPath = "/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.ContainerInstance/containerGroups/{containerGroupName}"
 )
@@ -44,23 +44,27 @@ type ContainerGroupsClientWrapper struct {
 	CGClient azaci.ContainerGroupsClient
 }
 
-func (c *ContainerGroupsClientWrapper) CreateCG(ctx context.Context, resourceGroupName, containerGroupName string, containerGroup ContainerGroupWrapper) error {
-	containerGroup.Name = &containerGroupName
-	addReq, err := c.createOrUpdatePreparerWrapper(ctx, resourceGroupName, containerGroupName, containerGroup)
+func (c *ContainerGroupsClientWrapper) CreateCG(ctx context.Context, resourceGroupName string, containerGroup ContainerGroupWrapper) error {
+	logger := log.G(ctx).WithField("method", "CreateCG")
+
+	addReq, err := c.createOrUpdatePreparerWrapper(ctx, resourceGroupName, *containerGroup.Name, containerGroup)
 	if err != nil {
 		return err
 	}
 
 	result, err := c.CGClient.CreateOrUpdateSender(addReq)
+	logger.Infof("CreateCG status code: %s", result.Status())
+
 	if err != nil {
-		err = autorest.NewErrorWithError(err, "containerinstance.ContainerGroupsClient", "CreateOrUpdate", result.Response(), "Failure sending request")
+		err = autorest.NewErrorWithError(err, "containerinstance.ContainerGroupsClient", "CreateOrUpdateSender", result.Response(), "Failure sending request")
 		return err
 	}
 
+	logger.Infof("container group %s has created successfully", *containerGroup.Name)
 	return nil
 }
 
-// createOrUpdatePreparerWrapper prepares the CreateOrUpdate request for the wrapper.
+// createOrUpdatePreparerWrapper prepares the CreateOrUpdateSender request for the wrapper.
 func (c *ContainerGroupsClientWrapper) createOrUpdatePreparerWrapper(ctx context.Context, resourceGroupName string, containerGroupName string, containerGroup ContainerGroupWrapper) (*http.Request, error) {
 	pathParameters := map[string]interface{}{
 		"containerGroupName": autorest.Encode("path", containerGroupName),
@@ -83,7 +87,7 @@ func (c *ContainerGroupsClientWrapper) createOrUpdatePreparerWrapper(ctx context
 	return preparer.Prepare((&http.Request{}).WithContext(ctx))
 }
 
-// MarshalJSON is the custom marshaler for ContainerGroupProperties.
+// MarshalJSON is the custom marshal for ContainerGroupProperties.
 func (cg ContainerGroupPropertiesWrapper) MarshalJSON() ([]byte, error) {
 	objectMap := make(map[string]interface{})
 	if cg.ContainerGroupProperties.Containers != nil {
