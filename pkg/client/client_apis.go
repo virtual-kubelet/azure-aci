@@ -215,15 +215,22 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 	defer span.End()
 
 	enableTimestamp := true
-	logTail := int32(opts.Tail)
 
+	// tail should be > 0, otherwise, set to nil
+	var logTail *int32
+	tail := int32(opts.Tail)
+	if opts.Tail == 0 {
+		logTail = nil
+	} else {
+		logTail = &tail
+	}
 	var err error
 	var result azaci.Logs
 	err = retry.OnError(retry.DefaultBackoff,
 		func(err error) bool {
 			return ctx.Err() == nil
 		}, func() error {
-			result, err = a.ContainersClient.ListLogs(ctx, resourceGroup, cgName, containerName, &logTail, &enableTimestamp)
+			result, err = a.ContainersClient.ListLogs(ctx, resourceGroup, cgName, containerName, logTail, &enableTimestamp)
 			if err != nil {
 				logger.Debug("error getting container logs, name: %s , container group:  %s, retrying", containerName, cgName)
 				return err
