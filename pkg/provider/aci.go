@@ -865,7 +865,6 @@ func (p *ACIProvider) getCommand(container *v1.Container) *[]string {
 //get VolumeMounts declared on Container as []aci.VolumeMount
 func (p *ACIProvider) getVolumeMounts(container *v1.Container) *[]azaci.VolumeMount {
 	volumeMounts := make([]azaci.VolumeMount, 0, len(container.VolumeMounts))
-	fmt.Println(container.VolumeMounts)
 	for i := range container.VolumeMounts {
 		volumeMounts = append(volumeMounts, azaci.VolumeMount{
 			Name:      &container.VolumeMounts[i].Name,
@@ -879,9 +878,9 @@ func (p *ACIProvider) getVolumeMounts(container *v1.Container) *[]azaci.VolumeMo
 //get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
 func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) *[]azaci.EnvironmentVariable {
 	environmentVariable := make([]azaci.EnvironmentVariable, 0, len(container.Env))
-	for _, e := range container.Env {
-		if e.Value != "" {
-			envVar := getACIEnvVar(e)
+	for i := range container.Env {
+		if container.Env[i].Value != "" {
+			envVar := getACIEnvVar(container.Env[i])
 			environmentVariable = append(environmentVariable, envVar)
 		}
 	}

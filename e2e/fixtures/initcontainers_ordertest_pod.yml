@@ -12,6 +12,13 @@ spec:
     volumeMounts:
       - name: azure
         mountPath: /mnt/azure
+  - image: alpine
+    name: init-container-02
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo Hi from init-container-02 >> /mnt/azure/newfile.txt" ]
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
   containers:
   - image: alpine
     imagePullPolicy: Always
