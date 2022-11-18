@@ -78,7 +78,7 @@ func TestPodLifecycle(t *testing.T) {
 	// check container logs
 	t.Log("get container logs ....")
 	cmd = kubectl("logs", "pod/vk-e2e-hpa", "-c", "hpa-example", "--namespace=vk-test")
-	out, err := cmd.CombinedOutput()
+	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
 	}
