@@ -18,6 +18,7 @@ func TestPodLifecycle(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
+
 	cmd = kubectl("apply", "-f", "fixtures/hpa.yml", "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
@@ -99,9 +100,10 @@ func TestPodLifecycle(t *testing.T) {
 	}
 	t.Log("success query exec on the container")
 
-	t.Log("clean up pod")
+	t.Log("clean up")
 	cmd = kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
 }
+

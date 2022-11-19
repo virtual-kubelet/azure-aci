@@ -303,7 +303,15 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		return err
 
 	}
+
+	// get initContainers
+	initContainers, err := p.getInitContainers(ctx, pod)
+	if err != nil {
+		return err
+	}
+
 	// assign all the things
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
@@ -838,6 +846,91 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []azaci.ImageRegistryCred
 	}
 
 	return ips, err
+}
+
+//verify if Container is properly declared for the use on ACI
+func (p *ACIProvider) verifyContainer(container *v1.Container) error {
+	if len(container.Command) == 0 && len(container.Args) > 0 {
+		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+	}
+	return nil
+}
+
+//this method is used for both initConainers and containers
+func (p *ACIProvider) getCommand(container *v1.Container) *[]string {
+	command := append(container.Command, container.Args...)
+	return &command
+}
+
+//get VolumeMounts declared on Container as []aci.VolumeMount
+func (p *ACIProvider) getVolumeMounts(container *v1.Container) *[]azaci.VolumeMount {
+	volumeMounts := make([]azaci.VolumeMount, 0, len(container.VolumeMounts))
+	for i := range container.VolumeMounts {
+		volumeMounts = append(volumeMounts, azaci.VolumeMount{
+			Name:      &container.VolumeMounts[i].Name,
+			MountPath: &container.VolumeMounts[i].MountPath,
+			ReadOnly:  &container.VolumeMounts[i].ReadOnly,
+		})
+	}
+	return &volumeMounts
+}
+
+//get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
+func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) *[]azaci.EnvironmentVariable {
+	environmentVariable := make([]azaci.EnvironmentVariable, 0, len(container.Env))
+	for i := range container.Env {
+		if container.Env[i].Value != "" {
+			envVar := getACIEnvVar(container.Env[i])
+			environmentVariable = append(environmentVariable, envVar)
+		}
+	}
+	return &environmentVariable
+}
+
+//get InitContainers defined in Pod as []aci.InitContainerDefinition
+func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]azaci.InitContainerDefinition, error) {
+	initContainers := make([]azaci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
+	for i, initContainer := range pod.Spec.InitContainers {
+		err := p.verifyContainer(&initContainer)
+		if err != nil {
+			log.G(ctx).Errorf("couldn't verify container %v", err)
+			return nil, err
+		}
+
+		if initContainer.Ports != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support ports")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support ports")
+		}
+		if initContainer.Resources.Requests != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support resources requests")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support resources requests")
+		}
+		if initContainer.Resources.Limits != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support resources limits")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support resources limits")
+		}
+		if initContainer.LivenessProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support livenessProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support livenessProbe")
+		}
+		if initContainer.ReadinessProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support readinessProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
+		}
+
+		newInitContainer := azaci.InitContainerDefinition{
+			Name: &pod.Spec.InitContainers[i].Name,
+			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition {
+				Image: &pod.Spec.InitContainers[i].Image,
+				Command: p.getCommand(&pod.Spec.InitContainers[i]),
+				VolumeMounts: p.getVolumeMounts(&pod.Spec.InitContainers[i]),
+				EnvironmentVariables: p.getEnvironmentVariables(&pod.Spec.InitContainers[i]),
+			},
+		}
+
+		initContainers = append(initContainers, newInitContainer)
+	}
+	return initContainers, nil
 }
 
 func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {

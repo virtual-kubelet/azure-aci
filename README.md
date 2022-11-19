@@ -27,7 +27,7 @@ This document details configuring the Virtual Kubelet ACI provider.
 
 Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Container Instances provide. Please check the Azure documentation accurate details on region availability, pricing and new features. The list here attempts to give an accurate reference for the features we support in ACI and the ACI provider within Virtual Kubelet.
 
-### features
+### Features
 
 * Volumes: empty dir, github repo, projection, Azure Files, Azure Files CSI drivers
 * Secure env variables, config maps
@@ -36,6 +36,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Basic Azure Networking support within AKS virtual node
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
 * Azure Monitor integration or formally known as OMS
+* Support for init-containers ([use init containers](#Create-pod-with-init-containers))
 
 ### Limitations
 
@@ -44,7 +45,6 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet
 * VNet peering
 * Argument support for exec
-* Init containers
 * [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support
 * downward APIs (i.e podIP)
 
@@ -649,6 +649,28 @@ Output:
 "helloworld-aci.westus.azurecontainer.io"
 ```
 -->
+
+### Create pod with init containers
+Multiple init containers can be specified in the podspec similar to how containers are specified
+
+```yaml
+spec:
+  initContainers:
+  - image: <INIT CONTAINER IMAGE 1>
+    name: init-container-01
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo \"Hi\"" ]
+  - image: <INIT CONTAINER IMAGE 2>
+    name: init-container-02
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo \"Hi\"" ]
+  containers:
+  - image: <CONTAINER IMAGE>
+    imagePullPolicy: Always
+    name: container
+    command: [ "/bin/sh" ]
+```
+More information on init containers can be found in [Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) and [ACI](https://docs.microsoft.com/en-us/azure/container-instances/container-instances-init-container) documentations
 
 ## Work around for the virtual kubelet pod
 
