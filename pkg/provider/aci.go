@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -25,6 +24,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics"
+	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -306,7 +306,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	}
 
-
 	// if no username credentials are provided use agentpool MI if for pulling images from ACR
 	if len(*creds) == 0 {
 		agentPoolKubeletIdentity, err := p.GetAgentPoolKubeletIdentity(ctx, pod)
@@ -318,8 +317,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
 	}
 
+	// get initContainers
+	initContainers, err := p.getInitContainers(ctx, pod)
+	if err != nil {
+		return err
+	}
 
 	// assign all the things
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
@@ -338,14 +343,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		for p := range *containerPorts {
 			ports = append(ports, azaci.Port{
 				Port:     (*containerPorts)[p].Port,
-				Protocol: "TCP",
+				Protocol: azaci.ContainerGroupNetworkProtocolTCP,
 			})
 		}
 	}
 	if len(ports) > 0 && p.subnetName == "" {
 		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
 			Ports: &ports,
-			Type:  "Public",
+			Type:  azaci.ContainerGroupIPAddressTypePublic,
 		}
 
 		if dnsNameLabel := pod.Annotations[virtualKubeletDNSNameLabel]; dnsNameLabel != "" {
@@ -451,7 +456,7 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 
 	if p.tracker != nil {
 		// Delete is not a sync API on ACI yet, but will assume with current implementation that termination is completed. Also, till gracePeriod is supported.
-		updateErr := p.tracker.UpdatePodStatus(
+		updateErr := p.tracker.UpdatePodStatus(ctx,
 			podNS,
 			podName,
 			func(podStatus *v1.PodStatus) {
@@ -495,7 +500,11 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	return containerGroupToPod(cg)
+	err = validation.ValidateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
+	return p.containerGroupToPod(cg)
 }
 
 // GetContainerLogs returns the logs of a pod by name that is running inside ACI.
@@ -510,8 +519,15 @@ func (p *ACIProvider) GetContainerLogs(ctx context.Context, namespace, podName, 
 	}
 
 	// get logs from cg
-	logContent := p.azClientsAPIs.ListLogs(ctx, p.resourceGroup, *cg.Name, containerName, opts)
-	return ioutil.NopCloser(strings.NewReader(*logContent)), err
+	logContent, err := p.azClientsAPIs.ListLogs(ctx, p.resourceGroup, *cg.Name, containerName, opts)
+	if err != nil {
+		return nil, err
+	}
+	if logContent != nil {
+		logStr := *logContent
+		return io.NopCloser(strings.NewReader(logStr)), nil
+	}
+	return nil, nil
 }
 
 // GetPodFullName as defined in the provider context
@@ -522,6 +538,11 @@ func (p *ACIProvider) GetPodFullName(namespace string, pod string) string {
 // RunInContainer executes a command in a container in the pod, copying data
 // between in/out/err and the container's stdin/stdout/stderr.
 func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, container string, cmd []string, attach api.AttachIO) error {
+	logger := log.G(ctx).WithField("method", "RunInContainer")
+	ctx, span := trace.StartSpan(ctx, "aci.RunInContainer")
+	defer span.End()
+	ctx = addAzureAttributes(ctx, span, p)
+
 	out := attach.Stdout()
 	if out != nil {
 		defer out.Close()
@@ -533,21 +554,8 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	// Set default terminal size
-	size := api.TermSize{
-		Height: 60,
-		Width:  120,
-	}
-
-	resize := attach.Resize()
-	if resize != nil {
-		select {
-		case size = <-resize:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	cols := int32(size.Height)
-	rows := int32(size.Width)
+	cols := int32(60)
+	rows := int32(120)
 	cmdParam := strings.Join(cmd, " ")
 	req := azaci.ContainerExecRequest{
 		Command: &cmdParam,
@@ -562,12 +570,15 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 		return err
 	}
 
-	wsURI := xcrsp.WebSocketURI
-	password := xcrsp.Password
+	wsURI := *xcrsp.WebSocketURI
+	password := *xcrsp.Password
 
-	c, _, _ := websocket.DefaultDialer.Dial(*wsURI, nil)
-	if err := c.WriteMessage(websocket.TextMessage, []byte(*password)); err != nil { // Websocket password needs to be sent before WS terminal is active
-		panic(err)
+	c, _, err := websocket.DefaultDialer.Dial(wsURI, nil)
+	if err != nil {
+		return err
+	}
+	if err := c.WriteMessage(websocket.TextMessage, []byte(password)); err != nil { // Websocket password needs to be sent before WS terminal is active
+		return err
 	}
 
 	// Cleanup on exit
@@ -590,12 +601,16 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 					return
 				}
 				if n > 0 { // Only call WriteMessage if there is data to send
-					if err := c.WriteMessage(websocket.BinaryMessage, msg[:n]); err != nil {
-						panic(err)
+					if err = c.WriteMessage(websocket.BinaryMessage, msg[:n]); err != nil {
+						logger.Errorf("an error has occurred while trying to write message")
+						return
 					}
 				}
 			}
 		}()
+	}
+	if err != nil {
+		return err
 	}
 
 	if out != nil {
@@ -612,9 +627,13 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 				break
 			}
 			if _, err := io.Copy(out, cr); err != nil {
-				panic(err)
+				logger.Errorf("an error has occurred while trying to copy message")
+				break
 			}
 		}
+	}
+	if err != nil {
+		return err
 	}
 
 	return ctx.Err()
@@ -632,7 +651,11 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	return getPodStatusFromContainerGroup(cg), nil
+	err = validation.ValidateContainerGroup(cg)
+	if err != nil {
+		return nil, err
+	}
+	return p.getPodStatusFromContainerGroup(cg)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
@@ -646,23 +669,32 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 		return nil, err
 	}
 
+	if cgs == nil {
+		log.G(ctx).Infof("no container groups found for resource group %s", p.resourceGroup)
+		return nil, nil
+	}
 	pods := make([]*v1.Pod, 0, len(*cgs))
 
-	for _, cg := range *cgs {
-		if cg.Tags["NodeName"] != &p.nodeName {
+	for cgIndex := range *cgs {
+		validation.ValidateContainerGroup(&(*cgs)[cgIndex])
+		if err != nil {
+			return nil, err
+		}
+
+		if (*cgs)[cgIndex].Tags["NodeName"] != &p.nodeName {
 			continue
 		}
 
-		p, err := containerGroupToPod(&cg)
+		pod, err := p.containerGroupToPod(&(*cgs)[cgIndex])
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
-				"name": cg.Name,
-				"id":   cg.ID,
-			}).WithError(err).Error("error converting container group to pod")
+				"name": (*cgs)[cgIndex].Name,
+				"id":   (*cgs)[cgIndex].ID,
+			}).WithError(err).Errorf("error converting container group %s to pod", (*cgs)[cgIndex].Name)
 
 			continue
 		}
-		pods = append(pods, p)
+		pods = append(pods, pod)
 	}
 
 	return pods, nil
@@ -688,12 +720,15 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 // ListActivePods interface impl.
 func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, error) {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.ListActivePods")
+	defer span.End()
+
 	providerPods, err := p.GetPods(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	podsIdentifiers := make([]PodIdentifier, 0, len(providerPods))
+
 	for _, pod := range providerPods {
 		podsIdentifiers = append(
 			podsIdentifiers,
@@ -706,11 +741,19 @@ func (p *ACIProvider) ListActivePods(ctx context.Context) ([]PodIdentifier, erro
 	return podsIdentifiers, nil
 }
 
+// FetchPodStatus interface impl
 func (p *ACIProvider) FetchPodStatus(ctx context.Context, ns, name string) (*v1.PodStatus, error) {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.FetchPodStatus")
+	defer span.End()
+
 	return p.GetPodStatus(ctx, ns, name)
 }
 
+// CleanupPod interface impl
 func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.CleanupPod")
+	defer span.End()
+
 	return p.deleteContainerGroup(ctx, ns, name)
 }
 
@@ -851,6 +894,91 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []azaci.ImageRegistryCred
 	}
 
 	return ips, err
+}
+
+//verify if Container is properly declared for the use on ACI
+func (p *ACIProvider) verifyContainer(container *v1.Container) error {
+	if len(container.Command) == 0 && len(container.Args) > 0 {
+		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+	}
+	return nil
+}
+
+//this method is used for both initConainers and containers
+func (p *ACIProvider) getCommand(container *v1.Container) *[]string {
+	command := append(container.Command, container.Args...)
+	return &command
+}
+
+//get VolumeMounts declared on Container as []aci.VolumeMount
+func (p *ACIProvider) getVolumeMounts(container *v1.Container) *[]azaci.VolumeMount {
+	volumeMounts := make([]azaci.VolumeMount, 0, len(container.VolumeMounts))
+	for i := range container.VolumeMounts {
+		volumeMounts = append(volumeMounts, azaci.VolumeMount{
+			Name:      &container.VolumeMounts[i].Name,
+			MountPath: &container.VolumeMounts[i].MountPath,
+			ReadOnly:  &container.VolumeMounts[i].ReadOnly,
+		})
+	}
+	return &volumeMounts
+}
+
+//get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
+func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) *[]azaci.EnvironmentVariable {
+	environmentVariable := make([]azaci.EnvironmentVariable, 0, len(container.Env))
+	for i := range container.Env {
+		if container.Env[i].Value != "" {
+			envVar := getACIEnvVar(container.Env[i])
+			environmentVariable = append(environmentVariable, envVar)
+		}
+	}
+	return &environmentVariable
+}
+
+//get InitContainers defined in Pod as []aci.InitContainerDefinition
+func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]azaci.InitContainerDefinition, error) {
+	initContainers := make([]azaci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
+	for i, initContainer := range pod.Spec.InitContainers {
+		err := p.verifyContainer(&initContainer)
+		if err != nil {
+			log.G(ctx).Errorf("couldn't verify container %v", err)
+			return nil, err
+		}
+
+		if initContainer.Ports != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support ports")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support ports")
+		}
+		if initContainer.Resources.Requests != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support resources requests")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support resources requests")
+		}
+		if initContainer.Resources.Limits != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support resources limits")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support resources limits")
+		}
+		if initContainer.LivenessProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support livenessProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support livenessProbe")
+		}
+		if initContainer.ReadinessProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support readinessProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
+		}
+
+		newInitContainer := azaci.InitContainerDefinition{
+			Name: &pod.Spec.InitContainers[i].Name,
+			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition {
+				Image: &pod.Spec.InitContainers[i].Image,
+				Command: p.getCommand(&pod.Spec.InitContainers[i]),
+				VolumeMounts: p.getVolumeMounts(&pod.Spec.InitContainers[i]),
+				EnvironmentVariables: p.getEnvironmentVariables(&pod.Spec.InitContainers[i]),
+			},
+		}
+
+		initContainers = append(initContainers, newInitContainer)
+	}
+	return initContainers, nil
 }
 
 func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
@@ -1063,15 +1191,6 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe,
 		TimeoutSeconds:      &probe.TimeoutSeconds,
 		PeriodSeconds:       &probe.PeriodSeconds,
 	}, nil
-}
-
-func getProtocol(pro v1.Protocol) azaci.ContainerNetworkProtocol {
-	switch pro {
-	case v1.ProtocolUDP:
-		return azaci.ContainerNetworkProtocolUDP
-	default:
-		return azaci.ContainerNetworkProtocolTCP
-	}
 }
 
 // Filters service account secret volume for Windows.

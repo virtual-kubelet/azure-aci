@@ -37,6 +37,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
 * Azure Monitor integration or formally known as OMS
 * Using service principal credentials to pull ACR images ([see workaround](#Private-registry))
+* Support for init-containers ([use init containers](#Create-pod-with-init-containers))
 * Pull ACR image using managed identity ([acr image pull](#Pulling-images-using-user-assigned-managed-identity))
 
 ### Limitations
@@ -45,7 +46,6 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * [Limitations](https://docs.microsoft.com/azure/container-instances/container-instances-vnet) with VNet
 * VNet peering
 * Argument support for exec
-* Init containers
 * [Host aliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/) support
 * downward APIs (i.e podIP)
 
@@ -676,6 +676,28 @@ Output:
 "helloworld-aci.westus.azurecontainer.io"
 ```
 -->
+
+### Create pod with init containers
+Multiple init containers can be specified in the podspec similar to how containers are specified
+
+```yaml
+spec:
+  initContainers:
+  - image: <INIT CONTAINER IMAGE 1>
+    name: init-container-01
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo \"Hi\"" ]
+  - image: <INIT CONTAINER IMAGE 2>
+    name: init-container-02
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo \"Hi\"" ]
+  containers:
+  - image: <CONTAINER IMAGE>
+    imagePullPolicy: Always
+    name: container
+    command: [ "/bin/sh" ]
+```
+More information on init containers can be found in [Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) and [ACI](https://docs.microsoft.com/en-us/azure/container-instances/container-instances-init-container) documentations
 
 ## Work around for the virtual kubelet pod
 

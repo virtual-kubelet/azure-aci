@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vk-e2e-initcontainers-order
+  namespace: vk-test
+spec:
+  initContainers:
+  - image: alpine
+    name: init-container-01
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo Hi from init-container-01 >> /mnt/azure/newfile.txt" ]
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
+  - image: alpine
+    name: init-container-02
+    command: [ "/bin/sh" ]
+    args: [ "-c", "echo Hi from init-container-02 >> /mnt/azure/newfile.txt" ]
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
+  containers:
+  - image: alpine
+    imagePullPolicy: Always
+    name: container
+    command: [
+        "sh",
+        "-c",
+        "echo Hi from container >> /mnt/azure/newfile.txt; while sleep 10; do cat /mnt/azure/newfile.txt; done;"
+    ]
+    resources:
+      requests:
+        memory: 1G
+        cpu: 1
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
+  nodeSelector:
+    kubernetes.io/role: agent
+    beta.kubernetes.io/os: linux
+    type: virtual-kubelet
+  tolerations:
+  - key: virtual-kubelet.io/provider
+    operator: Exists
+  volumes:
+  - name: azure
+    csi:
+      driver: file.csi.azure.com
+      volumeAttributes:
+        secretName: csidriversecret  # required
+        shareName: vncsidriversharename  # required

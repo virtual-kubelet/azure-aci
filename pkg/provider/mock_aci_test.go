@@ -13,7 +13,7 @@ type GetContainerGroupInfoFunc func(ctx context.Context, resourceGroup, namespac
 type GetContainerGroupListFunc func(ctx context.Context, resourceGroup string) (*[]azaci.ContainerGroup, error)
 type ListCapabilitiesFunc func(ctx context.Context, region string) (*[]azaci.Capabilities, error)
 type DeleteContainerGroupFunc func(ctx context.Context, resourceGroup, cgName string) error
-type ListLogsFunc func(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) *string
+type ListLogsFunc func(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error)
 type ExecuteContainerCommandFunc func(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (azaci.ContainerExecResponse, error)
 
 type GetContainerGroupFunc func(ctx context.Context, resourceGroup, containerGroupName string) (*client.ContainerGroupWrapper, error)
@@ -70,11 +70,11 @@ func (m *MockACIProvider) DeleteContainerGroup(ctx context.Context, resourceGrou
 	return nil
 }
 
-func (m *MockACIProvider) ListLogs(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) *string {
+func (m *MockACIProvider) ListLogs(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error) {
 	if m.MockListLogs != nil {
 		return m.MockListLogs(ctx, resourceGroup, cgName, containerName, opts)
 	}
-	return nil
+	return nil, nil
 }
 
 func (m *MockACIProvider) ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (*azaci.ContainerExecResponse, error) {

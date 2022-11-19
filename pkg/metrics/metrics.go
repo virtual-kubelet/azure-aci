@@ -176,7 +176,7 @@ func (decider *podStatsGetterDecider) getContainerGroupFromPod(ctx context.Conte
 	}
 	aciCG, err := decider.aciCGGetter.GetContainerGroup(ctx, decider.rgName, cgName)
 	if err != nil {
-		if aciCG.StatusCode == http.StatusNotFound {
+		if aciCG != nil && aciCG.StatusCode == http.StatusNotFound {
 			return nil, errors.Wrapf(err, "failed to query Container Group %s, not found it", cgName)
 		}
 		return nil, errors.Wrapf(err, "failed to query Container Group %s", cgName)
