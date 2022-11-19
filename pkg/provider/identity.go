@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"os"
+	"regexp"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -14,7 +16,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-func SetContainerGroupIdentity(identity *armmsi.Identity, identityType azaci.ResourceIdentityType, containerGroup *client2.ContainerGroupWrapper) {
+func SetContainerGroupIdentity(ctx context.Context, identity *armmsi.Identity, identityType azaci.ResourceIdentityType, containerGroup *client2.ContainerGroupWrapper) {
 	if identity == nil || identityType != azaci.ResourceIdentityTypeUserAssigned {
 		return
 	}
@@ -28,6 +30,8 @@ func SetContainerGroupIdentity(identity *armmsi.Identity, identityType azaci.Res
 			},
 		},
 	}
+
+	log.G(ctx).Infof("setting managed identity based imageRegistryCredentials\n")
 	containerGroup.Identity = &cgIdentity
 }
 
@@ -65,31 +69,44 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 	if strings.HasPrefix(p.resourceGroup, "MC_") {
 		rg = strings.Split(p.resourceGroup, "_")[1]
 	}
+	masterURI := os.Getenv("MASTER_URI")
+	t := regexp.MustCompile(`[:/]`)
+	masterURISplit := t.Split(masterURI, -1)
+	fqdn := ""
+	if len(masterURISplit) > 1 {
+		fqdn = masterURISplit[3]
+	}
 
-	log.G(ctx).Infof("looking for cluster %s in resource group: %s \n", pod.ClusterName, rg)
+	log.G(ctx).Infof("looking for cluster in resource group: %s \n", rg)
 
 	aksClient, err := armcontainerservice.NewManagedClustersClient(p.vnetSubscriptionID, cred, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	cluster, err := aksClient.Get(ctx, rg, pod.ClusterName, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
-	if !ok {
-		return nil, fmt.Errorf("could not get kubelet identity from cluster")
-	}
-	if kubeletIdentity != nil {
-		// get armmsi identity object using identity resource name
-		identityResourceName := strings.SplitAfter(*kubeletIdentity.ResourceID, "userAssignedIdentities/")[1]
-		userAssignedIdentityGetResponse, err := client.Get(ctx, rg, identityResourceName, nil)
+	// List clusters in RG and filter on fqdn
+	clusterResourceGroupPager := aksClient.NewListByResourceGroupPager(rg, nil)
+	for clusterResourceGroupPager.More() {
+		nextResult, err := clusterResourceGroupPager.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return &userAssignedIdentityGetResponse.Identity, nil
+		// pick the cluster based on fqdn
+		for _, cluster := range nextResult.Value {
+			if (*cluster.Properties.Fqdn == fqdn) {
+				kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
+				if !ok || kubeletIdentity == nil {
+					return nil, fmt.Errorf("could not get kubelet identity from cluster\n")
+				}
+				// get armmsi identity object using identity resource name
+				identityResourceName := strings.SplitAfter(*kubeletIdentity.ResourceID, "userAssignedIdentities/")[1]
+				userAssignedIdentityGetResponse, err := client.Get(ctx, rg, identityResourceName, nil)
+				if err != nil {
+					return nil, err
+				}
+				return &userAssignedIdentityGetResponse.Identity, nil
+			}
+		}
 	}
 
 	// if all fails
@@ -102,10 +119,10 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 		}
 		// pick the cluster based on fqdn
 		for _, cluster := range nextResult.Value {
-			if (*cluster.Name == pod.ClusterName) {
+			if (*cluster.Properties.Fqdn == fqdn) {
 				kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
 				if !ok || kubeletIdentity == nil {
-					return nil, fmt.Errorf("could not get kubelet identity from cluster")
+					return nil, fmt.Errorf("could not get kubelet identity from cluster\n")
 				}
 				// get armmsi identity object using identity resource name
 				identityResourceName := strings.SplitAfter(*kubeletIdentity.ResourceID, "userAssignedIdentities/")[1]
@@ -117,5 +134,5 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 			}
 		}
 	}
-	return nil, fmt.Errorf("could not find an agent pool identity for cluster %s under subscription %s", pod.ClusterName, p.vnetSubscriptionID)
+	return nil, fmt.Errorf("could not find an agent pool identity for cluster %s under subscription %s\n", pod.ClusterName, p.vnetSubscriptionID)
 }

@@ -313,7 +313,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 			log.G(ctx).Infof("could not find Agent pool identity %v", err)
 		}
 
-		SetContainerGroupIdentity(agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
+		SetContainerGroupIdentity(ctx, agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
 		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
 	}
 

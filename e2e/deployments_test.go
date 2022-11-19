@@ -50,6 +50,30 @@ func TestImagePullUsingKubeletIdentityMI(t *testing.T) {
 		}
 	}
 
+	// check pod status
+	t.Log("get pod status ....")
+	cmd = kubectl("get", "pod", "--field-selector=status.phase=Running", "--namespace=vk-test", "--output=jsonpath={.items..metadata.name}")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	if string(out) != "e2etest-acr-test-mi-container" {
+		t.Fatal("failed to get pod's status")
+	}
+	t.Logf("success query pod status %s", string(out))
+
+	// check container status
+	t.Log("get container status ....")
+	cmd = kubectl("get", "pod", "e2etest-acr-test-mi-container", "--namespace=vk-test", "--output=jsonpath={.status.containerStatuses[0].ready}")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatal(string(out))
+	}
+	if string(out) != "true" {
+		t.Fatal("failed to get pod's status")
+	}
+	t.Logf("success query container status %s", string(out))
+
 	t.Log("clean up pod")
 	cmd = kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
 	if out, err := cmd.CombinedOutput(); err != nil {

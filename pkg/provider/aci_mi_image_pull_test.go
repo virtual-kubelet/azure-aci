@@ -3,6 +3,7 @@ package provider
 import (
 	"fmt"
 	"testing"
+	"context"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
@@ -148,7 +149,7 @@ func TestSetContainerGroupIdentity(t *testing.T) {
 				},
 			}
 
-			SetContainerGroupIdentity(tc.identity, tc.identityType, testContainerGroup)
+			SetContainerGroupIdentity(context.Background(), tc.identity, tc.identityType, testContainerGroup)
 			if tc.identityType == azaci.ResourceIdentityTypeUserAssigned && tc.identity != nil{
 				// identity uri, clientID, principalID should match
 				assert.Check(t, testContainerGroup.Identity != nil, "container group identity should be populated")
