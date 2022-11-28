@@ -1,6 +1,6 @@
 # Install a downgraded Azure ACI plugin for Virtual Kubelet
 
-This document presents the instructions to install a previous official Azure ACI plugin using Helm (1.4.5 as an example).
+This document presents the instructions to install a previous official Azure ACI plugin using Helm (1.4.5 as an example). This operation works for upgrade cases (e.g. 1.4.7) as well.
 
 ## Prerequisites
 
