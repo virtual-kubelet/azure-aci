@@ -29,11 +29,10 @@ func ValidateContainer(container containerinstance.Container) error {
 		return errors.Errorf("container %s properties CurrentState StartTime cannot be nil", *container.Name)
 	}
 	if container.InstanceView.PreviousState == nil {
-		emptyStr := ""
+		pendingState := "Pending"
 		container.InstanceView.PreviousState = &containerinstance.ContainerState{
-			State:        &emptyStr,
-			StartTime:    container.InstanceView.CurrentState.StartTime,
-			DetailStatus: &emptyStr,
+			State:        &pendingState,
+			DetailStatus: &pendingState,
 		}
 		return nil
 	}
@@ -66,16 +65,18 @@ func ValidateContainerGroup(cg *containerinstance.ContainerGroup) error {
 	if cg.Tags == nil {
 		return errors.Errorf("tags list cannot be nil for container group %s", *cg.Name)
 	}
-	if cg.IPAddress == nil {
-		return errors.Errorf("IPAddress cannot be nil for container group %s", *cg.Name)
-	} else {
-		aciState := *cg.ContainerGroupProperties.ProvisioningState
-		if cg.IPAddress.IP == nil {
-			if aciState == "Running" {
-				return errors.Errorf("podIP cannot be nil for container group %s while state is %s ", *cg.Name, aciState)
-			} else {
-				emptyIP := ""
-				cg.IPAddress.IP = &emptyIP
+	if cg.OsType != containerinstance.OperatingSystemTypesWindows {
+		if cg.IPAddress == nil {
+			return errors.Errorf("IPAddress cannot be nil for container group %s", *cg.Name)
+		} else {
+			aciState := *cg.ContainerGroupProperties.ProvisioningState
+			if cg.IPAddress.IP == nil {
+				if aciState == "Running" {
+					return errors.Errorf("podIP cannot be nil for container group %s while state is %s ", *cg.Name, aciState)
+				} else {
+					emptyIP := ""
+					cg.IPAddress.IP = &emptyIP
+				}
 			}
 		}
 	}

@@ -169,7 +169,10 @@ func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg client2.Co
 	subnetID := "/subscriptions/" + pn.VnetSubscriptionID + "/resourceGroups/" + pn.VnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + pn.VnetName + "/subnets/" + pn.SubnetName
 	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
+	// windows containers don't support DNS config
+	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
+		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
+	}
 }
 
 func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain string) *azaci.DNSConfiguration {
