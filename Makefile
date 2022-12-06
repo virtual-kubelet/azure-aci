@@ -8,6 +8,7 @@ GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
 AKS_E2E_SCRIPT := ./hack/e2e/aks.sh
+AKS_ADDON_E2E_SCRIPT := ./hack/e2e/aks-addon.sh
 
 GO111MODULE := on
 export GO111MODULE
@@ -82,6 +83,9 @@ test:
 e2e-test:
 	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 
+.PHONY: aks-addon-e2e-test
+aks-addon-e2e-test:
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_ADDON_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 .PHONY: vet
 vet:
 	@go vet ./... #$(packages)
