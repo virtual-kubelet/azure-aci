@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: kube-system
+  name: virtual-kubelet-azure-aci
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aci-connector-linux
+  template:
+    metadata:
+      labels:
+        app: aci-connector-linux
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.azure.com/cluster
+                    operator: Exists
+                  - key: type
+                    operator: NotIn
+                    values:
+                      - virtual-kubelet
+                  - key: kubernetes.io/os
+                    operator: In
+                    values:
+                      - linux
+      containers:
+      - name: vk-azure-aci
+        image: TEST_IMAGE
+        imagePullPolicy: Always
+        env:
+        - name: KUBELET_PORT
+          value: "10250"
+        - name: AKS_CREDENTIAL_LOCATION
+          value: /etc/aks/azure.json
+        - name: AZURE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: aci-connector-linux
+              key: clientSecret
+        - name: APISERVER_CERT_LOCATION
+          value: /etc/virtual-kubelet/cert.pem
+        - name: APISERVER_KEY_LOCATION
+          value: /etc/virtual-kubelet/key.pem
+        - name: VKUBELET_POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        - name: ACI_EXTRA_USER_AGENT
+          value: "deploy/aks/azure-aci/e2e-test"
+        - name: ACI_SUBNET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: aci_subnet_name
+        - name: MASTER_URI
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: master_uri
+        - name: CLUSTER_CIDR
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: cluster_subnet_cidr
+        - name: KUBE_DNS_IP
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: kube_dns_ip
+        - name: ENABLE_REAL_TIME_METRICS
+          value: "true"
+        - name: USE_VK_VERSION_2
+          value: "true"
+        - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: aci_user_identity
+        volumeMounts:
+          - name: certificates
+            mountPath: /etc/kubernetes/certs
+            readOnly: true
+          - name: credentials
+            mountPath: "/etc/virtual-kubelet"
+          - name: aks-credential
+            mountPath: "/etc/aks/azure.json"
+        command: ["virtual-kubelet"]
+        args: [
+          "--provider", "azure",
+          "--nodename", "vk-aci-test-aks",
+          "--authentication-token-webhook=true",
+          "--client-verify-ca", "/etc/kubernetes/certs/ca.crt",
+          "--no-verify-clients=false",
+          "--os", "Linux"
+        ]
+      volumes:
+      - name: certificates
+        hostPath:
+          path: /etc/kubernetes/certs
+      - name: credentials
+        secret:
+          secretName: aci-connector-linux
+      - name: aks-credential
+        hostPath:
+          path: /etc/kubernetes/azure.json
+          type: File
+      serviceAccountName: aci-connector-linux
+      restartPolicy: Always

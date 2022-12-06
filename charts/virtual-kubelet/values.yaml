@@ -5,6 +5,7 @@ image:
   tag: 1.4.7
   pullPolicy: Always
 
+namespace: vk-azure-aci
 useVKVersion2: true
 
 nodeName: "virtual-node-aci-linux-helm"

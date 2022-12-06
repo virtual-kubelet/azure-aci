@@ -31,6 +31,7 @@ import (
 const (
 	fakeResourceGroup = "vk-rg"
 	fakeNodeName      = "vk"
+	fakeVnetName      = "vnet"
 )
 
 var (
@@ -563,6 +564,15 @@ func createTestProvider(aciMocks *MockACIProvider, resourceManager *manager.Reso
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	err = os.Setenv("ACI_VNET_NAME", fakeVnetName)
+	if err != nil {
+		return nil, err
+	}
+	err = os.Setenv("ACI_VNET_RESOURCE_GROUP", fakeResourceGroup)
+	if err != nil {
+		return nil, err
 	}
 
 	err = os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)

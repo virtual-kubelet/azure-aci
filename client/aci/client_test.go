@@ -745,6 +745,7 @@ func TestCreateContainerGroupWithVNet(t *testing.T) {
 }
 
 func TestCreateContainerGroupWithGPU(t *testing.T) {
+	t.Skip("Old custom SDK tests")
 	uid := uuid.New()
 	containerGroupName := containerGroup + "-" + uid.String()[0:6]
 

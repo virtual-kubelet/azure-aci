@@ -1,6 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: {{ .Values.namespace }}
   name: {{ template "vk.fullname" . }}
 {{ include "vk.labels" . | indent 2 }}
     component: kubelet

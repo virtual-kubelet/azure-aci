@@ -23,7 +23,7 @@ fi
 : "${LOCATION:=eastus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
-: "${CHART_NAME:=vk-aci-test-aks}"
+: "${CHART_NAME:=aks-addon--test}"
 : "${TEST_NODE_NAME:=vk-aci-test-aks}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
@@ -32,9 +32,9 @@ fi
 : "${ACI_SUBNET_CIDR=10.241.0.0/16}"
 : "${VNET_NAME=aksAddonVN}"
 : "${CLUSTER_SUBNET_NAME=aksAddonsubnet}"
-: "${ACI_SUBNET_NAME=aksAddonACIsubnet}"
+: "${ACI_SUBNET_NAME=acisubnet}"
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
-: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
+: "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=aksaddonvk$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 
 error() {
@@ -140,25 +140,20 @@ MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' 
 
 ACI_USER_IDENTITY="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.clientId -o tsv)"
 KUBE_DNS_IP="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query networkProfile.dnsServiceIp -o tsv)"
+CLUSTER_RESOURCE_ID="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "id" -o tsv)"
+MC_RESOURCE_GROUP="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "nodeResourceGroup" -o tsv)"
+SUB_ID="$(az account show --query "id" -o tsv)"
 
+kubectl create configmap test-vars -n kube-system \
+  --from-literal=master_uri="$MASTER_URI" \
+  --from-literal=aci_user_identity="$ACI_USER_IDENTITY" \
+  --from-literal=kube_dns_ip="$KUBE_DNS_IP" \
+  --from-literal=cluster_subnet_cidr="$CLUSTER_SUBNET_CIDR" \
+  --from-literal=aci_subnet_name="$ACI_SUBNET_NAME"
 
-helm install \
-    --kubeconfig="$KUBECONFIG" \
-    --set "image.repository=$IMG_URL"  \
-    --set "image.name=$IMG_REPO" \
-    --set "image.tag=$IMG_TAG" \
-    --set "nodeName=$TEST_NODE_NAME" \
-    --set providers.azure.vnet.enabled=true \
-    --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
-    --set "providers.azure.vnet.subnetCidr=$ACI_SUBNET_CIDR" \
-    --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_CIDR" \
-    --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
-    --set "providers.azure.masterUri=$MASTER_URI" \
-    --set "providers.azure.managedIdentityID=$ACI_USER_IDENTITY" \
-    "$CHART_NAME" \
-    ./charts/virtual-kubelet
+sed -e "s|TEST_IMAGE|$ACR_NAME.azurecr.io/$IMG_REPO:$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
 
-kubectl wait --for=condition=available deploy "$TEST_NODE_NAME-virtual-kubelet-azure-aci" --timeout=300s
+kubectl wait --for=condition=available deploy "virtual-kubelet-azure-aci" -n kube-system --timeout=300s
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break

@@ -193,7 +193,6 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	if azConfig.AKSCredential != nil {
 		p.resourceGroup = azConfig.AKSCredential.ResourceGroup
 		p.region = azConfig.AKSCredential.Region
-
 		p.vnetName = azConfig.AKSCredential.VNetName
 		p.vnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
 	}
@@ -232,16 +231,14 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 
 	if rg := os.Getenv("ACI_RESOURCE_GROUP"); rg != "" {
 		p.resourceGroup = rg
-	}
-	if p.resourceGroup == "" {
-		return nil, errors.New("Resource group can not be empty please set ACI_RESOURCE_GROUP")
+	} else if p.resourceGroup == "" {
+		return nil, errors.New("resource group can not be empty please set ACI_RESOURCE_GROUP")
 	}
 
 	if r := os.Getenv("ACI_REGION"); r != "" {
 		p.region = r
-	}
-	if p.region == "" {
-		return nil, errors.New("Region can not be empty please set ACI_REGION")
+	} else if p.region == "" {
+		return nil, errors.New("region can not be empty please set ACI_REGION")
 	}
 
 	if r := p.region; !isValidACIRegion(r) {
@@ -920,10 +917,10 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]aza
 
 		newInitContainer := azaci.InitContainerDefinition{
 			Name: &pod.Spec.InitContainers[i].Name,
-			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition {
-				Image: &pod.Spec.InitContainers[i].Image,
-				Command: p.getCommand(&pod.Spec.InitContainers[i]),
-				VolumeMounts: p.getVolumeMounts(&pod.Spec.InitContainers[i]),
+			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition{
+				Image:                &pod.Spec.InitContainers[i].Image,
+				Command:              p.getCommand(&pod.Spec.InitContainers[i]),
+				VolumeMounts:         p.getVolumeMounts(&pod.Spec.InitContainers[i]),
 				EnvironmentVariables: p.getEnvironmentVariables(&pod.Spec.InitContainers[i]),
 			},
 		}
