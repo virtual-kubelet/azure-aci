@@ -15,8 +15,6 @@ assignees: ''
 
 **Virtual-kubelet version**
 
-**azure-aci plugin version**
-
 **Kubernetes version**
 
 **Additional context**

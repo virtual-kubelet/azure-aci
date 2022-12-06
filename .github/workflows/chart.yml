@@ -3,8 +3,8 @@ name: publish_helm_chart
 on:
   push:
     paths:
-      - ".github/workflows/chart.yaml"
-      - "charts/**"
+      - '.github/workflows/chart.yaml'
+      - 'charts/**'
   create:
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
