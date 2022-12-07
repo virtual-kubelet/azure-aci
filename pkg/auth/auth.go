@@ -23,8 +23,8 @@ type CloudEnvironmentName string
 
 const (
 	AzurePublicCloud       CloudEnvironmentName = "AzurePublicCloud"
-	AzureUSGovernmentCloud CloudEnvironmentName = "AzureUSGovernment"
-	AzureChinaCloud        CloudEnvironmentName = "AzureChina"
+	AzureUSGovernmentCloud CloudEnvironmentName = "AzureUSGovernmentCloud"
+	AzureChinaCloud        CloudEnvironmentName = "AzureChinaCloud"
 )
 
 type Config struct {
