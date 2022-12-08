@@ -6,10 +6,12 @@ concurrency:
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
   pull_request_target:
-    branches: [master]
+    branches:
+      - master
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:

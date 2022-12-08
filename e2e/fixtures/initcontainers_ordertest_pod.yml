@@ -4,6 +4,7 @@ metadata:
   name: vk-e2e-initcontainers-order
   namespace: vk-test
 spec:
+  nodeName: vk-aci-test-aks
   initContainers:
   - image: alpine
     name: init-container-01
