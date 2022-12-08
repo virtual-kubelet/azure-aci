@@ -125,7 +125,8 @@ az aks create \
     --assign-identity "$cluster_identity_id" \
     --generate-ssh-keys \
     --attach-acr "$ACR_NAME"
-fi
+
+else
 
 az aks create \
     -g "$RESOURCE_GROUP" \
@@ -139,6 +140,7 @@ az aks create \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
     --generate-ssh-keys
+fi
 
 az role assignment create \
     --role "Network Contributor" \
