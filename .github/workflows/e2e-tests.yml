@@ -6,11 +6,12 @@ concurrency:
 
 on:
   pull_request_target:
-    branches: [master]
-    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
-  push:
-    branches: [master]
-    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
+    paths:
+      - '.github/workflows/chart.yml'
+      - 'charts/**'
+  create:
+    # Publish semver tags as releases.
+    tags: [ 'v*.*.*' ]
 
 permissions:
    id-token: write
