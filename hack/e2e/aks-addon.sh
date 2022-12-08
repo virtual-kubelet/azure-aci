@@ -19,8 +19,8 @@ if [ "$PR_RAND" = "" ]; then
     RANDOM_NUM=$RANDOM
 fi
 
-: "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=westus}"
+: "${RESOURCE_GROUP:=aks-addon-aci-test-$RANDOM_NUM}"
+: "${LOCATION:=eastus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -28,12 +28,12 @@ fi
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
 : "${VNET_RANGE=10.0.0.0/8}"
-: "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
-: "${ACI_SUBNET_RANGE=10.241.0.0/16}"
-: "${VNET_NAME=myAKSVNet}"
-: "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
-: "${ACI_SUBNET_NAME=myACISubnet}"
-: "${ACR_NAME=vkacr$RANDOM_NUM}"
+: "${CLUSTER_SUBNET_CIDR=10.240.0.0/16}"
+: "${ACI_SUBNET_CIDR=10.241.0.0/16}"
+: "${VNET_NAME=aksAddonVN}"
+: "${CLUSTER_SUBNET_NAME=aksAddonsubnet}"
+: "${ACI_SUBNET_NAME=aksAddonACIsubnet}"
+: "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
 
@@ -89,13 +89,13 @@ az network vnet create \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
     --subnet-name $CLUSTER_SUBNET_NAME \
-    --subnet-prefix $CLUSTER_SUBNET_RANGE
+    --subnet-prefix $CLUSTER_SUBNET_CIDR
 
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name $ACI_SUBNET_NAME \
-    --address-prefix $ACI_SUBNET_RANGE \
+    --address-prefix $ACI_SUBNET_CIDR \
     --query id -o tsv)"
 
 cluster_subnet_id="$(az network vnet subnet show \
@@ -150,8 +150,8 @@ helm install \
     --set "nodeName=$TEST_NODE_NAME" \
     --set providers.azure.vnet.enabled=true \
     --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
-    --set "providers.azure.vnet.subnetCidr=$ACI_SUBNET_RANGE" \
-    --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE" \
+    --set "providers.azure.vnet.subnetCidr=$ACI_SUBNET_CIDR" \
+    --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_CIDR" \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
     --set "providers.azure.managedIdentityID=$ACI_USER_IDENTITY" \
