@@ -49,6 +49,7 @@ The following table lists the configurable parameters of the azure-aci chart and
 
 | Parameter                                      | Description                                                                                                           | Default                               |
 |------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|---------------------------------------|
+ | namespace                                      | The name of the namespace that azure-aci will be deployed in.                                                         | `vk-azure-aci`                        | 
 | image.secretName                               | The name of image secret.                                                                                             | `virtual-kubelet-aci-acr`             |
 | image.repository                               | Image repository.                                                                                                     | `mcr.microsoft.com`                   |
 | image.name                                     | Image name.                                                                                                           | `oss/virtual-kubelet/virtual-kubelet` |
@@ -77,6 +78,7 @@ The following table lists the configurable parameters of the azure-aci chart and
 | providers.azure.managedIdentityID              | Only required if `targetAKS` is false.                                                                                | ` `                                   |
 | providers.azure.aciResourceGroup               | `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments.                                         | ` `                                   |
 | providers.azure.aciRegion                      | `aciResourceGroup` and `aciRegion` are required only for non-AKS deployments.                                         | ` `                                   |
+| providers.azure.enableRealTimeMetrics          | Enable Real-Time metrics.                                                                                             | `true`                                |
 | providers.azure.masterUri                      | API server URL for the AKS cluster.                                                                                   | ` `                                   |
 | providers.azure.loganalytics.enabled           | Log Analytics enabled flag.                                                                                           | `false`                               |
 | providers.azure.loganalytics.workspaceId       | Log Analytics workspace ID.                                                                                           | ` `                                   |

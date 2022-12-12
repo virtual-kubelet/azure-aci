@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
@@ -36,15 +37,24 @@ func (p *ACIProvider) setVNETConfig(ctx context.Context, azConfig *auth.Config) 
 	if vnetSubscriptionID := os.Getenv("ACI_VNET_SUBSCRIPTION_ID"); vnetSubscriptionID != "" {
 		p.vnetSubscriptionID = vnetSubscriptionID
 	}
+
 	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
 		p.vnetName = vnetName
+	} else if p.vnetName == "" {
+		return errors.New("vnet name can not be empty please set ACI_VNET_NAME")
 	}
+
 	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
 		p.vnetResourceGroup = vnetResourceGroup
+	} else if p.vnetResourceGroup == "" {
+		return errors.New("vnet resourceGroup can not be empty please set ACI_VNET_RESOURCE_GROUP")
 	}
+
+	// Set subnet properties.
 	if subnetName := os.Getenv("ACI_SUBNET_NAME"); p.vnetName != "" && subnetName != "" {
 		p.subnetName = subnetName
 	}
+
 	if subnetCIDR := os.Getenv("ACI_SUBNET_CIDR"); subnetCIDR != "" {
 		if p.subnetName == "" {
 			return fmt.Errorf("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR")

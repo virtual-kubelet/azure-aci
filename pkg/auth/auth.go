@@ -211,7 +211,6 @@ func newAKSCredential(filePath string) (*aksCredential, error) {
 	if err := json.Unmarshal(b, &cred); err != nil {
 		return nil, err
 	}
-
 	logger.Debug("load AKS credential file successfully")
 	return &cred, nil
 }
