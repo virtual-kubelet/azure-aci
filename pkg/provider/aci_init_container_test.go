@@ -1,20 +1,19 @@
 package provider
 
-
 import (
 	"context"
 	"testing"
 
-	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/golang/mock/gomock"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/node-cli/manager"
+	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestCreatePodWithInitContainers(t *testing.T) {
@@ -43,7 +42,6 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 		return nil
 	}
 
-
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -52,27 +50,27 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name: "container-name-01",
+					Name:  "container-name-01",
 					Image: "alpine",
 				},
 				{
-					Name: "container-name-02",
+					Name:  "container-name-02",
 					Image: "alpine",
 				},
 			},
 		},
 	}
 	cases := []struct {
-		description     string
-		initContainers	[]v1.Container
-		expectedError   error
+		description    string
+		initContainers []v1.Container
+		expectedError  error
 	}{
 		{
-			description:  "Init Containers with Supported fields",
+			description:   "Init Containers with Supported fields",
 			expectedError: nil,
 			initContainers: []v1.Container{
 				v1.Container{
-					Name: initContainerName1,
+					Name:  initContainerName1,
 					Image: "alpine",
 					VolumeMounts: []v1.VolumeMount{
 						v1.VolumeMount{
@@ -81,10 +79,10 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 						},
 					},
 					Command: []string{"/bin/bash"},
-					Args: []string{"-c echo test"},
+					Args:    []string{"-c echo test"},
 					Env: []v1.EnvVar{
 						v1.EnvVar{
-							Name: "TEST_ENV",
+							Name:  "TEST_ENV",
 							Value: "testvalue",
 						},
 					},
@@ -96,16 +94,16 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			},
 		},
 		{
-			description:  "Init Containers with ports",
+			description: "Init Containers with ports",
 			initContainers: []v1.Container{
 				v1.Container{
 					Name:  "initContainer 01",
 					Image: "alpine",
 					Ports: []v1.ContainerPort{
 						v1.ContainerPort{
-							Name: "http",
+							Name:          "http",
 							ContainerPort: 80,
-							Protocol: "TCP",
+							Protocol:      "TCP",
 						},
 					},
 				},
@@ -113,13 +111,13 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support ports"),
 		},
 		{
-			description:  "Init Containers with liveness probe",
+			description: "Init Containers with liveness probe",
 			initContainers: []v1.Container{
 				v1.Container{
 					Name: "initContainer 01",
 					LivenessProbe: &v1.Probe{
 						Handler: v1.Handler{
-						HTTPGet: &v1.HTTPGetAction{
+							HTTPGet: &v1.HTTPGetAction{
 								Port: intstr.FromString("http"),
 								Path: "/",
 							},
@@ -135,7 +133,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support livenessProbe"),
 		},
 		{
-			description:  "Init Containers with readiness probe",
+			description: "Init Containers with readiness probe",
 			initContainers: []v1.Container{
 				v1.Container{
 					Name: "initContainer 01",
@@ -157,7 +155,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe"),
 		},
 		{
-			description:  "Init Containers with resource request",
+			description: "Init Containers with resource request",
 			initContainers: []v1.Container{
 				{
 					Name: "initContainer 01",

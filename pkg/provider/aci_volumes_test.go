@@ -154,19 +154,19 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 			pod.Spec.Containers[0].VolumeMounts = fakeVolumeMount
 			pod.Spec.InitContainers = []v1.Container{
 				v1.Container{
-					Name: initContainerName,
+					Name:  initContainerName,
 					Image: "alpine",
 					VolumeMounts: []v1.VolumeMount{
 						v1.VolumeMount{
-							Name: "fakeVolume",
+							Name:      "fakeVolume",
 							MountPath: "/mnt/azure",
 						},
 					},
 					Command: []string{"/bin/bash"},
-					Args: []string{"-c echo test"},
+					Args:    []string{"-c echo test"},
 					Env: []v1.EnvVar{
 						v1.EnvVar{
-							Name: "TEST_ENV",
+							Name:  "TEST_ENV",
 							Value: "testvalue",
 						},
 					},

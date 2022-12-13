@@ -21,7 +21,7 @@ env:
 
 jobs:
   lint:
-    name: "Lint"
+    name: "Lint & Format"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -38,6 +38,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: Format
+        run: make fmt
 
       - name: golangci-lint
         run: make lint

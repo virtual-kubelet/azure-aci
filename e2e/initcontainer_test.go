@@ -1,12 +1,11 @@
-
 package e2e
 
 import (
+	"io/ioutil"
+	"os"
+	"os/exec"
 	"testing"
 	"time"
-	"io/ioutil"
-	"os/exec"
-	"os"
 
 	"gotest.tools/assert"
 )

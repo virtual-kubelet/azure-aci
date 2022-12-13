@@ -106,4 +106,3 @@ func TestPodLifecycle(t *testing.T) {
 		t.Fatal(string(out))
 	}
 }
-

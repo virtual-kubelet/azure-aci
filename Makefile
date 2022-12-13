@@ -5,6 +5,10 @@ GOLANGCI_LINT_VER := v1.49.0
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
+GOIMPORTS_VER := latest
+GOIMPORTS_BIN := goimports
+GOIMPORTS := $(abspath $(TOOLS_BIN_DIR)/$(GOIMPORTS_BIN)-$(GOIMPORTS_VER))
+
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
 AKS_E2E_SCRIPT := ./hack/e2e/aks.sh
@@ -35,12 +39,9 @@ IMG_TAG ?= $(subst v,,$(VERSION))
 $(GOLANGCI_LINT):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
-.PHONY: safebuild
-# docker build
-safebuild:
-	@echo "Building image..."
-	docker build -t $(DOCKER_IMAGE):$(VERSION) .
-
+# GOIMPORTS
+$(GOIMPORTS):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) golang.org/x/tools/cmd/goimports $(GOIMPORTS_BIN) $(GOIMPORTS_VER)
 
 BUILDX_BUILDER_NAME ?= img-builder
 QEMU_VERSION ?= 5.2.0-2
@@ -110,6 +111,11 @@ check-mod: # verifies that module changes for go.mod and go.sum are checked in
 .PHONY: mod
 mod:
 	@go mod tidy
+
+.PHONY: fmt
+fmt:  $(GOIMPORTS) ## Run go fmt against code.
+	go fmt ./...
+	$(GOIMPORTS) -w $$(go list -f {{.Dir}} ./...)
 
 .PHONY: testauth
 testauth: test-cred-json test-loganalytics-json
