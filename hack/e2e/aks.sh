@@ -29,6 +29,7 @@ fi
 : "${TEST_WINDOWS_NODE_NAME:=vk-aci-test-win-aks}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
+: "${INIT_IMG_TAG:=0.1.0}"
 : "${VNET_RANGE=10.0.0.0/8}"
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
@@ -81,7 +82,9 @@ if [ "$E2E_TARGET" = "pr" ]; then
   az acr login --name "$ACR_NAME"
   IMG_URL=$ACR_NAME.azurecr.io
   IMG_REPO="virtual-kubelet"
+  INIT_IMG_REPO="init-validation"
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+  OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$ACR_NAME.azurecr.io/$INIT_IMG_REPO make docker-build-init-image
 
 fi
 
@@ -183,6 +186,8 @@ helm install \
     --set "image.repository=${IMG_URL}"  \
     --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
+    --set "initImage.name=${INIT_IMG_REPO}" \
+    --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_NODE_NAME}" \
     --set providers.azure.vnet.enabled=true \
     --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
@@ -232,7 +237,7 @@ export TEST_WINDOWS_NODE_NAME
 az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -o tsv)
 
-az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string $AZURE_STORAGE_CONNECTION_STRING
+az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
 CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $CSI_DRIVER_STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv)
 
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME

@@ -29,6 +29,7 @@ fi
 : "${TEST_WINDOWS_NODE_NAME:=vk-aci-test-win-aks}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
+: "${INIT_IMG_TAG:=0.1.0}"
 : "${VNET_RANGE=10.0.0.0/8}"
 : "${CLUSTER_SUBNET_CIDR=10.240.0.0/16}"
 : "${ACI_SUBNET_CIDR=10.241.0.0/16}"
@@ -81,7 +82,10 @@ if [ "$E2E_TARGET" = "pr" ]; then
   az acr login --name "$ACR_NAME"
   IMG_URL=$ACR_NAME.azurecr.io
   IMG_REPO="virtual-kubelet"
+  INIT_IMG_REPO="init-validation"
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+  OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$ACR_NAME.azurecr.io/$INIT_IMG_REPO make docker-build-init-image
+
 fi
 
 TMPDIR="$(mktemp -d)"
@@ -155,7 +159,7 @@ kubectl create configmap test-vars -n kube-system \
   --from-literal=cluster_subnet_cidr="$CLUSTER_SUBNET_CIDR" \
   --from-literal=aci_subnet_name="$ACI_SUBNET_NAME"
 
-sed -e "s|TEST_IMAGE|$ACR_NAME.azurecr.io/$IMG_REPO:$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
+sed -e "s|TEST_INIT_IMAGE|$ACR_NAME.azurecr.io/$INIT_IMG_REPO:$INIT_IMG_TAG|g" -e "s|TEST_IMAGE|$ACR_NAME.azurecr.io/$IMG_REPO:$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
 
 kubectl wait --for=condition=available deploy "virtual-kubelet-azure-aci" -n kube-system --timeout=300s
 

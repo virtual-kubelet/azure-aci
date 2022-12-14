@@ -1,0 +1,21 @@
+.dockerignore
+Dockerfile
+bin/
+helm/
+hack/
+charts/
+.circleci/
+README.md
+.gitignore
+
+# binary output
+bin/
+hack/tools/bin/
+
+.azure
+
+.DS_Store
+.vscode/
+.idea/
+.run/
+dist/

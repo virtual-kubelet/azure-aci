@@ -73,7 +73,7 @@ type ACIProvider struct {
 	resourceManager          *manager.ResourceManager
 	containerGroupExtensions []*client2.Extension
 	enabledFeatures          *featureflag.FlagIdentifier
-	providernetwork          network.ProviderNetwork
+	ProviderNetwork          network.ProviderNetwork
 
 	resourceGroup      string
 	region             string
@@ -193,12 +193,12 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	if azConfig.AKSCredential != nil {
 		p.resourceGroup = azConfig.AKSCredential.ResourceGroup
 		p.region = azConfig.AKSCredential.Region
-		p.providernetwork.VnetName = azConfig.AKSCredential.VNetName
-		p.providernetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
+		p.ProviderNetwork.VnetName = azConfig.AKSCredential.VNetName
+		p.ProviderNetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
 	}
 
-	if p.providernetwork.VnetResourceGroup == "" {
-		p.providernetwork.VnetResourceGroup = p.resourceGroup
+	if p.ProviderNetwork.VnetResourceGroup == "" {
+		p.ProviderNetwork.VnetResourceGroup = p.resourceGroup
 	}
 	// If the log analytics file has been specified, load workspace credentials from the file
 	if logAnalyticsAuthFile := os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"); logAnalyticsAuthFile != "" {
@@ -251,11 +251,11 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		return nil, err
 	}
 
-	if err := p.providernetwork.SetVNETConfig(ctx, &azConfig); err != nil {
+	if err := p.ProviderNetwork.SetVNETConfig(ctx, &azConfig); err != nil {
 		return nil, err
 	}
 
-	if p.providernetwork.SubnetName != "" {
+	if p.ProviderNetwork.SubnetName != "" {
 		// windows containers don't support kube-proxy nor realtime metrics
 		if p.operatingSystem != string(azaci.OperatingSystemTypesWindows) {
 			err = p.setACIExtensions(ctx)
@@ -343,7 +343,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 			})
 		}
 	}
-	if len(ports) > 0 && p.providernetwork.SubnetName == "" {
+	if len(ports) > 0 && p.ProviderNetwork.SubnetName == "" {
 		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
 			Ports: &ports,
 			Type:  azaci.ContainerGroupIPAddressTypePublic,
@@ -365,7 +365,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"CreationTimestamp": &podCreationTimestamp,
 	}
 
-	p.providernetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
+	p.ProviderNetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
 
 	// windows containers don't support kube-proxy nor realtime metrics
 	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {

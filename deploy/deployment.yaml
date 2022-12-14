@@ -28,6 +28,31 @@ spec:
                     operator: In
                     values:
                       - linux
+      initContainers:
+        - name: init-validation
+          image: TEST_INIT_IMAGE
+          imagePullPolicy: Always
+          env:
+            - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
+              valueFrom:
+                configMapKeyRef:
+                  name: test-vars
+                  key: aci_user_identity
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: aci-connector-linux
+                  key: clientSecret
+            - name: AKS_CREDENTIAL_LOCATION
+              value: /etc/aks/azure.json
+          volumeMounts:
+            - name: credentials
+              mountPath: "/etc/virtual-kubelet"
+            - name: certificates
+              mountPath: /etc/kubernetes/certs
+              readOnly: true
+            - name: aks-credential
+              mountPath: "/etc/aks/azure.json"
       containers:
       - name: vk-azure-aci
         image: TEST_IMAGE

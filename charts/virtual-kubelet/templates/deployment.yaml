@@ -19,6 +19,36 @@ spec:
       labels:
         app: {{ template "vk.fullname" . }}
     spec:
+    {{- if .Values.useVKVersion2}}
+      initContainers:
+        - name: init-validation
+          image: "{{ .Values.image.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.tag }}"
+          imagePullPolicy: {{ .Values.initImage.pullPolicy }}
+          env:
+            - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
+              value: {{ .managedIdentityID }}
+            - name: AZURE_CLIENT_ID
+              value: {{ .clientId }}
+            - name: AZURE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "vk.fullname" $ }}
+                  key: clientSecret
+            - name: AKS_CREDENTIAL_LOCATION
+              value: /etc/aks/azure.json
+            - name: AZURE_AUTH_LOCATION
+              value: /etc/virtual-kubelet/credentials.json
+          volumeMounts:
+            - name: credentials
+              mountPath: "/etc/virtual-kubelet"
+            - name: certificates
+              mountPath: /etc/kubernetes/certs
+              readOnly: true
+          {{- if .Values.providers.azure.targetAKS }}
+            - name: aks-credential
+              mountPath: "/etc/aks/azure.json"
+          {{- end }}
+    {{- end }}
       containers:
       - name: {{ template "vk.fullname" . }}
         image: "{{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"

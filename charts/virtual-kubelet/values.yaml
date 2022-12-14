@@ -5,7 +5,13 @@ image:
   tag: 1.4.9
   pullPolicy: Always
 
+initImage:
+  name: init-validation
+  tag: 0.1.0
+  pullPolicy: Always
+
 namespace: vk-azure-aci
+
 useVKVersion2: true
 
 nodeName: "virtual-node-aci-linux-helm"
