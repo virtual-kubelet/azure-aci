@@ -201,18 +201,16 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 
 			err = provider.CreatePod(context.Background(), pod)
 
-			for _, vol := range tc.volumes {
-				if vol.Name == azureFileVolumeName1 || vol.Name == azureFileVolumeName2 {
-					if tc.expectedError != nil {
-						assert.Equal(t, tc.expectedError.Error(), err.Error())
-					} else {
-						assert.NilError(t, tc.expectedError, err)
-					}
-				}
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
+
 		})
 	}
 }
+
 func TestCreatePodWithProjectedVolume(t *testing.T) {
 	projectedVolumeName := "projectedvolume"
 	fakeSecretName := "fake-secret"
@@ -516,15 +514,12 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 
 			err = provider.CreatePod(context.Background(), pod)
 
-			for _, vol := range tc.volumes {
-				if vol.Name == azureFileVolumeName {
-					if tc.expectedError != nil {
-						assert.Equal(t, tc.expectedError.Error(), err.Error())
-					} else {
-						assert.NilError(t, tc.expectedError, err)
-					}
-				}
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
+
 		})
 	}
 }

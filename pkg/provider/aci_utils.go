@@ -9,6 +9,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+
+	"github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	v1 "k8s.io/api/core/v1"
 )
 
 func getContainerID(cgID, containerName *string) string {
@@ -26,7 +29,7 @@ func getContainerID(cgID, containerName *string) string {
 	return fmt.Sprintf("aci://%s", hex.EncodeToString(hashBytes))
 }
 
-func omitDuplicates(strs []string) []string {
+func OmitDuplicates(strs []string) []string {
 	uniqueStrs := make(map[string]bool)
 
 	var ret []string
@@ -37,4 +40,13 @@ func omitDuplicates(strs []string) []string {
 		}
 	}
 	return ret
+}
+
+func GetProtocol(pro v1.Protocol) containerinstance.ContainerNetworkProtocol {
+	switch pro {
+	case v1.ProtocolUDP:
+		return containerinstance.ContainerNetworkProtocolUDP
+	default:
+		return containerinstance.ContainerNetworkProtocolTCP
+	}
 }

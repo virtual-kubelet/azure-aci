@@ -152,7 +152,7 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 	}
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
-		t.Fatal("Failed to create pod", err)
+		t.Fatal("failed to create pod", err)
 	}
 }
 
