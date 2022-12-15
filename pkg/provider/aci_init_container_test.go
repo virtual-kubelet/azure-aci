@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
+	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"gotest.tools/assert"
@@ -176,6 +177,8 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 
+			ctx := context.TODO()
+			
 			resourceManager, err := manager.NewResourceManager(
 				NewMockPodLister(mockCtrl),
 				NewMockSecretLister(mockCtrl),
@@ -190,6 +193,10 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			provider, err := createTestProvider(aciMocks, resourceManager)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
+			}
+
+			if !provider.enabledFeatures.IsEnabled(ctx, featureflag.InitContainerFeature) {
+				t.Skipf("%s feature is not enabled", featureflag.InitContainerFeature)
 			}
 
 			pod.Spec.InitContainers = tc.initContainers

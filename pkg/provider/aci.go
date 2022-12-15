@@ -22,6 +22,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/analytics"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
+	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/node-cli/manager"
@@ -70,6 +71,7 @@ type ACIProvider struct {
 	azClientsAPIs            client2.AzClientsInterface
 	resourceManager          *manager.ResourceManager
 	containerGroupExtensions []*client2.Extension
+	enabledFeatures          *featureflag.FlagIdentifier
 
 	resourceGroup      string
 	region             string
@@ -181,6 +183,8 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 			return nil, err
 		}
 	}
+
+	p.enabledFeatures = featureflag.InitFeatureFlag(ctx)
 
 	p.azClientsAPIs = azAPIs
 	p.resourceManager = rm
@@ -301,14 +305,16 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	}
 
-	// get initContainers
-	initContainers, err := p.getInitContainers(ctx, pod)
-	if err != nil {
-		return err
+	if p.enabledFeatures.IsEnabled(ctx, featureflag.InitContainerFeature) {
+		// get initContainers
+		initContainers, err := p.getInitContainers(ctx, pod)
+		if err != nil {
+			return err
+		}
+		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
 	}
 
 	// assign all the things
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds

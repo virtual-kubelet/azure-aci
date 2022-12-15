@@ -14,6 +14,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
+	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
@@ -39,10 +40,38 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
+	mockSecretLister := NewMockSecretLister(mockCtrl)
+	resourceManager, err := manager.NewResourceManager(
+		NewMockPodLister(mockCtrl),
+		mockSecretLister,
+		NewMockConfigMapLister(mockCtrl),
+		NewMockServiceLister(mockCtrl),
+		NewMockPersistentVolumeClaimLister(mockCtrl),
+		NewMockPersistentVolumeLister(mockCtrl))
+	if err != nil {
+		t.Fatal("Unable to prepare the mocks for resourceManager", err)
+	}
 	aciMocks := createNewACIMock()
+
+	provider, err := createTestProvider(aciMocks, resourceManager)
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
+
+	initEnabled := provider.enabledFeatures.IsEnabled(context.TODO(), featureflag.InitContainerFeature)
+
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
 		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
-		initContainers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers
+		// Check only if init container feature is enabled
+		if initEnabled {
+			initContainers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers
+			assert.Check(t, initContainers[0].VolumeMounts != nil, "Volume mount should be present")
+			assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
+			assert.Check(t, initContainers[0].Command != nil, "Command mount should be present")
+			assert.Check(t, initContainers[0].Image != nil, "Image should be present")
+			assert.Check(t, *initContainers[0].Name == initContainerName, "Name should be correct")
+		}
+
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
@@ -52,11 +81,6 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 		assert.Check(t, is.Equal(fakeShareName1, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[1].AzureFile.ShareName), "volume share name is not matched")
 		assert.Check(t, is.Equal(azureFileVolumeName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].Name), "volume name is not matched")
 		assert.Check(t, is.Equal(fakeShareName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].AzureFile.ShareName), "volume share name is not matched")
-		assert.Check(t, initContainers[0].VolumeMounts != nil, "Volume mount should be present")
-		assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
-		assert.Check(t, initContainers[0].Command != nil, "Command mount should be present")
-		assert.Check(t, initContainers[0].Image != nil, "Image should be present")
-		assert.Check(t, *initContainers[0].Name == initContainerName, "Name should be correct")
 
 		return nil
 	}
@@ -148,7 +172,6 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			mockSecretLister := NewMockSecretLister(mockCtrl)
 
 			pod := testsutil.CreatePodObj(podName, podNamespace)
 			pod.Spec.Containers[0].VolumeMounts = fakeVolumeMount
@@ -175,22 +198,6 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 
 			tc.callSecretMocks(mockSecretLister)
 			pod.Spec.Volumes = tc.volumes
-
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-				mockSecretLister,
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare the mocks for resourceManager", err)
-			}
-
-			provider, err := createTestProvider(aciMocks, resourceManager)
-			if err != nil {
-				t.Fatal("Unable to create test provider", err)
-			}
 
 			err = provider.CreatePod(context.Background(), pod)
 
