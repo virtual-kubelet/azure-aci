@@ -4,6 +4,7 @@ on:
   push:
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
+  workflow_dispatch:
     inputs:
       imageTag:
         description: 'release tag'
