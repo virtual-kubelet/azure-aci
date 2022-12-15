@@ -1,9 +1,17 @@
 name: publish_helm_chart
 
 on:
-  create:
+  push:
     # Publish semver tags as releases.
     tags: [ 'v*.*.*' ]
+    inputs:
+      imageTag:
+        description: 'release tag'
+        required: true
+      chart_dir:
+        description: 'helm chart path'
+        required: true
+        default: 'charts'
 
 permissions:
   contents: write
@@ -12,14 +20,16 @@ jobs:
   deploy:
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 0
+          ref: ${{ github.event.inputs.imageTag }}
       - name: Publish Helm chart
         uses: stefanprodan/helm-gh-pages@v1.7.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          charts_dir: charts
+          charts_dir: ${{ github.event.inputs.chart_dir }}
           target_dir: charts
           linting: off
