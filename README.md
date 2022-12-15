@@ -1,7 +1,7 @@
 # Kubernetes Virtual Kubelet with ACI
 
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/virtual-kubelet/azure-aci)](https://github.com/virtual-kubelet/azure-aci/releases)
-![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/virtual-kubelet/azure-aci/e2e-tests/master)
+[![aks-addon-e2e-tests](https://github.com/virtual-kubelet/azure-aci/actions/workflows/aks-addon-tests.yml/badge.svg?branch=master)](https://github.com/virtual-kubelet/azure-aci/actions/workflows/aks-addon-tests.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/virtual-kubelet/azure-aci)](https://goreportcard.com/report/github.com/virtual-kubelet/azure-aci)
 [![codecov](https://codecov.io/gh/virtual-kubelet/azure-aci/branch/master/graph/badge.svg?token=XHb1xbrki0)](https://codecov.io/gh/virtual-kubelet/azure-aci)
 
@@ -35,7 +35,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that Azure Cont
 * Network security group support
 * Basic Azure Networking support within AKS virtual node
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
-* Azure Monitor integration or formally known as OMS
+* Azure Monitor integration ( aka OMS)
 * Support for init-containers ([use init containers](#Create-pod-with-init-containers))
 
 ### Limitations
@@ -471,9 +471,10 @@ helm install "$RELEASE_NAME" "$CHART_URL" \
   --set providers.azure.subscriptionId=$AZURE_SUBSCRIPTION_ID \
   --set providers.azure.aciResourceGroup=$AZURE_RG \
   --set providers.azure.aciRegion=$ACI_REGION \
-  --set providers.azure.masterUri=$MASTER_URI
+  --set providers.azure.masterUri=$MASTER_URI \
   --set providers.azure.clientId=$AZURE_CLIENT_ID \
-  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET \
+  --set providers.azure.clientKey=$AZURE_CLIENT_SECRET
+  
   ```
 
 ## Validate the Virtual Kubelet ACI provider
@@ -726,8 +727,11 @@ kubectl edit deploy virtual-kubelet-virtual-kubelet
 Add the following name and value to the deployment in the environment section. Use your copied AKS master URI.
 
 ```yaml
---name: MASTER_URI
+
+  ...
+- name: MASTER_URI
   value: https://aksxxxx-xxxxx-xxxx-xxxxxxx.hcp.uksouth.azmk8s.io:443
+
   ```
 
 ### Taint deprecated errors
@@ -761,8 +765,11 @@ kubectl edit deploy virtual-kubelet-virtual-kubelet
 Add the following as an environment variable within the deployment.
 
 ```yaml
---name: VK_TAINT_KEY
+
+...
+- name: VK_TAINT_KEY
   value: azure.com/aci
+
 ```
 
 Also, delete the following argument in your pod spec:

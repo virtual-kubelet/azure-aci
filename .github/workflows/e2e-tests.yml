@@ -6,12 +6,12 @@ concurrency:
 
 on:
   pull_request_target:
+    branches:
+      - release-**
+    types: [opened]
     paths:
       - '.github/workflows/chart.yml'
       - 'charts/**'
-  create:
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
 
 permissions:
    id-token: write

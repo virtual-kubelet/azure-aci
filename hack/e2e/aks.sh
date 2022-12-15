@@ -29,7 +29,6 @@ fi
 : "${TEST_WINDOWS_NODE_NAME:=vk-aci-test-win-aks}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
-
 : "${VNET_RANGE=10.0.0.0/8}"
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
@@ -112,6 +111,8 @@ node_identity="$(az identity create --name "${RESOURCE_GROUP}-node-identity" --r
 
 node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
+
+node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query clientId -o tsv)"
 
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
@@ -210,11 +211,11 @@ helm install \
     --set "image.tag=${IMG_TAG}" \
     --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
     --set "providers.azure.masterUri=$MASTER_URI" \
-    --set "providers.azure.managedIdentityID=$node_identity" \
     "$WIN_CHART_NAME" \
+    --set "namespace=$WIN_CHART_NAME" \
     ./charts/virtual-kubelet
 
-kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=300s
+kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n "$WIN_CHART_NAME" --timeout=300s
 
 while true; do
     kubectl get node "$TEST_WINDOWS_NODE_NAME" &> /dev/null && break

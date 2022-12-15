@@ -143,7 +143,7 @@ kubectl get nodes
 
 NAME                                   STATUS    ROLES     AGE        VERSION
 virtual-kubelet-aci-1.4.5              Ready     agent     2m         v1.19.10-vk-azure-aci-v1.4.5
-virtual-node-aci-linux                 Ready     agent     150m       v1.19.10-vk-azure-aci-v1.4.7-dev
+virtual-node-aci-linux                 Ready     agent     150m       v1.19.10-vk-azure-aci-vx.x.x-dev
 ```
 
 The `virtual-kubelet-aci-1.4.5` virtual node is managed by the downgraded version of ACI virtual kubelet.
