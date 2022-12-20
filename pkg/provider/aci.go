@@ -256,9 +256,12 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	}
 
 	if p.providernetwork.SubnetName != "" {
-		err = p.setACIExtensions(ctx)
-		if err != nil {
-			return nil, err
+		// windows containers don't support kube-proxy nor realtime metrics
+		if p.operatingSystem != string(azaci.OperatingSystemTypesWindows) {
+			err = p.setACIExtensions(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -364,7 +367,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	p.providernetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
 
-	cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
+	// windows containers don't support kube-proxy nor realtime metrics
+	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
+		cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
+	}
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.

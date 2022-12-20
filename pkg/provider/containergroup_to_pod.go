@@ -81,13 +81,17 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 		return nil, err
 	}
 
+	podIp := ""
+	if cg.OsType != azaci.OperatingSystemTypesWindows {
+		podIp = *cg.IPAddress.IP
+	}
 	return &v1.PodStatus{
 		Phase:             getPodPhaseFromACIState(*aciState),
 		Conditions:        getPodConditionsFromACIState(*aciState, creationTime, lastUpdateTime, allReady),
 		Message:           "",
 		Reason:            "",
 		HostIP:            p.internalIP,
-		PodIP:             *cg.IPAddress.IP,
+		PodIP:             podIp,
 		StartTime:         &firstContainerStartTime,
 		ContainerStatuses: containerStatuses,
 	}, nil
@@ -122,6 +126,15 @@ func aciContainerStateToContainerState(cs *azaci.ContainerState) v1.ContainerSta
 				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
 			},
 		}
+		// Handle windows container with no prev state
+	case "Pending":
+		return v1.ContainerState{
+			Waiting: &v1.ContainerStateWaiting{
+				Reason:  *cs.State,
+				Message: *cs.DetailStatus,
+			},
+		}
+
 	default:
 		// Handle the case where the container is pending.
 		// Which should be all other aci states.
