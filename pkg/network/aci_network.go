@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
@@ -183,8 +184,8 @@ func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain str
 	options := make([]string, 0)
 
 	if pod.Spec.DNSConfig != nil {
-		nameServers = omitDNSServerDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
-		searchDomains = omitDNSServerDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
+		nameServers = util.OmitDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
+		searchDomains = util.OmitDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
 
 		for _, option := range pod.Spec.DNSConfig.Options {
 			op := option.Name
@@ -225,7 +226,7 @@ func generateSearchesForDNSClusterFirst(dnsConfig *v1.PodDNSConfig, pod *v1.Pod,
 	svcDomain := fmt.Sprintf("svc.%s", clusterDomain)
 	clusterSearch := []string{nsSvcDomain, svcDomain, clusterDomain}
 
-	return omitDNSServerDuplicates(append(clusterSearch, hostSearch...))
+	return util.OmitDuplicates(append(clusterSearch, hostSearch...))
 }
 
 // https://github.com/kubernetes/kubernetes/blob/4276ed36282405d026d8072e0ebed4f1da49070d/pkg/kubelet/network/dns/dns.go#L101-L149
@@ -281,17 +282,4 @@ func formDNSSearchFitsLimits(ctx context.Context, searches []string) string {
 	}
 
 	return strings.Join(searches, " ")
-}
-
-func omitDNSServerDuplicates(strs []string) []string {
-	uniqueStrs := make(map[string]bool)
-
-	var ret []string
-	for _, str := range strs {
-		if !uniqueStrs[str] {
-			ret = append(ret, str)
-			uniqueStrs[str] = true
-		}
-	}
-	return ret
 }

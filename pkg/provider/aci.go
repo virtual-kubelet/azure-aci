@@ -25,6 +25,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics"
 	"github.com/virtual-kubelet/azure-aci/pkg/network"
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
@@ -990,7 +991,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			containerPorts := aciContainer.Ports
 			containerPortsList := append(*containerPorts, azaci.ContainerPort{
 				Port:     &podContainers[c].Ports[i].ContainerPort,
-				Protocol: GetProtocol(podContainers[c].Ports[i].Protocol),
+				Protocol: util.GetProtocol(podContainers[c].Ports[i].Protocol),
 			})
 			aciContainer.Ports = &containerPortsList
 		}

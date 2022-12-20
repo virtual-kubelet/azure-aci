@@ -2,7 +2,7 @@
 Copyright (c) Microsoft Corporation.
 Licensed under the Apache 2.0 license.
 */
-package provider
+package util
 
 import (
 	"crypto/sha256"
@@ -14,7 +14,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-func getContainerID(cgID, containerName *string) string {
+func GetContainerID(cgID, containerName *string) string {
 	if cgID == nil {
 		return ""
 	}
