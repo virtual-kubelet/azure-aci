@@ -178,7 +178,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 
 			ctx := context.TODO()
-			
+
 			resourceManager, err := manager.NewResourceManager(
 				NewMockPodLister(mockCtrl),
 				NewMockSecretLister(mockCtrl),
