@@ -1,24 +1,17 @@
 name: publish_helm_chart
 
 on:
-  push:
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
-  workflow_dispatch:
-    inputs:
-      imageTag:
-        description: 'release tag'
-        required: true
-      chart_dir:
-        description: 'helm chart path'
-        required: true
-        default: 'charts'
+  pull_request:
+    branches:
+      - release-**
+    types: [ opened ]
 
 permissions:
   contents: write
 
 jobs:
-  deploy:
+  publish-helm-chart:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'update manifest and helm charts')
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -26,11 +19,10 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-          ref: ${{ github.event.inputs.imageTag }}
       - name: Publish Helm chart
         uses: stefanprodan/helm-gh-pages@v1.7.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          charts_dir: ${{ github.event.inputs.chart_dir }}
+          charts_dir: charts
           target_dir: charts
           linting: off

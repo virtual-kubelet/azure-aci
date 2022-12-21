@@ -5,13 +5,10 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches:
-      - master
-    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
   pull_request_target:
     branches:
       - master
+      - release-**
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:
