@@ -81,7 +81,7 @@ jobs:
         run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - name: Set Image tag
         run: |
-          ver=${{ env.RELEASE_VERSION}}
+          ver=${{ env.TAG }}
           echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
       - name: Build and push image
         run: |
