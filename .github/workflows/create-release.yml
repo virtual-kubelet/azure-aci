@@ -63,25 +63,25 @@ jobs:
     - create-release
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      TAG: ${{ needs.create-release.outputs.tag }}
     runs-on: ubuntu-20.04
     steps:
+      - id: get-tag
+        name: Get tag
+        run: echo "tag=$(echo ${{ github.event.pull_request.head.ref }} | tr -d release-)" >> $GITHUB_OUTPUT
       - uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 0
-          ref: ${{ env.TAG }}
+          ref: ${{ steps.get-tag.outputs.tag }}
       - name: Login to ${{ env.REGISTRY }}
         uses: docker/login-action@f4ef78c080cd8ba55a85445d5b36e214a81df20a
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set env
-        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
       - name: Set Image tag
         run: |
-          ver=${{ env.TAG }}
+          ver=${{ steps.get-tag.outputs.tag }}
           echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
       - name: Build and push image
         run: |
