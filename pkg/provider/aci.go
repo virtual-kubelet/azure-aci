@@ -23,7 +23,10 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/analytics"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
+	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics"
+	"github.com/virtual-kubelet/azure-aci/pkg/network"
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
@@ -42,7 +45,6 @@ const (
 
 	virtualKubeletDNSNameLabel = "virtualkubelet.io/dnsnamelabel"
 
-	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 	// Parameter names defined in azure file CSI driver, refer to
 	// https://github.com/kubernetes-sigs/azurefile-csi-driver/blob/master/docs/driver-parameters.md
 	azureFileShareName  = "shareName"
@@ -72,6 +74,8 @@ type ACIProvider struct {
 	azClientsAPIs            client2.AzClientsInterface
 	resourceManager          *manager.ResourceManager
 	containerGroupExtensions []*client2.Extension
+	enabledFeatures          *featureflag.FlagIdentifier
+	providernetwork          network.ProviderNetwork
 
 	resourceGroup      string
 	region             string
@@ -85,13 +89,7 @@ type ACIProvider struct {
 	internalIP         string
 	daemonEndpointPort int32
 	diagnostics        *azaci.ContainerGroupDiagnostics
-	subnetName         string
-	subnetCIDR         string
-	vnetSubscriptionID string
-	vnetName           string
-	vnetResourceGroup  string
 	clusterDomain      string
-	kubeDNSIP          string
 	tracker            *PodsTracker
 
 	*metrics.ACIPodMetricsProvider
@@ -184,6 +182,8 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		}
 	}
 
+	p.enabledFeatures = featureflag.InitFeatureFlag(ctx)
+
 	p.azClientsAPIs = azAPIs
 	p.resourceManager = rm
 	p.clusterDomain = clusterDomain
@@ -195,13 +195,12 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	if azConfig.AKSCredential != nil {
 		p.resourceGroup = azConfig.AKSCredential.ResourceGroup
 		p.region = azConfig.AKSCredential.Region
-
-		p.vnetName = azConfig.AKSCredential.VNetName
-		p.vnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
+		p.providernetwork.VnetName = azConfig.AKSCredential.VNetName
+		p.providernetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
 	}
 
-	if p.vnetResourceGroup == "" {
-		p.vnetResourceGroup = p.resourceGroup
+	if p.providernetwork.VnetResourceGroup == "" {
+		p.providernetwork.VnetResourceGroup = p.resourceGroup
 	}
 	// If the log analytics file has been specified, load workspace credentials from the file
 	if logAnalyticsAuthFile := os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"); logAnalyticsAuthFile != "" {
@@ -234,16 +233,14 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 
 	if rg := os.Getenv("ACI_RESOURCE_GROUP"); rg != "" {
 		p.resourceGroup = rg
-	}
-	if p.resourceGroup == "" {
-		return nil, errors.New("Resource group can not be empty please set ACI_RESOURCE_GROUP")
+	} else if p.resourceGroup == "" {
+		return nil, errors.New("resource group can not be empty please set ACI_RESOURCE_GROUP")
 	}
 
 	if r := os.Getenv("ACI_REGION"); r != "" {
 		p.region = r
-	}
-	if p.region == "" {
-		return nil, errors.New("Region can not be empty please set ACI_REGION")
+	} else if p.region == "" {
+		return nil, errors.New("region can not be empty please set ACI_REGION")
 	}
 
 	if r := p.region; !isValidACIRegion(r) {
@@ -256,8 +253,18 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		return nil, err
 	}
 
-	if err := p.setVNETConfig(ctx, &azConfig); err != nil {
+	if err := p.providernetwork.SetVNETConfig(ctx, &azConfig); err != nil {
 		return nil, err
+	}
+
+	if p.providernetwork.SubnetName != "" {
+		// windows containers don't support kube-proxy nor realtime metrics
+		if p.operatingSystem != string(azaci.OperatingSystemTypesWindows) {
+			err = p.setACIExtensions(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.azClientsAPIs)
@@ -317,14 +324,16 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
 	}
 
-	// get initContainers
-	initContainers, err := p.getInitContainers(ctx, pod)
-	if err != nil {
-		return err
+	if p.enabledFeatures.IsEnabled(ctx, featureflag.InitContainerFeature) {
+		// get initContainers
+		initContainers, err := p.getInitContainers(ctx, pod)
+		if err != nil {
+			return err
+		}
+		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
 	}
 
 	// assign all the things
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
 	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
@@ -347,7 +356,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 			})
 		}
 	}
-	if len(ports) > 0 && p.subnetName == "" {
+	if len(ports) > 0 && p.providernetwork.SubnetName == "" {
 		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
 			Ports: &ports,
 			Type:  azaci.ContainerGroupIPAddressTypePublic,
@@ -369,7 +378,12 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"CreationTimestamp": &podCreationTimestamp,
 	}
 
-	p.amendVnetResources(ctx, *cg, pod)
+	p.providernetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
+
+	// windows containers don't support kube-proxy nor realtime metrics
+	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
+		cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
+	}
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
@@ -408,7 +422,32 @@ func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, id
 		}
 	}
 	return &ips
+}
 
+// setACIExtensions
+func (p *ACIProvider) setACIExtensions(ctx context.Context) error {
+	masterURI := os.Getenv("MASTER_URI")
+	if masterURI == "" {
+		masterURI = "10.0.0.1"
+	}
+	clusterCIDR := os.Getenv("CLUSTER_CIDR")
+	if clusterCIDR == "" {
+		clusterCIDR = "10.240.0.0/16"
+	}
+
+	kubeExtensions, err := client2.GetKubeProxyExtension(serviceAccountSecretMountPath, masterURI, clusterCIDR)
+	if err != nil {
+		return fmt.Errorf("error creating kube proxy extension: %v", err)
+	}
+
+	p.containerGroupExtensions = append(p.containerGroupExtensions, kubeExtensions)
+
+	enableRealTimeMetricsExtension := os.Getenv("ENABLE_REAL_TIME_METRICS")
+	if enableRealTimeMetricsExtension == "true" {
+		realtimeExtension := client2.GetRealtimeMetricsExtension()
+		p.containerGroupExtensions = append(p.containerGroupExtensions, realtimeExtension)
+	}
+	return nil
 }
 
 func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *azaci.ContainerGroupDiagnostics {
@@ -968,10 +1007,10 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]aza
 
 		newInitContainer := azaci.InitContainerDefinition{
 			Name: &pod.Spec.InitContainers[i].Name,
-			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition {
-				Image: &pod.Spec.InitContainers[i].Image,
-				Command: p.getCommand(&pod.Spec.InitContainers[i]),
-				VolumeMounts: p.getVolumeMounts(&pod.Spec.InitContainers[i]),
+			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition{
+				Image:                &pod.Spec.InitContainers[i].Image,
+				Command:              p.getCommand(&pod.Spec.InitContainers[i]),
+				VolumeMounts:         p.getVolumeMounts(&pod.Spec.InitContainers[i]),
 				EnvironmentVariables: p.getEnvironmentVariables(&pod.Spec.InitContainers[i]),
 			},
 		}
@@ -1005,7 +1044,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			containerPorts := aciContainer.Ports
 			containerPortsList := append(*containerPorts, azaci.ContainerPort{
 				Port:     &podContainers[c].Ports[i].ContainerPort,
-				Protocol: getProtocol(podContainers[c].Ports[i].Protocol),
+				Protocol: util.GetProtocol(podContainers[c].Ports[i].Protocol),
 			})
 			aciContainer.Ports = &containerPortsList
 		}

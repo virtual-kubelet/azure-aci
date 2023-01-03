@@ -5,14 +5,12 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch: {}
   pull_request:
     branches:
       - master
-    paths-ignore: [docs/**, "**.md", "**.mdx", "**.png", "**.jpg"]
+      - release-**
+    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:
   # Common versions
@@ -20,7 +18,7 @@ env:
 
 jobs:
   lint:
-    name: "Lint"
+    name: "Lint & Format"
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -37,6 +35,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - name: Format
+        run: make fmt
 
       - name: golangci-lint
         run: make lint

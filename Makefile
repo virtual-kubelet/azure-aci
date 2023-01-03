@@ -5,9 +5,14 @@ GOLANGCI_LINT_VER := v1.49.0
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
+GOIMPORTS_VER := latest
+GOIMPORTS_BIN := goimports
+GOIMPORTS := $(abspath $(TOOLS_BIN_DIR)/$(GOIMPORTS_BIN)-$(GOIMPORTS_VER))
+
 # Scripts
 GO_INSTALL := ./hack/go-install.sh
 AKS_E2E_SCRIPT := ./hack/e2e/aks.sh
+AKS_ADDON_E2E_SCRIPT := ./hack/e2e/aks-addon.sh
 
 GO111MODULE := on
 export GO111MODULE
@@ -17,6 +22,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
+VERSION ?= v1.4.8
 IMG_NAME ?= virtual-kubelet
 IMAGE ?= $(REGISTRY)/$(IMG_NAME)
 LOCATION := $(E2E_REGION)
@@ -34,12 +40,9 @@ IMG_TAG ?= $(subst v,,$(VERSION))
 $(GOLANGCI_LINT):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) github.com/golangci/golangci-lint/cmd/golangci-lint $(GOLANGCI_LINT_BIN) $(GOLANGCI_LINT_VER)
 
-.PHONY: safebuild
-# docker build
-safebuild:
-	@echo "Building image..."
-	docker build -t $(DOCKER_IMAGE):$(VERSION) .
-
+# GOIMPORTS
+$(GOIMPORTS):
+	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) golang.org/x/tools/cmd/goimports $(GOIMPORTS_BIN) $(GOIMPORTS_VER)
 
 BUILDX_BUILDER_NAME ?= img-builder
 QEMU_VERSION ?= 5.2.0-2
@@ -82,6 +85,9 @@ test:
 e2e-test:
 	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 
+.PHONY: aks-addon-e2e-test
+aks-addon-e2e-test:
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_ADDON_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 .PHONY: vet
 vet:
 	@go vet ./... #$(packages)
@@ -106,6 +112,11 @@ check-mod: # verifies that module changes for go.mod and go.sum are checked in
 .PHONY: mod
 mod:
 	@go mod tidy
+
+.PHONY: fmt
+fmt:  $(GOIMPORTS) ## Run go fmt against code.
+	go fmt ./...
+	$(GOIMPORTS) -w $$(go list -f {{.Dir}} ./...)
 
 .PHONY: testauth
 testauth: test-cred-json test-loganalytics-json
@@ -134,12 +145,10 @@ GO_BIN_DEPS = $(call FILTER_HACK, $(call FILTER_TESTS, $(call FILTER_E2E, $(GO_F
 bin/%: $(GO_BIN_DEPS)
 	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -o bin/$(*) $(VERSION_FLAGS) ./cmd/$(*)
 
-.PHONY: helm
-helm: bin/virtual-kubelet.tgz
-
-bin/virtual-kubelet.tgz:
-	rm -rf /tmp/virtual-kubelet
-	mkdir /tmp/virtual-kubelet
-	cp -r helm/* /tmp/virtual-kubelet/
-	mkdir -p bin
-	tar -zcvf bin/virtual-kubelet.tgz -C /tmp virtual-kubelet
+.PHONY: release-manifest
+release-manifest:
+	@sed -i -e 's/^VERSION ?= .*/VERSION ?= ${VERSION}/' ./Makefile
+	@sed -i -e "s/version: .*/version: ${IMG_TAG}/" ./charts/virtual-kubelet/Chart.yaml
+	@sed -i -e "s/tag: .*/tag: ${IMG_TAG}/" ./charts/virtual-kubelet/values.yaml
+	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./charts/virtual-kubelet/README.md
+	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./docs/UPGRADE-README.md

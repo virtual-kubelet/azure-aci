@@ -24,10 +24,11 @@ fi
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
+: "${WIN_CHART_NAME:=vk-aci-test-win-aks}"
 : "${TEST_NODE_NAME:=vk-aci-test-aks}"
+: "${TEST_WINDOWS_NODE_NAME:=vk-aci-test-win-aks}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
-
 : "${VNET_RANGE=10.0.0.0/8}"
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
@@ -125,6 +126,10 @@ export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAM
 export ACR_NAME=${ACR_NAME}
 
 
+node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query clientId -o tsv)"
+
+echo -e "\n......Creating AKS Cluster.........[DONE]\n"
+
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
@@ -139,7 +144,8 @@ az aks create \
     --assign-identity "$cluster_identity_id" \
     --generate-ssh-keys \
     --attach-acr "$ACR_NAME"
-fi
+
+else
 
 az aks create \
     -g "$RESOURCE_GROUP" \
@@ -154,7 +160,7 @@ az aks create \
     --assign-identity "$cluster_identity_id" \
 	--attach-acr $ACR_ID \
     --generate-ssh-keys
-echo -e "\n......Creating AKS Cluster.........[DONE]\n"
+fi
 
 echo -e "\n......Creating RBAC Role for Network Contributor on vNet\n"
 az role assignment create \
@@ -202,6 +208,7 @@ MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' 
 echo -e "\n......Get AKS Cluster Master URL.........[DONE]\n"
 
 echo -e "\n......Install Virtual node on the AKS Cluster with ACI provider\n"
+## Linux VK
 helm install \
     --kubeconfig="${KUBECONFIG}" \
     --set "image.repository=${IMG_URL}"  \
@@ -217,7 +224,7 @@ helm install \
     "$CHART_NAME" \
     ./charts/virtual-kubelet
 
-kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-azure-aci" --timeout=300s
+kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=300s
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break
@@ -228,6 +235,30 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
 echo -e "\n......Install Virtual node on the AKS Cluster with ACI provider.........[DONE]\n"
+
+## Windows VK
+helm install \
+    --kubeconfig="${KUBECONFIG}" \
+    --set nodeOsType=Windows \
+    --set "image.repository=${IMG_URL}"  \
+    --set "image.name=${IMG_REPO}" \
+    --set "image.tag=${IMG_TAG}" \
+    --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
+    --set "providers.azure.masterUri=$MASTER_URI" \
+    "$WIN_CHART_NAME" \
+    --set "namespace=$WIN_CHART_NAME" \
+    ./charts/virtual-kubelet
+
+kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n "$WIN_CHART_NAME" --timeout=300s
+
+while true; do
+    kubectl get node "$TEST_WINDOWS_NODE_NAME" &> /dev/null && break
+    sleep 3
+done
+
+kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
+
+export TEST_WINDOWS_NODE_NAME
 
 echo -e "\n......Initialize environment variabled needed for E2e tests\n"
 ## CSI Driver test

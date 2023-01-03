@@ -10,6 +10,7 @@ import (
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/tests"
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -58,7 +59,7 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 			RestartCount:         *containersList[i].InstanceView.RestartCount,
 			Image:                *containersList[i].Image,
 			ImageID:              "",
-			ContainerID:          getContainerID(cg.ID, containersList[i].Name),
+			ContainerID:          util.GetContainerID(cg.ID, containersList[i].Name),
 		}
 
 		if getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) != v1.PodRunning &&
@@ -80,13 +81,17 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 		return nil, err
 	}
 
+	podIp := ""
+	if cg.OsType != azaci.OperatingSystemTypesWindows {
+		podIp = *cg.IPAddress.IP
+	}
 	return &v1.PodStatus{
 		Phase:             getPodPhaseFromACIState(*aciState),
 		Conditions:        getPodConditionsFromACIState(*aciState, creationTime, lastUpdateTime, allReady),
 		Message:           "",
 		Reason:            "",
 		HostIP:            p.internalIP,
-		PodIP:             *cg.IPAddress.IP,
+		PodIP:             podIp,
 		StartTime:         &firstContainerStartTime,
 		ContainerStatuses: containerStatuses,
 	}, nil
@@ -121,6 +126,15 @@ func aciContainerStateToContainerState(cs *azaci.ContainerState) v1.ContainerSta
 				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
 			},
 		}
+		// Handle windows container with no prev state
+	case "Pending":
+		return v1.ContainerState{
+			Waiting: &v1.ContainerStateWaiting{
+				Reason:  *cs.State,
+				Message: *cs.DetailStatus,
+			},
+		}
+
 	default:
 		// Handle the case where the container is pending.
 		// Which should be all other aci states.

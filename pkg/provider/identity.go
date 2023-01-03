@@ -42,7 +42,7 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 	if err != nil {
 		return nil, err
 	}
-	client, err := armmsi.NewUserAssignedIdentitiesClient(p.vnetSubscriptionID, cred, nil)
+	client, err := armmsi.NewUserAssignedIdentitiesClient(p.providernetwork.VnetSubscriptionID, cred, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 
 	log.G(ctx).Infof("looking for cluster in resource group: %s \n", rg)
 
-	aksClient, err := armcontainerservice.NewManagedClustersClient(p.vnetSubscriptionID, cred, nil)
+	aksClient, err := armcontainerservice.NewManagedClustersClient(p.providernetwork.VnetSubscriptionID, cred, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -134,5 +134,5 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 			}
 		}
 	}
-	return nil, fmt.Errorf("could not find an agent pool identity for cluster %s under subscription %s\n", pod.ClusterName, p.vnetSubscriptionID)
+	return nil, fmt.Errorf("could not find an agent pool identity for cluster %s under subscription %s\n", pod.ClusterName, p.providernetwork.VnetSubscriptionID)
 }

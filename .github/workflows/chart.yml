@@ -1,27 +1,27 @@
 name: publish_helm_chart
 
 on:
-  push:
-    paths:
-      - ".github/workflows/chart.yaml"
-      - "charts/**"
-  create:
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
+  pull_request:
+    branches:
+      - release-**
+      - master
+    types: [ closed ]
 
 permissions:
   contents: write
 
 jobs:
-  deploy:
+  publish-helm-chart:
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'update manifest and helm charts')
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 0
       - name: Publish Helm chart
-        uses: stefanprodan/helm-gh-pages@v1.6.0
+        uses: stefanprodan/helm-gh-pages@v1.7.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           charts_dir: charts

@@ -1,12 +1,13 @@
 package api
 
 import (
-	. "github.com/onsi/gomega"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"testing"
+
+	. "github.com/onsi/gomega"
 )
 
 func TestErrorWithNoMessage(t *testing.T) {

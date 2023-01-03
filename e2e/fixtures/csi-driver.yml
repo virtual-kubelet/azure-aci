@@ -4,6 +4,7 @@ metadata:
   name: vk-e2e-csi-driver
   namespace: vk-test
 spec:
+  nodeName: vk-aci-test-aks
   containers:
   - image: k8s.gcr.io/hpa-example
     imagePullPolicy: Always
