@@ -82,7 +82,11 @@ if [ "$E2E_TARGET" = "pr" ]; then
   IMG_URL=$ACR_NAME.azurecr.io
   IMG_REPO="virtual-kubelet"
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+
+  az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
 fi
+
+export ACR_NAME=${ACR_NAME}
 
 TMPDIR="$(mktemp -d)"
 
