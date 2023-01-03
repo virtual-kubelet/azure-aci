@@ -200,4 +200,6 @@ CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group "
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
 export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
 
+envsubst < e2e/fixtures/mi-pull-image.yaml > e2e/fixtures/mi-pull-image-exec.yaml
+
 $@
