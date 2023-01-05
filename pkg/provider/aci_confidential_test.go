@@ -11,7 +11,6 @@ import (
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
@@ -123,18 +122,8 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 
 			ctx := context.TODO()
 
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-				NewMockSecretLister(mockCtrl),
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare the mocks for resourceManager", err)
-			}
-
-			provider, err := createTestProvider(aciMocks, resourceManager)
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}

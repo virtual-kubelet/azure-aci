@@ -4,12 +4,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/virtual-kubelet/node-cli/manager"
 	errdef "github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 )
 
 const (
@@ -34,7 +35,7 @@ type PodsTrackerHandler interface {
 }
 
 type PodsTracker struct {
-	rm       *manager.ResourceManager
+	pods     corev1listers.PodLister
 	updateCb func(*v1.Pod)
 	handler  PodsTrackerHandler
 }
@@ -68,7 +69,13 @@ func (pt *PodsTracker) StartTracking(ctx context.Context) {
 
 // UpdatePodStatus updates the status of a pod, by posting to update callback.
 func (pt *PodsTracker) UpdatePodStatus(ctx context.Context, ns, name string, updateHandler func(*v1.PodStatus), forceUpdate bool) error {
-	k8sPods := pt.rm.GetPods()
+	ctx, span := trace.StartSpan(ctx, "PodsTracker.UpdatePodStatus")
+	defer span.End()
+
+	k8sPods, err := pt.pods.List(labels.Everything())
+	if err != nil {
+		log.G(ctx).WithError(err).Errorf("failed to retrieve pods list")
+	}
 	pod := getPodFromList(k8sPods, ns, name)
 
 	if pod == nil {
@@ -89,7 +96,10 @@ func (pt *PodsTracker) updatePodsLoop(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.updatePods")
 	defer span.End()
 
-	k8sPods := pt.rm.GetPods()
+	k8sPods, err := pt.pods.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 	for _, pod := range k8sPods {
 		updatedPod := pod.DeepCopy()
 		ok := pt.processPodUpdates(ctx, updatedPod)
@@ -103,7 +113,10 @@ func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.cleanupDanglingPods")
 	defer span.End()
 
-	k8sPods := pt.rm.GetPods()
+	k8sPods, err := pt.pods.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 	activePods, err := pt.handler.ListActivePods(ctx)
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("failed to retrieve active container groups list")
@@ -132,6 +145,7 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 	defer span.End()
 
 	if pt.shouldSkipPodStatusUpdate(pod) {
+		log.G(ctx).Infof("pod %s will skip pod status update", pod.Name)
 		return false
 	}
 
@@ -164,7 +178,6 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 				}
 				pod.Status.ContainerStatuses[i].State.Running = nil
 			}
-
 			return true
 		}
 
@@ -173,6 +186,7 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("failed to retrieve pod %v status from provider", pod.Name)
+		return false
 	}
 
 	return false

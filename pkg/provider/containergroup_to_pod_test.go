@@ -25,7 +25,7 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	startTime := cgCreationTime.Add(time.Second * 3)
 	finishTime := startTime.Add(time.Second * 3)
 
-	provider, err := createTestProvider(createNewACIMock(), nil)
+	provider, err := createTestProvider(createNewACIMock(), nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}

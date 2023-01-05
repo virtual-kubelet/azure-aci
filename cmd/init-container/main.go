@@ -7,14 +7,13 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
-	cli "github.com/virtual-kubelet/node-cli"
-	logruscli "github.com/virtual-kubelet/node-cli/logrus"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -26,11 +25,11 @@ import (
 )
 
 func main() {
-	ctx := cli.ContextWithCancelOnSignal(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 
 	logger := logrus.StandardLogger()
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
-	_ = logruscli.Config{LogLevel: "info"}
 
 	log.G(ctx).Debug("Init container started")
 

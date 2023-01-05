@@ -7,7 +7,6 @@ import (
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
@@ -117,7 +116,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 				v1.Container{
 					Name: "initContainer 01",
 					LivenessProbe: &v1.Probe{
-						Handler: v1.Handler{
+						ProbeHandler: v1.ProbeHandler{
 							HTTPGet: &v1.HTTPGetAction{
 								Port: intstr.FromString("http"),
 								Path: "/",
@@ -139,7 +138,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 				v1.Container{
 					Name: "initContainer 01",
 					ReadinessProbe: &v1.Probe{
-						Handler: v1.Handler{
+						ProbeHandler: v1.ProbeHandler{
 							HTTPGet: &v1.HTTPGetAction{
 								Port: intstr.FromInt(8080),
 								Path: "/",
@@ -179,18 +178,8 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 
 			ctx := context.TODO()
 
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-				NewMockSecretLister(mockCtrl),
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare the mocks for resourceManager", err)
-			}
-
-			provider, err := createTestProvider(aciMocks, resourceManager)
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}

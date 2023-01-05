@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
@@ -40,19 +39,10 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	mockSecretLister := NewMockSecretLister(mockCtrl)
-	resourceManager, err := manager.NewResourceManager(
-		NewMockPodLister(mockCtrl),
-		mockSecretLister,
-		NewMockConfigMapLister(mockCtrl),
-		NewMockServiceLister(mockCtrl),
-		NewMockPersistentVolumeClaimLister(mockCtrl),
-		NewMockPersistentVolumeLister(mockCtrl))
-	if err != nil {
-		t.Fatal("Unable to prepare the mocks for resourceManager", err)
-	}
-	aciMocks := createNewACIMock()
 
-	provider, err := createTestProvider(aciMocks, resourceManager)
+	aciMocks := createNewACIMock()
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		mockSecretLister, NewMockPodLister(mockCtrl))
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
@@ -234,17 +224,6 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		},
 	}, nil)
 
-	resourceManager, err := manager.NewResourceManager(
-		NewMockPodLister(mockCtrl),
-		secretLister,
-		configMapLister,
-		NewMockServiceLister(mockCtrl),
-		NewMockPersistentVolumeClaimLister(mockCtrl),
-		NewMockPersistentVolumeLister(mockCtrl))
-	if err != nil {
-		t.Fatal("Unable to prepare the mocks for resourceManager", err)
-	}
-
 	aciMocks := createNewACIMock()
 
 	encodedSecretVal := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
@@ -271,7 +250,6 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 				"CreationTimestamp": &creationTime,
 				"PodName":           &podName,
 				"Namespace":         &podNamespace,
-				"ClusterName":       &nodeName,
 				"NodeName":          &nodeName,
 				"UID":               &podName,
 			},
@@ -324,7 +302,8 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 
 	pod.Spec.Volumes = fakeVolumes
 
-	provider, err := createTestProvider(aciMocks, resourceManager)
+	provider, err := createTestProvider(aciMocks, configMapLister,
+		secretLister, NewMockPodLister(mockCtrl))
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
@@ -493,18 +472,8 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, fakeVolumeMount)
 			pod.Spec.Volumes = tc.volumes
 
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-				mockSecretLister,
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare the mocks for resourceManager", err)
-			}
-
-			provider, err := createTestProvider(aciMocks, resourceManager)
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}

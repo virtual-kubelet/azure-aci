@@ -49,7 +49,6 @@ func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*
 			"CreationTimestamp": &timeAsString,
 			"PodName":           &cgName,
 			"Namespace":         &cgNamespace,
-			"ClusterName":       &nodeName,
 			"NodeName":          &nodeName,
 			"UID":               &cgName,
 		},
@@ -227,7 +226,7 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 					},
 
 					LivenessProbe: &v12.Probe{
-						Handler: v12.Handler{
+						ProbeHandler: v12.ProbeHandler{
 							HTTPGet: &v12.HTTPGetAction{
 								Port: intstr.FromString("http"),
 								Path: "/",
@@ -240,7 +239,7 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 						FailureThreshold:    5,
 					},
 					ReadinessProbe: &v12.Probe{
-						Handler: v12.Handler{
+						ProbeHandler: v12.ProbeHandler{
 							HTTPGet: &v12.HTTPGetAction{
 								Port: intstr.FromInt(8080),
 								Path: "/",
@@ -280,7 +279,7 @@ func CreatePodProbeObj(hasHTTPGet, hasExec bool) *v12.Probe {
 	}
 
 	return &v12.Probe{
-		Handler: v12.Handler{
+		ProbeHandler: v12.ProbeHandler{
 			HTTPGet: httpGet,
 			Exec:    exec,
 		},

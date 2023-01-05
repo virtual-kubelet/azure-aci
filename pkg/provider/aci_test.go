@@ -19,7 +19,7 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
-	"github.com/virtual-kubelet/node-cli/manager"
+	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"gotest.tools/assert"
 
 	is "gotest.tools/assert/cmp"
@@ -133,7 +133,7 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 
 		return nil
 	}
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -199,7 +199,7 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 		},
 	}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -253,7 +253,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 		},
 	}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -288,7 +288,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		return nil
 	}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -348,7 +348,7 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -367,7 +367,7 @@ func TestGetPodsWithEmptyList(t *testing.T) {
 		return result, nil
 	}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -395,7 +395,6 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 				"CreationTimestamp": &creationTime,
 				"PodName":           &cgName,
 				"Namespace":         &cgName,
-				"ClusterName":       &node,
 				"NodeName":          &node,
 				"UID":               &cgName,
 			},
@@ -422,7 +421,6 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 					"CreationTimestamp": &creationTime,
 					"PodName":           &cgName,
 					"Namespace":         &cgName,
-					"ClusterName":       &node,
 					"NodeName":          &node,
 					"UID":               &cgName,
 				},
@@ -436,7 +434,7 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 			}, nil
 		}
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -486,19 +484,8 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 		result = append(result, cg)
 		return result, nil
 	}
-
-	resourceManager, err := manager.NewResourceManager(
-		podLister,
-		NewMockSecretLister(mockCtrl),
-		NewMockConfigMapLister(mockCtrl),
-		NewMockServiceLister(mockCtrl),
-		NewMockPersistentVolumeClaimLister(mockCtrl),
-		NewMockPersistentVolumeLister(mockCtrl))
-	if err != nil {
-		t.Fatal("Unable to prepare the mocks for resourceManager", err)
-	}
-
-	provider, err := createTestProvider(aciMocks, resourceManager)
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), podLister)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -585,19 +572,12 @@ func createNewACIMock() *MockACIProvider {
 	})
 }
 
-func createTestProvider(aciMocks *MockACIProvider, resourceManager *manager.ResourceManager) (*ACIProvider, error) {
+func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMapLister, secretMocker *MockSecretLister, podMocker *MockPodLister) (*ACIProvider, error) {
 	ctx := context.TODO()
 
 	err := setAuthConfig()
 	if err != nil {
 		return nil, err
-	}
-
-	if resourceManager == nil {
-		resourceManager, err = manager.NewResourceManager(nil, nil, nil, nil, nil, nil)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	err = os.Setenv("ACI_VNET_NAME", fakeVnetName)
@@ -617,7 +597,18 @@ func createTestProvider(aciMocks *MockACIProvider, resourceManager *manager.Reso
 		return nil, err
 	}
 
-	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, resourceManager, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
+	cfg := nodeutil.ProviderConfig{
+		ConfigMaps: configMapMocker,
+		Secrets:    secretMocker,
+		Pods:       podMocker,
+	}
+
+	cfg.Node = &v1.Node{}
+
+	cfg.Node.Name = fakeNodeName
+	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
+
+	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}
@@ -649,7 +640,7 @@ func TestConfigureNode(t *testing.T) {
 		},
 	}
 	aciMocks := createNewACIMock()
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -682,7 +673,7 @@ func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -716,7 +707,7 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -830,7 +821,7 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
-	provider, err := createTestProvider(aciMocks, nil)
+	provider, err := createTestProvider(aciMocks, nil, nil, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -963,18 +954,8 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				return nil
 			}
 
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-				NewMockSecretLister(mockCtrl),
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare the mocks for resourceManager", err)
-			}
-
-			provider, err := createTestProvider(aciMocks, resourceManager)
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -1013,18 +994,8 @@ func TestGetPodWithContainerID(t *testing.T) {
 		return cg, nil
 	}
 
-	resourceManager, err := manager.NewResourceManager(
-		podLister,
-		NewMockSecretLister(mockCtrl),
-		NewMockConfigMapLister(mockCtrl),
-		NewMockServiceLister(mockCtrl),
-		NewMockPersistentVolumeClaimLister(mockCtrl),
-		NewMockPersistentVolumeLister(mockCtrl))
-	if err != nil {
-		t.Fatal("Unable to prepare the mocks for resourceManager", err)
-	}
-
-	provider, err := createTestProvider(aciMocks, resourceManager)
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), podLister)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
