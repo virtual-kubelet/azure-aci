@@ -3,9 +3,16 @@ package e2e
 import (
 	"testing"
 	"time"
+
+	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 )
 
 func TestImagePullUsingKubeletIdentityMI(t *testing.T) {
+	ctx := context.TODO()
+	enabledFeatures := featureflag.InitFeatureFlag(ctx)
+	if !enabledFeatures.IsEnabled(ctx, featureflag.ManagedIdentityPullFeature) {
+		t.Skipf("%s feature is not enabled", featureflag.ManagedIdentityPullFeature)
+	}
 	// delete the pod first
 	cmd := kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
 	if out, err := cmd.CombinedOutput(); err != nil {
