@@ -314,7 +314,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	// if no username credentials are provided use agentpool MI if for pulling images from ACR
-	if len(*creds) == 0 {
+	if len(*creds) == 0 && p.enabledFeatures.IsEnabled(ctx, featureflag.ManagedIdentityPullFeature) {
 		agentPoolKubeletIdentity, err := p.GetAgentPoolKubeletIdentity(ctx, pod)
 		if err != nil {
 			log.G(ctx).Infof("could not find Agent pool identity %v", err)

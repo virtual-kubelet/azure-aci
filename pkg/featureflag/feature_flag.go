@@ -12,6 +12,7 @@ import (
 
 const (
 	InitContainerFeature = "init-container"
+	ManagedIdentityPullFeature = "managed-identity-pull"
 )
 
 var enabledFeatures = []string{}
