@@ -8,5 +8,5 @@ maintainers:
 name: virtual-kubelet-azure-aci
 sources:
 - https://github.com/virtual-kubelet/azure-aci
-version: 1.4.8
+version: 1.4.9
 

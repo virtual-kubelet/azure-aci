@@ -2,7 +2,7 @@ image:
   secretName: virtual-kubelet-aci-acr
   repository: mcr.microsoft.com
   name: oss/virtual-kubelet/virtual-kubelet
-  tag: 1.4.8
+  tag: 1.4.9
   pullPolicy: Always
 
 namespace: vk-azure-aci
