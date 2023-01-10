@@ -16,7 +16,9 @@ import (
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/dimchansky/utfbom"
+	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
+	"github.com/virtual-kubelet/virtual-kubelet/trace"
 )
 
 type CloudEnvironmentName string
@@ -35,7 +37,7 @@ type Config struct {
 }
 
 // getAuthorizer return autorest authorizer.
-func (c *Config) getAuthorizer(resource string) (autorest.Authorizer, error) {
+func (c *Config) getAuthorizer(ctx context.Context, resource string) (autorest.Authorizer, error) {
 	var auth autorest.Authorizer
 	var err error
 
@@ -43,12 +45,16 @@ func (c *Config) getAuthorizer(resource string) (autorest.Authorizer, error) {
 	isUserIdentity := len(c.AuthConfig.ClientID) == 0
 
 	if isUserIdentity {
+		log.G(ctx).Debug("getting token using user identity")
+
 		token, err = adal.NewServicePrincipalTokenFromManagedIdentity(
 			resource, &adal.ManagedIdentityOptions{ClientID: c.AuthConfig.UserIdentityClientId})
 		if err != nil {
 			return nil, err
 		}
 	} else {
+		log.G(ctx).Debug("getting token using service principal")
+
 		oauthConfig, err := adal.NewOAuthConfig(
 			c.Cloud.ActiveDirectoryAuthorityHost, c.AuthConfig.TenantID)
 		if err != nil {
@@ -66,24 +72,29 @@ func (c *Config) getAuthorizer(resource string) (autorest.Authorizer, error) {
 }
 
 // SetAuthConfig sets the configuration needed for Authentication.
-func (c *Config) SetAuthConfig() error {
+func (c *Config) SetAuthConfig(ctx context.Context) error {
+	ctx, span := trace.StartSpan(ctx, "auth.SetAuthConfig")
+	defer span.End()
+
 	var err error
 	c.AuthConfig = &Authentication{}
 	c.Cloud = cloud.AzurePublic
 
 	if authFilepath := os.Getenv("AZURE_AUTH_LOCATION"); authFilepath != "" {
+		log.G(ctx).Debug("getting Azure auth config from file, path: %s", authFilepath)
 		auth := &Authentication{}
 		err = auth.newAuthenticationFromFile(authFilepath)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "cannot get Azure auth config. Please make sure AZURE_AUTH_LOCATION env variable is set correctly")
 		}
 		c.AuthConfig = auth
 	}
 
 	if aksCredFilepath := os.Getenv("AKS_CREDENTIAL_LOCATION"); aksCredFilepath != "" {
-		c.AKSCredential, err = newAKSCredential(aksCredFilepath)
+		log.G(ctx).Debug("getting AKS cred from file, path: %s", aksCredFilepath)
+		c.AKSCredential, err = newAKSCredential(ctx, aksCredFilepath)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "cannot get AKS credential config. Please make sure AKS_CREDENTIAL_LOCATION env variable is set correctly")
 		}
 
 		var clientId string
@@ -102,14 +113,17 @@ func (c *Config) SetAuthConfig() error {
 	}
 
 	if clientID := os.Getenv("AZURE_CLIENT_ID"); clientID != "" {
+		log.G(ctx).Debug("azure client ID env variable AZURE_CLIENT_ID is set")
 		c.AuthConfig.ClientID = clientID
 	}
 
 	if clientSecret := os.Getenv("AZURE_CLIENT_SECRET"); clientSecret != "" {
+		log.G(ctx).Debug("azure client secret env variable AZURE_CLIENT_SECRET is set")
 		c.AuthConfig.ClientSecret = clientSecret
 	}
 
 	if userIdentityClientId := os.Getenv("VIRTUALNODE_USER_IDENTITY_CLIENTID"); userIdentityClientId != "" {
+		log.G(ctx).Debug("user identity client ID env variable VIRTUALNODE_USER_IDENTITY_CLIENTID is set")
 		c.AuthConfig.UserIdentityClientId = userIdentityClientId
 	}
 
@@ -120,20 +134,22 @@ func (c *Config) SetAuthConfig() error {
 			return fmt.Errorf("neither AZURE_CLIENT_ID or VIRTUALNODE_USER_IDENTITY_CLIENTID is being set")
 		}
 
-		log.G(context.TODO()).Info("Using user identity for Authentication")
+		log.G(ctx).Info("using user identity for Authentication")
 	}
 
 	if tenantID := os.Getenv("AZURE_TENANT_ID"); tenantID != "" {
+		log.G(ctx).Debug("azure tenant ID env variable AZURE_TENANT_ID is set")
 		c.AuthConfig.TenantID = tenantID
 	}
 
 	if subscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID"); subscriptionID != "" {
+		log.G(ctx).Debug("azure subscription ID env variable AZURE_SUBSCRIPTION_ID is set")
 		c.AuthConfig.SubscriptionID = subscriptionID
 	}
 
 	resource := c.Cloud.Services[cloud.ResourceManager].Endpoint
 
-	c.Authorizer, err = c.getAuthorizer(resource)
+	c.Authorizer, err = c.getAuthorizer(ctx, resource)
 	if err != nil {
 		return err
 	}
@@ -172,7 +188,6 @@ func (a *Authentication) newAuthenticationFromFile(filepath string) error {
 
 // NewAuthentication returns an Authentication struct from user provided credentials.
 func NewAuthentication(clientID, clientSecret, subscriptionID, tenantID, userAssignedIdentityID string) *Authentication {
-
 	return &Authentication{
 		ClientID:             clientID,
 		ClientSecret:         clientSecret,
@@ -197,8 +212,8 @@ type aksCredential struct {
 }
 
 // newAKSCredential returns an aksCredential struct from file path.
-func newAKSCredential(filePath string) (*aksCredential, error) {
-	logger := log.G(context.TODO()).WithField("method", "newAKSCredential").WithField("file", filePath)
+func newAKSCredential(ctx context.Context, filePath string) (*aksCredential, error) {
+	logger := log.G(ctx).WithField("method", "newAKSCredential").WithField("file", filePath)
 	logger.Debug("Reading AKS credential file")
 
 	b, err := ioutil.ReadFile(filePath)

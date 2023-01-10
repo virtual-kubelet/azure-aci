@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
+	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
@@ -42,20 +43,27 @@ type ProviderNetwork struct {
 }
 
 func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Config) error {
+	ctx, span := trace.StartSpan(ctx, "network.SetVNETConfig")
+	defer span.End()
+
 	// the VNET subscription ID by default is authentication subscription ID.
 	// We need to override when using cross subscription virtual network resource
 	pn.VnetSubscriptionID = azConfig.AuthConfig.SubscriptionID
 	if vnetSubscriptionID := os.Getenv("ACI_VNET_SUBSCRIPTION_ID"); vnetSubscriptionID != "" {
+		log.G(ctx).Debug("ACI VNet subscription ID env variable ACI_VNET_SUBSCRIPTION_ID is set")
 		pn.VnetSubscriptionID = vnetSubscriptionID
 	}
 
 	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
+		log.G(ctx).Debug("ACI VNet name env variable ACI_VNET_NAME is set")
 		pn.VnetName = vnetName
 	} else if pn.VnetName == "" {
 		return errors.New("vnet name can not be empty please set ACI_VNET_NAME")
 	}
 
 	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
+		log.G(ctx).Debug("ACI VNet resource group env variable ACI_VNET_RESOURCE_GROUP is set")
+
 		pn.VnetResourceGroup = vnetResourceGroup
 	} else if pn.VnetResourceGroup == "" {
 		return errors.New("vnet resourceGroup can not be empty please set ACI_VNET_RESOURCE_GROUP")
@@ -63,15 +71,17 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 
 	// Set subnet properties.
 	if subnetName := os.Getenv("ACI_SUBNET_NAME"); pn.VnetName != "" && subnetName != "" {
+		log.G(ctx).Debug("ACI subnet name env variable ACI_SUBNET_NAME is set")
 		pn.SubnetName = subnetName
 	}
 
 	if subnetCIDR := os.Getenv("ACI_SUBNET_CIDR"); subnetCIDR != "" {
+		log.G(ctx).Debug("ACI subnet CIDR env variable ACI_SUBNET_CIDR is set")
 		if pn.SubnetName == "" {
 			return fmt.Errorf("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR")
 		}
 		if _, _, err := net.ParseCIDR(subnetCIDR); err != nil {
-			return fmt.Errorf("error parsing provided subnet range: %v", err)
+			return fmt.Errorf("error parsing provided subnet CIDR: %v", err)
 		}
 		pn.SubnetCIDR = subnetCIDR
 	}
@@ -82,6 +92,7 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 		}
 
 		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
+			log.G(ctx).Debug("kube DNS IP env variable KUBE_DNS_IP is set")
 			pn.KubeDNSIP = kubeDNSIP
 		}
 	}
@@ -89,6 +100,9 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 }
 
 func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Config) error {
+	logger := log.G(ctx).WithField("method", "setupNetwork")
+	logger.Debug("setting up network")
+
 	c := aznetwork.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID)
 	c.Authorizer = azConfig.Authorizer
 
@@ -132,6 +146,8 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	}
 
 	if createSubnet {
+		logger.Debug("creating a subnet")
+
 		var (
 			delegationName = "aciDelegation"
 			serviceName    = "Microsoft.ContainerInstance/containerGroups"
