@@ -22,7 +22,7 @@ func main() {
 
 	vkVersion, err := strconv.ParseBool(os.Getenv("USE_VK_VERSION_2"))
 	if err != nil {
-		log.G(ctx).Warn("cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1. Skipping init container checks")
+		log.G(ctx).Warn("init container: cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1. Skipping init container checks")
 		return
 	}
 
@@ -32,15 +32,19 @@ func main() {
 		//Setup config
 		err = azConfig.SetAuthConfig()
 		if err != nil {
-			log.G(ctx).Fatal(err)
+			log.G(ctx).Fatalf("init container: cannot setup the auth configuration ", err)
 		}
 	}
 	p := provider.ACIProvider{
 		ProviderNetwork: network.ProviderNetwork{},
 	}
+
 	// Check or set up a network for VK
+	log.G(ctx).Info("init container: setting up the network configuration")
 	err = p.ProviderNetwork.SetVNETConfig(ctx, &azConfig)
 	if err != nil {
-
+		log.G(ctx).Fatalf("init container: cannot setup the VNet configuration ", err)
 	}
+
+	log.G(ctx).Info("initial setup for virtual kubelet Azure ACI is successful")
 }
