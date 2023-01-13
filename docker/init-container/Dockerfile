@@ -21,9 +21,8 @@ RUN --mount=type=cache,target=${GOCACHE} \
     --mount=type=cache,id=vk-azure-aci-init,sharing=locked,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build -o initcontainer main.go
 
-FROM gcr.io/distroless/static:nonroot
+FROM --platform=$BUILDPLATFORM gcr.io/distroless/static
 WORKDIR /
 COPY --from=builder  /workspace/initcontainer .
-USER 65532:65532
 
-ENTRYPOINT [ "/initcontainer" ]
+ENTRYPOINT ["/initcontainer"]

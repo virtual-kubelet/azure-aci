@@ -1,3 +1,7 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package main
 
 import (
@@ -9,44 +13,97 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/network"
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	cli "github.com/virtual-kubelet/node-cli"
+	logruscli "github.com/virtual-kubelet/node-cli/logrus"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
 )
 
 func main() {
-	logger := logrus.StandardLogger()
-	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
-
 	ctx := cli.ContextWithCancelOnSignal(context.Background())
 
+	logger := logrus.StandardLogger()
+	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
+	_ = logruscli.Config{LogLevel: "debug"}
+
+	log.G(ctx).Debug("Init container started")
+
+	podName := os.Getenv("POD_NAME")
+	podNamespace := os.Getenv("NAMESPACE")
+
+	if podName == "" || podNamespace == "" {
+		log.G(ctx).Fatal("an error has occurred while retrieve the pod info ")
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", "")
+	if err != nil {
+		log.G(ctx).Fatal("an error has occurred while creating client ", err)
+	}
+
+	kubeClient := kubernetes.NewForConfigOrDie(config)
+	eventBroadcast := util.NewRecorder(ctx, kubeClient)
+	defer eventBroadcast.Shutdown()
+
+	recorder := eventBroadcast.NewRecorder(scheme.Scheme, v1.EventSource{Component: "k8s.io.api.core.v1.Pod"})
 	vkVersion, err := strconv.ParseBool(os.Getenv("USE_VK_VERSION_2"))
 	if err != nil {
-		log.G(ctx).Warn("init container: cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1. Skipping init container checks")
+		log.G(ctx).Warn("cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1. Skipping init container checks")
 		return
 	}
 
-	wait.Until(func() {
-		azConfig := auth.Config{}
+	if !vkVersion {
+		log.G(ctx).Warn("the provider will use VK version 1. Skipping init container checks")
+		return
+	}
 
-		if vkVersion {
-			//Setup config
-			err = azConfig.SetAuthConfig(ctx)
+	setupBackoff := wait.Backoff{
+		Steps:    50,
+		Duration: time.Minute,
+		Factor:   0,
+		Jitter:   0.01,
+	}
+	azConfig := auth.Config{}
+
+	//Setup config
+	err = azConfig.SetAuthConfig(ctx)
+	if err != nil {
+		log.G(ctx).Fatalf("cannot setup the auth configuration. Retrying, ", err)
+	}
+
+	err = retry.OnError(setupBackoff,
+		func(err error) bool {
+			return true
+		}, func() error {
+			var providerNetwork network.ProviderNetwork
+			// Check or set up a network for VK
+			log.G(ctx).Debug("setting up the network configuration")
+			err = providerNetwork.SetVNETConfig(ctx, &azConfig)
 			if err != nil {
-				log.G(ctx).Fatalf("init container: cannot setup the auth configuration ", err)
+				log.G(ctx).Errorf("cannot setup the VNet configuration. Retrying", err)
+				return err
 			}
-		}
+			return nil
+		})
 
-		var providerNetwork network.ProviderNetwork
-		// Check or set up a network for VK
-		log.G(ctx).Info("init container: setting up the network configuration")
-		err = providerNetwork.SetVNETConfig(ctx, &azConfig)
-		if err != nil {
-			log.G(ctx).Fatalf("init container: cannot setup the VNet configuration ", err)
-		}
-	},
-		1*time.Minute, ctx.Done())
-
+	if err != nil {
+		recorder.Eventf(&v1.ObjectReference{
+			Kind:      "Pod",
+			Name:      podName,
+			Namespace: podNamespace,
+		}, v1.EventTypeWarning, "InitFailed", "VNet config setup failed")
+		log.G(ctx).Fatal("cannot setup the VNet configuration ", err)
+	}
+	recorder.Eventf(&v1.ObjectReference{
+		Kind:      "Pod",
+		Name:      podName,
+		Namespace: podNamespace,
+	}, v1.EventTypeNormal, "InitSuccess", "initial setup for virtual kubelet Azure ACI is successful")
 	log.G(ctx).Info("initial setup for virtual kubelet Azure ACI is successful")
 }

@@ -193,8 +193,7 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	if azConfig.AKSCredential != nil {
 		p.resourceGroup = azConfig.AKSCredential.ResourceGroup
 		p.region = azConfig.AKSCredential.Region
-		p.ProviderNetwork.VnetName = azConfig.AKSCredential.VNetName
-		p.ProviderNetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
+
 	}
 
 	if p.ProviderNetwork.VnetResourceGroup == "" {

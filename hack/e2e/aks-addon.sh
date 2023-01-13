@@ -53,10 +53,10 @@ fi
 TMPDIR=""
 
 cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
-  if [ -n "$TMPDIR" ]; then
-      rm -rf "$TMPDIR"
-  fi
+ az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+ if [ -n "$TMPDIR" ]; then
+     rm -rf "$TMPDIR"
+ fi
 }
 trap 'cleanup' EXIT
 
@@ -177,15 +177,18 @@ helm install \
     --kubeconfig="${KUBECONFIG}" \
     --set nodeOsType=Windows \
     --set "image.repository=${IMG_URL}"  \
-    --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
+    --set "image.name=${IMG_REPO}" \
+    --set "initImage.repository=${IMG_URL}"  \
+    --set "initImage.name=${INIT_IMG_REPO}" \
+    --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
     --set "providers.azure.masterUri=$MASTER_URI" \
     --set "providers.azure.managedIdentityID=$ACI_USER_IDENTITY" \
     "$WIN_CHART_NAME" \
     ./charts/virtual-kubelet
 
-kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=300s
+kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=500s
 
 while true; do
     kubectl get node "$TEST_WINDOWS_NODE_NAME" &> /dev/null && break

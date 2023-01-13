@@ -6,6 +6,7 @@ image:
   pullPolicy: Always
 
 initImage:
+  repository: mcr.microsoft.com
   name: init-validation
   tag: 0.1.0
   pullPolicy: Always

@@ -13,12 +13,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
+	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
-	"github.com/virtual-kubelet/azure-aci/client/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -46,6 +46,10 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 	ctx, span := trace.StartSpan(ctx, "network.SetVNETConfig")
 	defer span.End()
 
+	if azConfig.AKSCredential != nil {
+		pn.VnetName = azConfig.AKSCredential.VNetName
+		pn.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
+	}
 	// the VNET subscription ID by default is authentication subscription ID.
 	// We need to override when using cross subscription virtual network resource
 	pn.VnetSubscriptionID = azConfig.AuthConfig.SubscriptionID
@@ -108,10 +112,10 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 
 	createSubnet := true
 	subnet, err := c.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, "")
-	if err != nil && !network.IsNotFound(err) {
+	if err != nil && !errdefs.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
-	if network.IsNotFound(err) && pn.SubnetCIDR == "" {
+	if errdefs.IsNotFound(err) && pn.SubnetCIDR == "" {
 		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
 	}
 	if err == nil {

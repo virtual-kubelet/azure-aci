@@ -186,6 +186,7 @@ helm install \
     --set "image.repository=${IMG_URL}"  \
     --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
+    --set "initImage.repository=${IMG_URL}"  \
     --set "initImage.name=${INIT_IMG_REPO}" \
     --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_NODE_NAME}" \
@@ -216,6 +217,9 @@ helm install \
     --set "image.repository=${IMG_URL}"  \
     --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
+    --set "initImage.repository=${IMG_URL}"  \
+    --set "initImage.name=${INIT_IMG_REPO}" \
+    --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
     --set "providers.azure.masterUri=$MASTER_URI" \
     "$WIN_CHART_NAME" \

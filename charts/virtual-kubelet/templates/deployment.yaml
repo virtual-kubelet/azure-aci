@@ -22,7 +22,7 @@ spec:
     {{- if .Values.useVKVersion2}}
       initContainers:
         - name: init-validation
-          image: "{{ .Values.image.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.tag }}"
+          image: "{{ .Values.initImage.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.tag }}"
           imagePullPolicy: {{ .Values.initImage.pullPolicy }}
           env:
             - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
@@ -36,8 +36,23 @@ spec:
                   key: clientSecret
             - name: AKS_CREDENTIAL_LOCATION
               value: /etc/aks/azure.json
-            - name: AZURE_AUTH_LOCATION
-              value: /etc/virtual-kubelet/credentials.json
+
+ {{- if .Values.providers.azure.vnet.enabled }}
+            - name: ACI_SUBNET_NAME
+              value: {{ required "subnetName is required" .vnet.subnetName }}
+            - name: KUBE_DNS_IP
+              value:{{ .vnet.kubeDnsIp }}
+ {{- end }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: USE_VK_VERSION_2
+              value: "true"
           volumeMounts:
             - name: credentials
               mountPath: "/etc/virtual-kubelet"
