@@ -15,8 +15,7 @@ import (
 func NewRecorder(ctx context.Context, kubeClient *kubernetes.Clientset) record.EventBroadcaster {
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartStructuredLogging(3)
-	if eventBroadcaster != nil && kubeClient != nil {
-		eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
-	}
+	eventBroadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
+
 	return eventBroadcaster
 }

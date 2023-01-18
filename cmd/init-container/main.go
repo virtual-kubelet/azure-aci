@@ -51,7 +51,7 @@ func main() {
 	eventBroadcast := util.NewRecorder(ctx, kubeClient)
 	defer eventBroadcast.Shutdown()
 
-	recorder := eventBroadcast.NewRecorder(scheme.Scheme, v1.EventSource{Component: "k8s.io.api.core.v1.Pod"})
+	recorder := eventBroadcast.NewRecorder(scheme.Scheme, v1.EventSource{Component: "virtual kubelet"})
 	vkVersion, err := strconv.ParseBool(os.Getenv("USE_VK_VERSION_2"))
 	if err != nil {
 		log.G(ctx).Warn("cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1. Skipping init container checks")
