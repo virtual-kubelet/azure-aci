@@ -46,10 +46,6 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 	ctx, span := trace.StartSpan(ctx, "network.SetVNETConfig")
 	defer span.End()
 
-	if azConfig.AKSCredential != nil {
-		pn.VnetName = azConfig.AKSCredential.VNetName
-		pn.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
-	}
 	// the VNET subscription ID by default is authentication subscription ID.
 	// We need to override when using cross subscription virtual network resource
 	pn.VnetSubscriptionID = azConfig.AuthConfig.SubscriptionID

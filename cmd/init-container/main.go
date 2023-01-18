@@ -82,6 +82,14 @@ func main() {
 			return true
 		}, func() error {
 			var providerNetwork network.ProviderNetwork
+			if azConfig.AKSCredential != nil {
+				providerNetwork.VnetName = azConfig.AKSCredential.VNetName
+				if azConfig.AKSCredential.VNetResourceGroup != "" {
+					providerNetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
+				} else {
+					providerNetwork.VnetResourceGroup = azConfig.AKSCredential.ResourceGroup
+				}
+			}
 			// Check or set up a network for VK
 			log.G(ctx).Debug("setting up the network configuration")
 			err = providerNetwork.SetVNETConfig(ctx, &azConfig)
