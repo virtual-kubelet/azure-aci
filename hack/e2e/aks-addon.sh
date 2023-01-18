@@ -109,6 +109,7 @@ cluster_subnet_id="$(az network vnet subnet show \
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
+    --kubernetes-version "1.23.12" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -123,6 +124,7 @@ else
 
 az aks create \
     -g "$RESOURCE_GROUP" \
+    --kubernetes-version "1.23.12" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
