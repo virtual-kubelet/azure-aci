@@ -29,6 +29,26 @@ builds:
       - -X {{.ModulePath}}/pkg/version.Vcs={{.ShortCommit}}
     env:
       - CGO_ENABLED=0
+  - id: init-validation
+    dir: cmd/init-container
+    binary: bin/init-container
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 5
+      - 6
+      - 7
+    goamd64:
+      - v2
+      - v3
+    flags:
+      - -mod=vendor
+    env:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
 
 release:
   prerelease: auto
@@ -37,6 +57,9 @@ release:
 changelog:
   skip: false
   groups:
+    - title: Features 🌈
+      regexp: ^.*feat[(\\w)]*:+.*$
+
     - title: Bug Fixes 🐞
       regexp: ^.*fix[(\\w)]*:+.*$
     - title: Build 🏭
@@ -49,8 +72,6 @@ changelog:
       regexp: ^.*ci[(\\w)]*:+.*$
     - title: Documentation 📘
       regexp: ^.*docs[(\\w)]*:+.*$
-    - title: Features 🌈
-      regexp: ^.*feat[(\\w)]*:+.*$
     - title: Maintenance 🔧
       regexp: ^.*chore[(\\w)]*:+.*$
     - title: Performance Improvements 🚀

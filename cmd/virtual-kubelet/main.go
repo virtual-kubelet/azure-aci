@@ -77,7 +77,7 @@ func main() {
 
 	if vkVersion {
 		//Setup config
-		err = azConfig.SetAuthConfig()
+		err = azConfig.SetAuthConfig(ctx)
 		if err != nil {
 			log.G(ctx).Fatal(err)
 		}

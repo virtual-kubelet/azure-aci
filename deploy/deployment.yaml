@@ -28,6 +28,53 @@ spec:
                     operator: In
                     values:
                       - linux
+      initContainers:
+      - name: init-validation
+        image: TEST_INIT_IMAGE
+        imagePullPolicy: Always
+        env:
+        - name: AKS_CREDENTIAL_LOCATION
+          value: /etc/aks/azure.json
+        - name: AZURE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: aci-connector-linux
+              key: clientSecret
+        - name: ACI_EXTRA_USER_AGENT
+          value: "deploy/aks/azure-aci/e2e-test"
+        - name: ACI_SUBNET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: aci_subnet_name
+        - name: KUBE_DNS_IP
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: kube_dns_ip
+        - name: USE_VK_VERSION_2
+          value: "true"
+        - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
+          valueFrom:
+            configMapKeyRef:
+              name: test-vars
+              key: aci_user_identity
+        - name: POD_NAME
+          valueFrom:
+           fieldRef:
+            fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: certificates
+          mountPath: /etc/kubernetes/certs
+          readOnly: true
+        - name: credentials
+          mountPath: "/etc/virtual-kubelet"
+        - name: aks-credential
+          mountPath: "/etc/aks/azure.json"
       containers:
       - name: vk-azure-aci
         image: TEST_IMAGE
@@ -50,7 +97,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: status.podIP
-
         - name: ACI_EXTRA_USER_AGENT
           value: "deploy/aks/azure-aci/e2e-test"
         - name: ACI_SUBNET_NAME
@@ -83,13 +129,13 @@ spec:
               name: test-vars
               key: aci_user_identity
         volumeMounts:
-          - name: certificates
-            mountPath: /etc/kubernetes/certs
-            readOnly: true
-          - name: credentials
-            mountPath: "/etc/virtual-kubelet"
-          - name: aks-credential
-            mountPath: "/etc/aks/azure.json"
+        - name: certificates
+          mountPath: /etc/kubernetes/certs
+          readOnly: true
+        - name: credentials
+          mountPath: "/etc/virtual-kubelet"
+        - name: aks-credential
+          mountPath: "/etc/aks/azure.json"
         command: ["virtual-kubelet"]
         args: [
           "--provider", "azure",

@@ -23,14 +23,18 @@ TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
 VERSION ?= v1.4.9
+REGISTRY ?= ghcr.io
 IMG_NAME ?= virtual-kubelet
+INIT_IMG_NAME ?= init-validation
 IMAGE ?= $(REGISTRY)/$(IMG_NAME)
+INIT_IMAGE ?= $(REGISTRY)/$(INIT_IMG_NAME)
 LOCATION := $(E2E_REGION)
 E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
+INIT_IMG_TAG ?= 0.1.0
 
 
 ## --------------------------------------
@@ -58,11 +62,20 @@ docker-buildx-builder:
 .PHONY: docker-build-image
 docker-build-image: docker-buildx-builder
 	docker buildx build \
-		--file Dockerfile \
+		--file docker/virtual-kubelet/Dockerfile \
 		--output=$(OUTPUT_TYPE) \
 		--platform="$(BUILDPLATFORM)" \
 		--pull \
 		--tag $(IMAGE):$(IMG_TAG) .
+
+.PHONY: docker-build-init-image
+docker-build-init-image: docker-buildx-builder
+	docker buildx build \
+		--file docker/init-container/Dockerfile \
+		--output=$(OUTPUT_TYPE) \
+		--platform="$(BUILDPLATFORM)" \
+		--pull \
+		--tag $(INIT_IMAGE):$(INIT_IMG_TAG) .
 
 .PHONY: build
 build: bin/virtual-kubelet
