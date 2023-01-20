@@ -6,6 +6,7 @@ import (
 	"net"
 	"strings"
 
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/BurntSushi/toml"
 	"github.com/virtual-kubelet/node-cli/provider"
 )
@@ -13,7 +14,7 @@ import (
 type providerConfig struct {
 	ResourceGroup   string
 	Region          string
-	OperatingSystem string
+	OperatingSystem azaci.OperatingSystemTypes
 	CPU             string
 	Memory          string
 	Pods            string
@@ -47,10 +48,10 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 
 	// Default to Linux if the operating system was not defined in the config.
 	if config.OperatingSystem == "" {
-		config.OperatingSystem = provider.OperatingSystemLinux
+		config.OperatingSystem = azaci.OperatingSystemTypesLinux
 	} else {
 		// Validate operating system from config.
-		ok := provider.ValidOperatingSystems[config.OperatingSystem]
+		ok := provider.ValidOperatingSystems[string(config.OperatingSystem)]
 		if !ok {
 			return fmt.Errorf("%q is not a valid operating system, try one of the following instead: %s", config.OperatingSystem, strings.Join(provider.ValidOperatingSystems.Names(), " | "))
 		}

@@ -8,52 +8,30 @@ import (
 	"io/ioutil"
 	"os"
 
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
 )
 
-// Extension is the container group extension
-type Extension struct {
-	Name       string               `json:"name"`
-	Properties *ExtensionProperties `json:"properties"`
-}
+var (
+	// Supported extension types
 
-// ExtensionProperties is the properties for extension
-type ExtensionProperties struct {
-	Type              ExtensionType     `json:"extensionType"`
-	Version           ExtensionVersion  `json:"version"`
-	Settings          map[string]string `json:"settings,omitempty"`
-	ProtectedSettings map[string]string `json:"protectedSettings,omitempty"`
-}
+	ExtensionTypeKubeProxy       = "kube-proxy"
+	ExtensionTypeRealtimeMetrics = "realtime-metrics"
 
-// ExtensionType is an enum type for defining supported extension types
-type ExtensionType string
-
-// Supported extension types
-const (
-	ExtensionTypeKubeProxy       ExtensionType = "kube-proxy"
-	ExtensionTypeRealtimeMetrics ExtensionType = "realtime-metrics"
-)
-
-// ExtensionVersion is an enum type for defining supported extension versions
-type ExtensionVersion string
-
-const (
 	// ExtensionVersion_1 Supported extension version.
-	ExtensionVersion_1 ExtensionVersion = "1.0"
+	ExtensionVersion_1 = "1.0"
+
+	// Supported kube-proxy extension constants
+	KubeProxyExtensionSettingClusterCIDR = "clusterCidr"
+	KubeProxyExtensionSettingKubeVersion = "kubeVersion"
+	KubeProxyExtensionSettingKubeConfig  = "kubeConfig"
+	KubeProxyExtensionKubeVersion        = "v1.9.10"
 )
 
-// Supported kube-proxy extension constants
-const (
-	KubeProxyExtensionSettingClusterCIDR string = "clusterCidr"
-	KubeProxyExtensionSettingKubeVersion string = "kubeVersion"
-	KubeProxyExtensionSettingKubeConfig  string = "kubeConfig"
-	KubeProxyExtensionKubeVersion        string = "v1.9.10"
-)
-
-// GetKubeProxyExtension gets the kubeproxy extension
-func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*Extension, error) {
+// GetKubeProxyExtension gets the kubeProxy extension
+func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*azaci.DeploymentExtensionSpec, error) {
 	name := "virtual-kubelet"
 	var certAuthData []byte
 	var authInfo *clientcmdapi.AuthInfo
@@ -136,11 +114,11 @@ func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*Extensio
 		return nil, fmt.Errorf("failed to encode the kubeconfig: %v", err)
 	}
 
-	extension := Extension{
-		Name: "kube-proxy",
-		Properties: &ExtensionProperties{
-			Type:    ExtensionTypeKubeProxy,
-			Version: ExtensionVersion_1,
+	extension := azaci.DeploymentExtensionSpec{
+		Name: &ExtensionTypeKubeProxy,
+		Properties: &azaci.DeploymentExtensionSpecProperties{
+			ExtensionType: &ExtensionTypeKubeProxy,
+			Version:       &ExtensionVersion_1,
 			Settings: map[string]string{
 				KubeProxyExtensionSettingClusterCIDR: clusterCIDR,
 				KubeProxyExtensionSettingKubeVersion: KubeProxyExtensionKubeVersion,
@@ -170,12 +148,12 @@ func getKubeconfigAuthInfo(authInfos map[string]*clientcmdapi.AuthInfo) *clientc
 }
 
 // GetRealtimeMetricsExtension gets the realtime extension
-func GetRealtimeMetricsExtension() *Extension {
-	extension := Extension{
-		Name: "vk-realtime-metrics",
-		Properties: &ExtensionProperties{
-			Type:              ExtensionTypeRealtimeMetrics,
-			Version:           ExtensionVersion_1,
+func GetRealtimeMetricsExtension() *azaci.DeploymentExtensionSpec {
+	extension := azaci.DeploymentExtensionSpec{
+		Name: &ExtensionTypeRealtimeMetrics,
+		Properties: &azaci.DeploymentExtensionSpecProperties{
+			ExtensionType:     &ExtensionTypeRealtimeMetrics,
+			Version:           &ExtensionVersion_1,
 			Settings:          map[string]string{},
 			ProtectedSettings: map[string]string{},
 		},

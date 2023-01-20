@@ -72,7 +72,7 @@ func main() {
 		vkVersion = false
 	}
 
-	var azACIAPIs *client.AzClientsAPIs
+	var azACIAPIs *client.ACIClients
 	azConfig := auth.Config{}
 
 	if vkVersion {
@@ -82,7 +82,10 @@ func main() {
 			log.G(ctx).Fatal(err)
 		}
 
-		azACIAPIs = client.NewAzClientsAPIs(ctx, azConfig)
+		azACIAPIs, err = client.CreateACIClients(ctx, azConfig)
+		if err != nil {
+			log.G(ctx).Fatal(err)
+		}
 	}
 	run := func(ctx context.Context) error {
 		node, err := cli.New(ctx,

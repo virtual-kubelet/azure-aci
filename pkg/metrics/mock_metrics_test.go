@@ -8,8 +8,8 @@ import (
 	context "context"
 	reflect "reflect"
 
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	gomock "github.com/golang/mock/gomock"
-	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	statsv1alpha1 "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
@@ -98,10 +98,10 @@ func (m *MockContainerGroupGetter) EXPECT() *MockContainerGroupGetterMockRecorde
 }
 
 // GetContainerGroup mocks base method.
-func (m *MockContainerGroupGetter) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*client.ContainerGroupWrapper, error) {
+func (m *MockContainerGroupGetter) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*azaci.ContainerGroup, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetContainerGroupInfo", ctx, resourceGroup, containerGroupName)
-	ret0, _ := ret[0].(*client.ContainerGroupWrapper)
+	ret0, _ := ret[0].(*azaci.ContainerGroup)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -151,10 +151,10 @@ func (mr *MockpodStatsGetterMockRecorder) GetPodStats(ctx, pod interface{}) *gom
 }
 
 // getContainerGroupFromPod mocks base method.
-func (m *MockpodStatsGetter) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*client.ContainerGroupWrapper, error) {
+func (m *MockpodStatsGetter) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*azaci.ContainerGroup, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "getContainerGroupFromPod", ctx, pod)
-	ret0, _ := ret[0].(*client.ContainerGroupWrapper)
+	ret0, _ := ret[0].(*azaci.ContainerGroup)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

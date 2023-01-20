@@ -154,7 +154,7 @@ func TestSetAuthConfigWithAuthFile(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
+	assert.Check(t, azConfig.Token != "", "Authorizer should be nil")
 
 }
 
@@ -201,7 +201,7 @@ func TestSetAuthConfigWithAKSCredFile(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
+	assert.Check(t, azConfig.Token != "", "Authorizer should be nil")
 
 }
 
@@ -245,5 +245,5 @@ func TestSetAuthConfigWithEnvVariablesOnly(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
+	assert.Check(t, azConfig.Token != "", "Authorizer should be nil")
 }

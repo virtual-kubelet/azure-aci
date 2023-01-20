@@ -7,7 +7,7 @@ package provider
 import (
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
@@ -38,38 +38,38 @@ func (p *ACIProvider) containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, er
 func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, error) {
 	// cg is validated
 	allReady := true
-	var firstContainerStartTime, lastUpdateTime metav1.Time
+	var firstContainerStartTime, lastUpdateTime time.Time
 
-	containerStatuses := make([]v1.ContainerStatus, 0, len(*cg.Containers))
-	containersList := *cg.Containers
+	containerStatuses := make([]v1.ContainerStatus, 0, len(cg.Properties.Containers))
+	containersList := cg.Properties.Containers
 
 	for i := range containersList {
 		err := validation.ValidateContainer(containersList[i])
 		if err != nil {
 			return nil, err
 		}
-		firstContainerStartTime := metav1.NewTime(containersList[0].InstanceView.CurrentState.StartTime.Time)
-		lastUpdateTime := firstContainerStartTime
+		firstContainerStartTime := containersList[0].Properties.InstanceView.CurrentState.StartTime
+		lastUpdateTime = *firstContainerStartTime
 
 		containerStatus := v1.ContainerStatus{
 			Name:                 *containersList[i].Name,
-			State:                aciContainerStateToContainerState(containersList[i].InstanceView.CurrentState),
-			LastTerminationState: aciContainerStateToContainerState(containersList[i].InstanceView.PreviousState),
-			Ready:                getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) == v1.PodRunning,
-			RestartCount:         *containersList[i].InstanceView.RestartCount,
-			Image:                *containersList[i].Image,
+			State:                aciContainerStateToContainerState(containersList[i].Properties.InstanceView.CurrentState),
+			LastTerminationState: aciContainerStateToContainerState(containersList[i].Properties.InstanceView.PreviousState),
+			Ready:                getPodPhaseFromACIState(*containersList[i].Properties.InstanceView.CurrentState.State) == v1.PodRunning,
+			RestartCount:         *containersList[i].Properties.InstanceView.RestartCount,
+			Image:                *containersList[i].Properties.Image,
 			ImageID:              "",
 			ContainerID:          util.GetContainerID(cg.ID, containersList[i].Name),
 		}
 
-		if getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) != v1.PodRunning &&
-			getPodPhaseFromACIState(*containersList[i].InstanceView.CurrentState.State) != v1.PodSucceeded {
+		if getPodPhaseFromACIState(*containersList[i].Properties.InstanceView.CurrentState.State) != v1.PodRunning &&
+			getPodPhaseFromACIState(*containersList[i].Properties.InstanceView.CurrentState.State) != v1.PodSucceeded {
 			allReady = false
 		}
 
-		containerStartTime := metav1.NewTime(containersList[i].ContainerProperties.InstanceView.CurrentState.StartTime.Time)
-		if containerStartTime.Time.After(lastUpdateTime.Time) {
-			lastUpdateTime = containerStartTime
+		containerStartTime := containersList[i].Properties.InstanceView.CurrentState.StartTime
+		if containerStartTime.After(lastUpdateTime) {
+			lastUpdateTime = *containerStartTime
 		}
 
 		// Add to containerStatuses
@@ -82,8 +82,8 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 	}
 
 	podIp := ""
-	if cg.OsType != azaci.OperatingSystemTypesWindows {
-		podIp = *cg.IPAddress.IP
+	if cg.Properties.OSType != &util.WindowsType {
+		podIp = *cg.Properties.IPAddress.IP
 	}
 	return &v1.PodStatus{
 		Phase:             getPodPhaseFromACIState(*aciState),
@@ -92,27 +92,29 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 		Reason:            "",
 		HostIP:            p.internalIP,
 		PodIP:             podIp,
-		StartTime:         &firstContainerStartTime,
+		StartTime:         &metav1.Time{Time: firstContainerStartTime},
 		ContainerStatuses: containerStatuses,
 	}, nil
 }
 
 func aciContainerStateToContainerState(cs *azaci.ContainerState) v1.ContainerState {
 	// cg container state is validated
+	startTime := *cs.StartTime
+	finishTime := *cs.FinishTime
 	switch *cs.State {
 	case "Running":
 		return v1.ContainerState{
 			Running: &v1.ContainerStateRunning{
-				StartedAt: metav1.NewTime(cs.StartTime.Time),
+				StartedAt: metav1.NewTime(startTime),
 			},
 		}
 	// Handle the case of completion.
 	case "Succeeded":
 		return v1.ContainerState{
 			Terminated: &v1.ContainerStateTerminated{
-				StartedAt:  metav1.NewTime(cs.StartTime.Time),
+				StartedAt:  metav1.NewTime(startTime),
 				Reason:     "Completed",
-				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
+				FinishedAt: metav1.NewTime(finishTime),
 			},
 		}
 	// Handle the case where the container failed.
@@ -122,8 +124,8 @@ func aciContainerStateToContainerState(cs *azaci.ContainerState) v1.ContainerSta
 				ExitCode:   *cs.ExitCode,
 				Reason:     *cs.State,
 				Message:    *cs.DetailStatus,
-				StartedAt:  metav1.NewTime(cs.StartTime.Time),
-				FinishedAt: metav1.NewTime(cs.FinishTime.Time),
+				StartedAt:  metav1.NewTime(startTime),
+				FinishedAt: metav1.NewTime(finishTime),
 			},
 		}
 		// Handle windows container with no prev state
@@ -170,7 +172,7 @@ func getPodPhaseFromACIState(state string) v1.PodPhase {
 	return v1.PodUnknown
 }
 
-func getPodConditionsFromACIState(state string, creationTime, lastUpdateTime metav1.Time, allReady bool) []v1.PodCondition {
+func getPodConditionsFromACIState(state string, creationTime, lastUpdateTime time.Time, allReady bool) []v1.PodCondition {
 	// cg state is validated
 	switch state {
 	case "Running", "Succeeded":
@@ -185,32 +187,32 @@ func getPodConditionsFromACIState(state string, creationTime, lastUpdateTime met
 			{
 				Type:               v1.PodReady,
 				Status:             readyConditionStatus,
-				LastTransitionTime: readyConditionTime,
+				LastTransitionTime: metav1.Time{Time: readyConditionTime},
 			}, {
 				Type:               v1.PodInitialized,
 				Status:             v1.ConditionTrue,
-				LastTransitionTime: creationTime,
+				LastTransitionTime: metav1.Time{Time: creationTime},
 			}, {
 				Type:               v1.PodScheduled,
 				Status:             v1.ConditionTrue,
-				LastTransitionTime: creationTime,
+				LastTransitionTime: metav1.Time{Time: creationTime},
 			},
 		}
 	}
 	return []v1.PodCondition{}
 }
 
-func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, metav1.Time, error) {
+func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, time.Time, error) {
 	// cg is validated
 
 	// Use the Provisioning State if it's not Succeeded,
 	// otherwise use the state of the instance.
-	aciState := cg.ContainerGroupProperties.ProvisioningState
+	aciState := cg.Properties.ProvisioningState
 	if *aciState == "Succeeded" {
-		aciState = cg.ContainerGroupProperties.InstanceView.State
+		aciState = cg.Properties.InstanceView.State
 	}
 
-	var creationTime metav1.Time
+	var creationTime time.Time
 
 	// cg tags is validated
 	ts := *cg.Tags["CreationTimestamp"]
@@ -218,9 +220,9 @@ func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, me
 	if ts != "" {
 		t, err := time.Parse(tests.TimeLayout, ts)
 		if err != nil {
-			return nil, metav1.Now(), errors.Errorf("unable to parse the creation timestamp for container group %s", *cg.Name)
+			return nil, time.Now(), errors.Errorf("unable to parse the creation timestamp for container group %s", *cg.Name)
 		}
-		creationTime = metav1.NewTime(t)
+		creationTime = t
 	}
 
 	return aciState, creationTime, nil

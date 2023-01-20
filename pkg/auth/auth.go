@@ -11,10 +11,11 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	_ "github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/adal"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/dimchansky/utfbom"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -24,6 +25,7 @@ import (
 type CloudEnvironmentName string
 
 const (
+	//aksScope                                    = "6dae42f8-4368-4678-94ff-3960e28e3630"
 	AzurePublicCloud       CloudEnvironmentName = "AzurePublicCloud"
 	AzureUSGovernmentCloud CloudEnvironmentName = "AzureUSGovernmentCloud"
 	AzureChinaCloud        CloudEnvironmentName = "AzureChinaCloud"
@@ -33,42 +35,53 @@ type Config struct {
 	AKSCredential *aksCredential
 	AuthConfig    *Authentication
 	Cloud         cloud.Configuration
-	Authorizer    autorest.Authorizer
+	Token         string
 }
 
-// getAuthorizer return autorest authorizer.
-func (c *Config) getAuthorizer(ctx context.Context, resource string) (autorest.Authorizer, error) {
-	var auth autorest.Authorizer
+// getToken return autorest authorizer.
+func (c *Config) getToken(ctx context.Context) (string, error) {
 	var err error
+	var azToken azcore.AccessToken
+	scope := c.Cloud.Services[cloud.ResourceManager].Endpoint
 
-	var token *adal.ServicePrincipalToken
 	isUserIdentity := len(c.AuthConfig.ClientID) == 0
 
 	if isUserIdentity {
 		log.G(ctx).Debug("getting token using user identity")
-
-		token, err = adal.NewServicePrincipalTokenFromManagedIdentity(
-			resource, &adal.ManagedIdentityOptions{ClientID: c.AuthConfig.UserIdentityClientId})
+		opts := &azidentity.ManagedIdentityCredentialOptions{ID: azidentity.ClientID(c.AuthConfig.ClientID)}
+		msiCredential, err := azidentity.NewManagedIdentityCredential(opts)
 		if err != nil {
-			return nil, err
+			return "", err
+		}
+
+		azToken, err = msiCredential.GetToken(ctx,
+			policy.TokenRequestOptions{
+				Scopes: []string{scope},
+			})
+		if err != nil {
+			return "", err
 		}
 	} else {
 		log.G(ctx).Debug("getting token using service principal")
-
-		oauthConfig, err := adal.NewOAuthConfig(
-			c.Cloud.ActiveDirectoryAuthorityHost, c.AuthConfig.TenantID)
-		if err != nil {
-			return nil, err
+		opts := &azidentity.ClientSecretCredentialOptions{
+			ClientOptions: azcore.ClientOptions{
+				Cloud: c.Cloud,
+			},
 		}
-		token, err = adal.NewServicePrincipalToken(
-			*oauthConfig, c.AuthConfig.ClientID, c.AuthConfig.ClientSecret, resource)
+		spCredential, err := azidentity.NewClientSecretCredential(c.AuthConfig.TenantID, c.AuthConfig.ClientID, c.AuthConfig.ClientSecret, opts)
 		if err != nil {
-			return nil, err
+			return "", err
+		}
+		azToken, err = spCredential.GetToken(ctx,
+			policy.TokenRequestOptions{
+				Scopes: []string{scope},
+			})
+		if err != nil {
+			return "", err
 		}
 	}
 
-	auth = autorest.NewBearerAuthorizer(token)
-	return auth, err
+	return azToken.Token, err
 }
 
 // SetAuthConfig sets the configuration needed for Authentication.
@@ -147,9 +160,7 @@ func (c *Config) SetAuthConfig(ctx context.Context) error {
 		c.AuthConfig.SubscriptionID = subscriptionID
 	}
 
-	resource := c.Cloud.Services[cloud.ResourceManager].Endpoint
-
-	c.Authorizer, err = c.getAuthorizer(ctx, resource)
+	c.Token, err = c.getToken(ctx)
 	if err != nil {
 		return err
 	}

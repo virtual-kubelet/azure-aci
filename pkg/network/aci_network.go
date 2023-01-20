@@ -11,16 +11,18 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	aznetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
-	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 )
@@ -103,11 +105,22 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	logger := log.G(ctx).WithField("method", "setupNetwork")
 	logger.Debug("setting up network")
 
-	c := aznetwork.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID)
-	c.Authorizer = azConfig.Authorizer
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return errors.Wrap(err, "an error has occurred while creating getting credential ")
+	}
+	options := arm.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Cloud: azConfig.Cloud,
+		},
+	}
+	c, err := aznetwork.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
+	if err != nil {
+		return errors.Wrap(err, "failed to create subnet client ")
+	}
 
 	createSubnet := true
-	subnet, err := c.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, "")
+	response, err := c.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
 	if err != nil && !errdefs.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
@@ -116,18 +129,18 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	}
 	if err == nil {
 		if pn.SubnetCIDR == "" {
-			pn.SubnetCIDR = *subnet.SubnetPropertiesFormat.AddressPrefix
+			pn.SubnetCIDR = *response.Subnet.Properties.AddressPrefix
 		}
-		if pn.SubnetCIDR != *subnet.SubnetPropertiesFormat.AddressPrefix {
-			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *subnet.SubnetPropertiesFormat.AddressPrefix, pn.SubnetCIDR)
+		if pn.SubnetCIDR != *response.Properties.AddressPrefix {
+			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *response.Properties.AddressPrefix, pn.SubnetCIDR)
 		}
-		if subnet.SubnetPropertiesFormat.RouteTable != nil {
-			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *subnet.SubnetPropertiesFormat.RouteTable.ID)
+		if response.Properties.RouteTable != nil {
+			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *response.Properties.RouteTable.ID)
 		}
-		if subnet.SubnetPropertiesFormat.ServiceAssociationLinks != nil {
-			for _, l := range *subnet.SubnetPropertiesFormat.ServiceAssociationLinks {
-				if l.ServiceAssociationLinkPropertiesFormat != nil {
-					if *l.ServiceAssociationLinkPropertiesFormat.LinkedResourceType == subnetDelegationService {
+		if response.Properties.ServiceAssociationLinks != nil {
+			for _, l := range response.Properties.ServiceAssociationLinks {
+				if l.Properties != nil {
+					if *l.Properties.LinkedResourceType == subnetDelegationService {
 						createSubnet = false
 						break
 					} else {
@@ -136,8 +149,8 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 				}
 			}
 		} else {
-			for _, d := range *subnet.SubnetPropertiesFormat.Delegations {
-				if d.ServiceDelegationPropertiesFormat != nil && *d.ServiceDelegationPropertiesFormat.ServiceName == subnetDelegationService {
+			for _, d := range response.Properties.Delegations {
+				if d.Properties != nil && *d.Name == subnetDelegationService {
 					createSubnet = false
 					break
 				}
@@ -154,22 +167,22 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 			subnetAction   = "Microsoft.Network/virtualNetworks/subnets/action"
 		)
 
-		subnet = aznetwork.Subnet{
+		response.Subnet = aznetwork.Subnet{
 			Name: &pn.SubnetName,
-			SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{
+			Properties: &aznetwork.SubnetPropertiesFormat{
 				AddressPrefix: &pn.SubnetCIDR,
-				Delegations: &[]aznetwork.Delegation{
+				Delegations: []*aznetwork.Delegation{
 					{
 						Name: &delegationName,
-						ServiceDelegationPropertiesFormat: &aznetwork.ServiceDelegationPropertiesFormat{
+						Properties: &aznetwork.ServiceDelegationPropertiesFormat{
 							ServiceName: &serviceName,
-							Actions:     &[]string{subnetAction},
+							Actions:     []*string{&subnetAction},
 						},
 					},
 				},
 			},
 		}
-		_, err = c.CreateOrUpdate(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet)
+		_, err = c.BeginCreateOrUpdate(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, response.Subnet, nil)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
@@ -177,33 +190,33 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg client2.ContainerGroupWrapper, pod *v1.Pod, clusterDomain string) {
+func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg azaci.ContainerGroup, pod *v1.Pod, clusterDomain string) {
 	if pn.SubnetName == "" {
 		return
 	}
 
 	subnetID := "/subscriptions/" + pn.VnetSubscriptionID + "/resourceGroups/" + pn.VnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + pn.VnetName + "/subnets/" + pn.SubnetName
-	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
+	cgIDList := []*azaci.ContainerGroupSubnetID{{ID: &subnetID}}
+	cg.Properties.SubnetIDs = cgIDList
 	// windows containers don't support DNS config
-	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
+	if cg.Properties.OSType != &util.WindowsType {
+		cg.Properties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
 	}
 }
 
 func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain string) *azaci.DNSConfiguration {
-	nameServers := make([]string, 0)
+	servers := make([]string, 0)
 	searchDomains := make([]string, 0)
 
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
-		nameServers = append(nameServers, kubeDNSIP)
+		servers = append(servers, kubeDNSIP)
 		searchDomains = generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod, clusterDomain)
 	}
 
 	options := make([]string, 0)
 
 	if pod.Spec.DNSConfig != nil {
-		nameServers = util.OmitDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
+		servers = util.OmitDuplicates(append(servers, pod.Spec.DNSConfig.Nameservers...))
 		searchDomains = util.OmitDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
 
 		for _, option := range pod.Spec.DNSConfig.Options {
@@ -215,14 +228,18 @@ func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain str
 		}
 	}
 
-	if len(nameServers) == 0 {
+	if len(servers) == 0 {
 		return nil
 	}
-	nameServers = formDNSNameserversFitsLimits(ctx, nameServers)
+	servers = formDNSNameserversFitsLimits(ctx, servers)
 	domain := formDNSSearchFitsLimits(ctx, searchDomains)
+	var nameServers []*string
+	for s := range servers {
+		nameServers[s] = &servers[s]
+	}
 	opt := strings.Join(options, " ")
 	result := azaci.DNSConfiguration{
-		NameServers:   &nameServers,
+		NameServers:   nameServers,
 		SearchDomains: &domain,
 		Options:       &opt,
 	}

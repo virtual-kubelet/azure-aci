@@ -6,7 +6,13 @@ import (
 	"fmt"
 	"os"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+)
+
+const (
+	LogAnalyticsMetadataKeyPodUUID           string = "pod-uuid"
+	LogAnalyticsMetadataKeyNodeName          string = "node-name"
+	LogAnalyticsMetadataKeyClusterResourceID string = "cluster-resource-id"
 )
 
 // NewContainerGroupDiagnostics creates a container group diagnostics object

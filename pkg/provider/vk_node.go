@@ -22,7 +22,7 @@ func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
 	node.Status.Conditions = p.nodeConditions()
 	node.Status.Addresses = p.nodeAddresses()
 	node.Status.DaemonEndpoints = p.nodeDaemonEndpoints()
-	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
+	node.Status.NodeInfo.OperatingSystem = string(p.operatingSystem)
 	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
 	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
 
