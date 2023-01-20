@@ -8,9 +8,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
@@ -18,7 +22,7 @@ import (
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
+	aznetworkv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
@@ -30,6 +34,12 @@ const (
 	maxDNSSearchPaths       = 6
 	maxDNSSearchListChars   = 256
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
+)
+
+var (
+	delegationName = "aciDelegation"
+	serviceName    = "Microsoft.ContainerInstance/containerGroups"
+	subnetAction   = "Microsoft.Network/virtualNetworks/subnets/action"
 )
 
 type ProviderNetwork struct {
@@ -100,13 +110,39 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 
 func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Config) error {
 	logger := log.G(ctx).WithField("method", "setupNetwork")
-	logger.Debug("setting up network")
+	ctx, span := trace.StartSpan(ctx, "network.setupNetwork")
+	defer span.End()
 
-	c := aznetwork.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID)
-	c.Authorizer = azConfig.Authorizer
+	logger.Debug("getting azure credential")
 
+	var err error
+	var credential azcore.TokenCredential
+	isUserIdentity := len(azConfig.AuthConfig.ClientID) == 0
+
+	if isUserIdentity {
+		credential, err = azConfig.GetMSICredential(ctx)
+	} else {
+		credential, err = azConfig.GetSPCredential(ctx)
+	}
+	if err != nil {
+		return errors.Wrap(err, "an error has occurred while creating getting credential ")
+	}
+
+	options := arm.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Cloud: azConfig.Cloud,
+		},
+	}
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+
+	subnetsClient, err := aznetworkv2.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID, credential, &options)
+	if err != nil {
+		return errors.Wrap(err, "an error has occurred while creating subnet client")
+	}
 	createSubnet := true
-	subnet, err := c.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, "")
+	response, err := subnetsClient.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
 	if err != nil && !errdefs.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
@@ -114,19 +150,20 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
 	}
 	if err == nil {
+		currentSubnet := response.Subnet
 		if pn.SubnetCIDR == "" {
-			pn.SubnetCIDR = *subnet.SubnetPropertiesFormat.AddressPrefix
+			pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
 		}
-		if pn.SubnetCIDR != *subnet.SubnetPropertiesFormat.AddressPrefix {
-			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *subnet.SubnetPropertiesFormat.AddressPrefix, pn.SubnetCIDR)
+		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
+			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
 		}
-		if subnet.SubnetPropertiesFormat.RouteTable != nil {
-			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *subnet.SubnetPropertiesFormat.RouteTable.ID)
+		if currentSubnet.Properties.RouteTable != nil {
+			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
 		}
-		if subnet.SubnetPropertiesFormat.ServiceAssociationLinks != nil {
-			for _, l := range *subnet.SubnetPropertiesFormat.ServiceAssociationLinks {
-				if l.ServiceAssociationLinkPropertiesFormat != nil {
-					if *l.ServiceAssociationLinkPropertiesFormat.LinkedResourceType == subnetDelegationService {
+		if currentSubnet.Properties.ServiceAssociationLinks != nil {
+			for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
+				if l.Properties != nil {
+					if *l.Properties.LinkedResourceType == subnetDelegationService {
 						createSubnet = false
 						break
 					} else {
@@ -135,8 +172,8 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 				}
 			}
 		} else {
-			for _, d := range *subnet.SubnetPropertiesFormat.Delegations {
-				if d.ServiceDelegationPropertiesFormat != nil && *d.ServiceDelegationPropertiesFormat.ServiceName == subnetDelegationService {
+			for _, d := range currentSubnet.Properties.Delegations {
+				if d.Properties != nil && *d.Properties.ServiceName == subnetDelegationService {
 					createSubnet = false
 					break
 				}
@@ -147,31 +184,31 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	if createSubnet {
 		logger.Debug("creating a subnet")
 
-		var (
-			delegationName = "aciDelegation"
-			serviceName    = "Microsoft.ContainerInstance/containerGroups"
-			subnetAction   = "Microsoft.Network/virtualNetworks/subnets/action"
-		)
-
-		subnet = aznetwork.Subnet{
+		subnet := aznetworkv2.Subnet{
 			Name: &pn.SubnetName,
-			SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{
+			Properties: &aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &pn.SubnetCIDR,
-				Delegations: &[]aznetwork.Delegation{
+				Delegations: []*aznetworkv2.Delegation{
 					{
 						Name: &delegationName,
-						ServiceDelegationPropertiesFormat: &aznetwork.ServiceDelegationPropertiesFormat{
+						Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
 							ServiceName: &serviceName,
-							Actions:     &[]string{subnetAction},
+							Actions:     []*string{&subnetAction},
 						},
 					},
 				},
 			},
 		}
-		_, err = c.CreateOrUpdate(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet)
+		poller, err := subnetsClient.BeginCreateOrUpdate(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet, nil)
 		if err != nil {
 			return fmt.Errorf("error creating subnet: %v", err)
 		}
+		resp, err := poller.PollUntilDone(context.TODO(), nil)
+		if err != nil {
+			return fmt.Errorf("error creating subnet: %v", err)
+		}
+		logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", resp.Name, pn.VnetName, rawResponse.StatusCode)
+		logger.Infof("new subnet %s has been created successfully", resp.Name)
 	}
 	return nil
 }
