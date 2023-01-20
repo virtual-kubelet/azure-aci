@@ -221,7 +221,7 @@ func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain str
 	}
 	servers = formDNSNameserversFitsLimits(ctx, servers)
 	domain := formDNSSearchFitsLimits(ctx, searchDomains)
-	nameServers := make([]*string, len(servers))
+	nameServers := make([]*string, 0)
 	for s := range servers {
 		nameServers = append(nameServers, &servers[s])
 	}

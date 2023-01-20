@@ -902,14 +902,14 @@ func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 
 //this method is used for both initConainers and containers
 func (p *ACIProvider) getCommand(container v1.Container) []*string {
-	command := make([]*string, len(container.Command))
+	command := make([]*string, 0)
 	for c := range container.Command {
-		command[c] = &container.Command[c]
+		command = append(command, &container.Command[c])
 	}
 
-	args := make([]*string, len(container.Command))
+	args := make([]*string, 0)
 	for a := range container.Args {
-		args[a] = &container.Args[a]
+		args = append(args, &container.Args[a])
 	}
 
 	return append(command, args...)
@@ -1007,22 +1007,20 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 		}
 
 		for i := range podContainers[c].Ports {
-			containerPortsList := append(aciContainer.Properties.Ports, &azaciv2.ContainerPort{
+			aciContainer.Properties.Ports = append(aciContainer.Properties.Ports, &azaciv2.ContainerPort{
 				Port:     &podContainers[c].Ports[i].ContainerPort,
 				Protocol: util.GetProtocol(podContainers[c].Ports[i].Protocol),
 			})
-			aciContainer.Properties.Ports = containerPortsList
 		}
 
 		volMount := make([]*azaciv2.VolumeMount, 0, len(podContainers[c].VolumeMounts))
 		aciContainer.Properties.VolumeMounts = volMount
 		for v := range podContainers[c].VolumeMounts {
-			volList := append(aciContainer.Properties.VolumeMounts, &azaciv2.VolumeMount{
+			aciContainer.Properties.VolumeMounts = append(aciContainer.Properties.VolumeMounts, &azaciv2.VolumeMount{
 				Name:      &podContainers[c].VolumeMounts[v].Name,
 				MountPath: &podContainers[c].VolumeMounts[v].MountPath,
 				ReadOnly:  &podContainers[c].VolumeMounts[v].ReadOnly,
 			})
-			aciContainer.Properties.VolumeMounts = volList
 		}
 
 		initEnv := make([]*azaciv2.EnvironmentVariable, 0, len(podContainers[c].Env))
@@ -1150,10 +1148,10 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProb
 	// Probes have can have an Exec or HTTP Get Handler.
 	// Create those if they exist, then add to the
 	// ContainerProbe struct
-	var commands []*string
+	commands := make([]*string, 0)
 	if probe.Handler.Exec != nil {
 		for i := range probe.Handler.Exec.Command {
-			commands[i] = &probe.Handler.Exec.Command[i]
+			commands = append(commands, &probe.Handler.Exec.Command[i])
 		}
 	}
 	exec := azaciv2.ContainerExec{
