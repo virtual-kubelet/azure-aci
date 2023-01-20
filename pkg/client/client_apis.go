@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
@@ -22,18 +24,18 @@ import (
 type AzClientsInterface interface {
 	ContainerGroupGetter
 	CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *ContainerGroupWrapper) error
-	GetContainerGroupInfo(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error)
-	GetContainerGroupListResult(ctx context.Context, resourceGroup string) ([]*azaci.ContainerGroup, error)
-	ListCapabilities(ctx context.Context, region string) ([]*azaci.Capabilities, error)
+	GetContainerGroupInfo(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error)
+	GetContainerGroupListResult(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error)
+	ListCapabilities(ctx context.Context, region string) ([]*azaciv2.Capabilities, error)
 	DeleteContainerGroup(ctx context.Context, resourceGroup, cgName string) error
 	ListLogs(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error)
-	ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (*azaci.ContainerExecResponse, error)
+	ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaciv2.ContainerExecRequest) (*azaciv2.ContainerExecResponse, error)
 }
 
 type AzClientsAPIs struct {
-	ContainersClient     *azaci.ContainersClient
-	ContainerGroupClient *azaci.ContainerGroupsClient
-	LocationClient       *azaci.LocationClient
+	ContainersClient     *azaciv2.ContainersClient
+	ContainerGroupClient *azaciv2.ContainerGroupsClient
+	LocationClient       *azaciv2.LocationClient
 }
 
 func NewAzClientsAPIs(ctx context.Context, azConfig auth.Config) (*AzClientsAPIs, error) {
@@ -42,23 +44,27 @@ func NewAzClientsAPIs(ctx context.Context, azConfig auth.Config) (*AzClientsAPIs
 	if err != nil {
 		return nil, errors.Wrap(err, "an error has occurred while creating getting credential ")
 	}
+	ua := os.Getenv("ACI_EXTRA_USER_AGENT")
 	options := arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
 			Cloud: azConfig.Cloud,
+			Telemetry: policy.TelemetryOptions{
+				ApplicationID: ua,
+			},
 		},
 	}
 
-	cClient, err := azaci.NewContainersClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
+	cClient, err := azaciv2.NewContainersClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create container client ")
 	}
 
-	cgClient, err := azaci.NewContainerGroupsClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
+	cgClient, err := azaciv2.NewContainerGroupsClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create container group client ")
 	}
 
-	lClient, err := azaci.NewLocationClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
+	lClient, err := azaciv2.NewLocationClient(azConfig.AuthConfig.SubscriptionID, cred, &options)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create location client ")
 	}
@@ -70,7 +76,7 @@ func NewAzClientsAPIs(ctx context.Context, azConfig auth.Config) (*AzClientsAPIs
 	return &obj, nil
 }
 
-func (a *AzClientsAPIs) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*azaci.ContainerGroup, error) {
+func (a *AzClientsAPIs) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
 	_ = log.G(ctx).WithField("method", "GetContainerGroup")
 	ctx, span := trace.StartSpan(ctx, "aci.GetContainerGroup")
 	defer span.End()
@@ -95,7 +101,7 @@ func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup,
 	ctx, span := trace.StartSpan(ctx, "aci.CreateContainerGroup")
 	defer span.End()
 
-	containerGroup := azaci.ContainerGroup{
+	containerGroup := azaciv2.ContainerGroup{
 		Properties: cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties,
 		Name:       cg.Name,
 		Type:       cg.Type,
@@ -120,7 +126,7 @@ func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup,
 }
 
 // GetContainerGroupInfo returns a container group from ACI.
-func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
+func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 	logger := log.G(ctx).WithField("method", "GetContainerGroupInfo")
 	ctx, span := trace.StartSpan(ctx, "aci.GetContainerGroupInfo")
 	defer span.End()
@@ -135,7 +141,7 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 		return nil, err
 	}
 
-	err = validation.ValidateContainerGroup(response.ContainerGroup)
+	err = validation.ValidateContainerGroup(&response.ContainerGroup)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +152,7 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 	return &response.ContainerGroup, nil
 }
 
-func (a *AzClientsAPIs) GetContainerGroupListResult(ctx context.Context, resourceGroup string) ([]*azaci.ContainerGroup, error) {
+func (a *AzClientsAPIs) GetContainerGroupListResult(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
 	logger := log.G(ctx).WithField("method", "GetContainerGroupListResult")
 	ctx, span := trace.StartSpan(ctx, "aci.GetContainerGroupListResult")
 	defer span.End()
@@ -156,7 +162,7 @@ func (a *AzClientsAPIs) GetContainerGroupListResult(ctx context.Context, resourc
 
 	pager := a.ContainerGroupClient.NewListByResourceGroupPager(resourceGroup, nil)
 
-	var cgList []*azaci.ContainerGroup
+	var cgList []*azaciv2.ContainerGroup
 	for pager.More() {
 		page, err := pager.NextPage(ctxWithResp)
 		if err != nil {
@@ -168,7 +174,7 @@ func (a *AzClientsAPIs) GetContainerGroupListResult(ctx context.Context, resourc
 	return cgList, nil
 }
 
-func (a *AzClientsAPIs) ListCapabilities(ctx context.Context, region string) ([]*azaci.Capabilities, error) {
+func (a *AzClientsAPIs) ListCapabilities(ctx context.Context, region string) ([]*azaciv2.Capabilities, error) {
 	logger := log.G(ctx).WithField("method", "ListCapabilities")
 	ctx, span := trace.StartSpan(ctx, "aci.ListCapabilities")
 	defer span.End()
@@ -178,7 +184,7 @@ func (a *AzClientsAPIs) ListCapabilities(ctx context.Context, region string) ([]
 
 	pager := a.LocationClient.NewListCapabilitiesPager(region, nil)
 
-	var capList []*azaci.Capabilities
+	var capList []*azaciv2.Capabilities
 	for pager.More() {
 		page, err := pager.NextPage(ctxWithResp)
 		if err != nil {
@@ -231,12 +237,12 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 		logTail = &tail
 	}
 
-	options := azaci.ContainersClientListLogsOptions{
+	options := azaciv2.ContainersClientListLogsOptions{
 		Tail:       logTail,
 		Timestamps: &enableTimestamp,
 	}
 	var err error
-	var result azaci.Logs
+	var result azaciv2.Logs
 	err = retry.OnError(retry.DefaultBackoff,
 		func(err error) bool {
 			return ctx.Err() == nil
@@ -258,7 +264,7 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 	return result.Content, nil
 }
 
-func (a *AzClientsAPIs) ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaci.ContainerExecRequest) (*azaci.ContainerExecResponse, error) {
+func (a *AzClientsAPIs) ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaciv2.ContainerExecRequest) (*azaciv2.ContainerExecResponse, error) {
 	logger := log.G(ctx).WithField("method", "ExecuteContainerCommand")
 	ctx, span := trace.StartSpan(ctx, "aci.ExecuteContainerCommand")
 	defer span.End()

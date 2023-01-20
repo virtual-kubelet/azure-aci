@@ -7,7 +7,7 @@ package provider
 import (
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
@@ -16,7 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (p *ACIProvider) containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, error) {
+func (p *ACIProvider) containerGroupToPod(cg *azaciv2.ContainerGroup) (*v1.Pod, error) {
 	//cg is validated
 	pod, err := p.resourceManager.GetPod(*cg.Name, *cg.Tags["Namespace"])
 	if err != nil {
@@ -35,7 +35,7 @@ func (p *ACIProvider) containerGroupToPod(cg *azaci.ContainerGroup) (*v1.Pod, er
 	return updatedPod, nil
 }
 
-func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (*v1.PodStatus, error) {
+func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaciv2.ContainerGroup) (*v1.PodStatus, error) {
 	// cg is validated
 	allReady := true
 	var firstContainerStartTime, lastUpdateTime time.Time
@@ -82,7 +82,8 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 	}
 
 	podIp := ""
-	if cg.Properties.OSType != &util.WindowsType {
+	if cg.Properties.OSType != nil &&
+		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
 		podIp = *cg.Properties.IPAddress.IP
 	}
 	return &v1.PodStatus{
@@ -97,7 +98,7 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaci.ContainerGroup) (
 	}, nil
 }
 
-func aciContainerStateToContainerState(cs *azaci.ContainerState) v1.ContainerState {
+func aciContainerStateToContainerState(cs *azaciv2.ContainerState) v1.ContainerState {
 	// cg container state is validated
 	startTime := *cs.StartTime
 	finishTime := *cs.FinishTime
@@ -202,7 +203,7 @@ func getPodConditionsFromACIState(state string, creationTime, lastUpdateTime tim
 	return []v1.PodCondition{}
 }
 
-func getACIResourceMetaFromContainerGroup(cg *azaci.ContainerGroup) (*string, time.Time, error) {
+func getACIResourceMetaFromContainerGroup(cg *azaciv2.ContainerGroup) (*string, time.Time, error) {
 	// cg is validated
 
 	// Use the Provisioning State if it's not Succeeded,

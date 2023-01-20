@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"testing"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -264,10 +264,10 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		return nil
 	}
 
-	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 		caStr := "ca.crt"
 		provisioningState := "Creating"
-		return &azaci.ContainerGroup{
+		return &azaciv2.ContainerGroup{
 			Tags: map[string]*string{
 				"CreationTimestamp": &creationTime,
 				"PodName":           &podName,
@@ -277,14 +277,14 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 				"UID":               &podName,
 			},
 			Name: &cgName,
-			Properties: &azaci.ContainerGroupPropertiesProperties{
+			Properties: &azaciv2.ContainerGroupPropertiesProperties{
 				ProvisioningState: &provisioningState,
-				Volumes: []*azaci.Volume{
+				Volumes: []*azaciv2.Volume{
 					{
 						Name: &emptyVolumeName,
 					}, {
 						Name: &azureFileVolumeName,
-						AzureFile: &azaci.AzureFileVolume{
+						AzureFile: &azaciv2.AzureFileVolume{
 							ShareName: &fakeShareName1,
 						},
 					}, {

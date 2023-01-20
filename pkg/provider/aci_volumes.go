@@ -9,13 +9,13 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
 )
 
-func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azaci.Volume, error) {
+func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azaciv2.Volume, error) {
 	var secretName, shareName string
 	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
 		for k, v := range volume.CSI.VolumeAttributes {
@@ -47,17 +47,17 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azac
 	storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
 	storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
 
-	return &azaci.Volume{
+	return &azaciv2.Volume{
 		Name: &volume.Name,
-		AzureFile: &azaci.AzureFileVolume{
+		AzureFile: &azaciv2.AzureFileVolume{
 			ShareName:          &shareName,
 			StorageAccountName: &storageAccountNameStr,
 			StorageAccountKey:  &storageAccountKeyStr,
 		}}, nil
 }
 
-func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Volume, error) {
-	volumes := make([]*azaci.Volume, 0, len(pod.Spec.Volumes))
+func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.Volume, error) {
+	volumes := make([]*azaciv2.Volume, 0, len(pod.Spec.Volumes))
 	podVolumes := pod.Spec.Volumes
 	for i := range podVolumes {
 		// Handle the case for Azure File CSI driver
@@ -88,9 +88,9 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Vol
 			storageAccountNameStr := string(secret.Data[azureFileStorageAccountName])
 			storageAccountKeyStr := string(secret.Data[azureFileStorageAccountKey])
 
-			volumes = append(volumes, &azaci.Volume{
+			volumes = append(volumes, &azaciv2.Volume{
 				Name: &podVolumes[i].Name,
-				AzureFile: &azaci.AzureFileVolume{
+				AzureFile: &azaciv2.AzureFileVolume{
 					ShareName:          &podVolumes[i].AzureFile.ShareName,
 					ReadOnly:           &podVolumes[i].AzureFile.ReadOnly,
 					StorageAccountName: &storageAccountNameStr,
@@ -103,7 +103,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Vol
 		// Handle the case for the EmptyDir.
 		if podVolumes[i].EmptyDir != nil {
 			log.G(ctx).Info("empty volume name ", podVolumes[i].Name)
-			volumes = append(volumes, &azaci.Volume{
+			volumes = append(volumes, &azaciv2.Volume{
 				Name:     &podVolumes[i].Name,
 				EmptyDir: map[string]interface{}{},
 			})
@@ -112,9 +112,9 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Vol
 
 		// Handle the case for GitRepo volume.
 		if podVolumes[i].GitRepo != nil {
-			volumes = append(volumes, &azaci.Volume{
+			volumes = append(volumes, &azaciv2.Volume{
 				Name: &podVolumes[i].Name,
-				GitRepo: &azaci.GitRepoVolume{
+				GitRepo: &azaciv2.GitRepoVolume{
 					Directory:  &podVolumes[i].GitRepo.Directory,
 					Repository: &podVolumes[i].GitRepo.Repository,
 					Revision:   &podVolumes[i].GitRepo.Revision,
@@ -140,7 +140,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Vol
 			}
 
 			if len(paths) != 0 {
-				volumes = append(volumes, &azaci.Volume{
+				volumes = append(volumes, &azaciv2.Volume{
 					Name:   &podVolumes[i].Name,
 					Secret: paths,
 				})
@@ -169,7 +169,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Vol
 			}
 
 			if len(paths) != 0 {
-				volumes = append(volumes, &azaci.Volume{
+				volumes = append(volumes, &azaciv2.Volume{
 					Name:   &podVolumes[i].Name,
 					Secret: paths,
 				})
@@ -271,7 +271,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaci.Vol
 				}
 			}
 			if len(paths) != 0 {
-				volumes = append(volumes, &azaci.Volume{
+				volumes = append(volumes, &azaciv2.Volume{
 					Name:   &podVolumes[i].Name,
 					Secret: paths,
 				})

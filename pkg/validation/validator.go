@@ -1,12 +1,11 @@
 package validation
 
 import (
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/azure-aci/pkg/util"
 )
 
-func ValidateContainer(container *azaci.Container) error {
+func ValidateContainer(container *azaciv2.Container) error {
 
 	if container.Name == nil {
 		return errors.Errorf("container name cannot be nil")
@@ -31,7 +30,7 @@ func ValidateContainer(container *azaci.Container) error {
 	}
 	if container.Properties.InstanceView.PreviousState == nil {
 		pendingState := "Pending"
-		container.Properties.InstanceView.PreviousState = &azaci.ContainerState{
+		container.Properties.InstanceView.PreviousState = &azaciv2.ContainerState{
 			State:        &pendingState,
 			DetailStatus: &pendingState,
 		}
@@ -47,10 +46,7 @@ func ValidateContainer(container *azaci.Container) error {
 	return nil
 }
 
-func ValidateContainerGroup(cg azaci.ContainerGroup) error {
-	if &cg == nil {
-		return errors.Errorf("container group cannot be nil")
-	}
+func ValidateContainerGroup(cg *azaciv2.ContainerGroup) error {
 	if cg.Name == nil {
 		return errors.Errorf("container group Name cannot be nil")
 	}
@@ -66,7 +62,8 @@ func ValidateContainerGroup(cg azaci.ContainerGroup) error {
 	if cg.Tags == nil {
 		return errors.Errorf("tags list cannot be nil for container group %s", *cg.Name)
 	}
-	if cg.Properties.OSType != &util.WindowsType {
+	if cg.Properties.OSType != nil &&
+		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
 		if cg.Properties.IPAddress == nil {
 			return errors.Errorf("IPAddress cannot be nil for container group %s", *cg.Name)
 		} else {

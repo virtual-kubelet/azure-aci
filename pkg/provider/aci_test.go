@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	gpuSKU       = azaci.GpuSKUP100
+	gpuSKU       = azaciv2.GpuSKUP100
 	fakeRegion   = getEnv("LOCATION", "westus2")
 	creationTime = "2006-01-02 15:04:05.999999999 -0700 MST"
 	azConfig     auth.Config
@@ -362,8 +362,8 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 func TestGetPodsWithEmptyList(t *testing.T) {
 	aciMocks := createNewACIMock()
 
-	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaci.ContainerGroup, error) {
-		var result []*azaci.ContainerGroup
+	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
+		var result []*azaciv2.ContainerGroup
 		return result, nil
 	}
 
@@ -385,11 +385,11 @@ func TestGetPodsWithEmptyList(t *testing.T) {
 func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 	aciMocks := createNewACIMock()
 
-	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaci.ContainerGroup, error) {
+	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
 		cgName := "default-nginx"
 		node := fakeNodeName
 		provisioning := "Creating"
-		var cg = &azaci.ContainerGroup{
+		var cg = &azaciv2.ContainerGroup{
 			Name: &cgName,
 			Tags: map[string]*string{
 				"CreationTimestamp": &creationTime,
@@ -399,12 +399,12 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 				"NodeName":          &node,
 				"UID":               &cgName,
 			},
-			Properties: &azaci.ContainerGroupPropertiesProperties{
+			Properties: &azaciv2.ContainerGroupPropertiesProperties{
 				ProvisioningState: &provisioning,
 				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
 			},
 		}
-		var result []*azaci.ContainerGroup
+		var result []*azaciv2.ContainerGroup
 		result = append(result, cg)
 		return result, nil
 	}
@@ -440,7 +440,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockGetContainerGroupInfo =
-		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
+		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 			return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
 				testsutil.CreateACIContainersListObj("Running", "Initializing",
 					testsutil.CgCreationTime.Add(time.Second*2),
@@ -448,14 +448,14 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 					false, false, false), "Succeeded"), nil
 		}
 
-	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaci.ContainerGroup, error) {
+	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
 		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
 			testsutil.CreateACIContainersListObj("Running", "Initializing",
 				testsutil.CgCreationTime.Add(time.Second*2),
 				testsutil.CgCreationTime.Add(time.Second*3),
 				false, false, false), "Succeeded")
 
-		var result []*azaci.ContainerGroup
+		var result []*azaciv2.ContainerGroup
 		result = append(result, cg)
 		return result, nil
 	}
@@ -546,13 +546,13 @@ func setAuthConfig() error {
 }
 
 func createNewACIMock() *MockACIProvider {
-	return NewMockACIProvider(func(ctx context.Context, region string) ([]*azaci.Capabilities, error) {
+	return NewMockACIProvider(func(ctx context.Context, region string) ([]*azaciv2.Capabilities, error) {
 		gpu := "P100"
-		capability := &azaci.Capabilities{
+		capability := &azaciv2.Capabilities{
 			Location: &region,
 			Gpu:      &gpu,
 		}
-		var result []*azaci.Capabilities
+		var result []*azaciv2.Capabilities
 		result = append(result, capability)
 		return result, nil
 	})
@@ -901,7 +901,7 @@ func TestGetPodWithContainerID(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	cgID := ""
-	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 
 		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
 			testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), false, false, false), "Succeeded")

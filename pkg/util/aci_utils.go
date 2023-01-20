@@ -10,25 +10,21 @@ import (
 	"fmt"
 	"strings"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	v1 "k8s.io/api/core/v1"
 )
 
 var (
-	// WindowsType to prevent indirect pointer access
-	WindowsType = azaci.OperatingSystemTypesWindows
-	// LinuxType to prevent indirect pointer access
-	LinuxType = azaci.OperatingSystemTypesLinux
 	// LogTypeContainerInsights to prevent indirect pointer access
-	LogTypeContainerInsights = azaci.LogAnalyticsLogTypeContainerInsights
+	LogTypeContainerInsights = azaciv2.LogAnalyticsLogTypeContainerInsights
 	// ContainerNetworkProtocolTCP to prevent indirect pointer access
-	ContainerNetworkProtocolTCP = azaci.ContainerNetworkProtocolTCP
+	ContainerNetworkProtocolTCP = azaciv2.ContainerNetworkProtocolTCP
 	//ContainerNetworkProtocolUDP to prevent indirect pointer access
-	ContainerNetworkProtocolUDP = azaci.ContainerNetworkProtocolUDP
+	ContainerNetworkProtocolUDP = azaciv2.ContainerNetworkProtocolUDP
 	// ContainerGroupIPAddressTypePublic to prevent indirect pointer access
-	ContainerGroupIPAddressTypePublic = azaci.ContainerGroupIPAddressTypePublic
+	ContainerGroupIPAddressTypePublic = azaciv2.ContainerGroupIPAddressTypePublic
 	// ContainerGroupNetworkProtocolTCP to prevent indirect pointer access
-	ContainerGroupNetworkProtocolTCP = azaci.ContainerGroupNetworkProtocolTCP
+	ContainerGroupNetworkProtocolTCP = azaciv2.ContainerGroupNetworkProtocolTCP
 )
 
 func GetContainerID(cgID, containerName *string) string {
@@ -59,7 +55,7 @@ func OmitDuplicates(strs []string) []string {
 	return ret
 }
 
-func GetProtocol(pro v1.Protocol) *azaci.ContainerNetworkProtocol {
+func GetProtocol(pro v1.Protocol) *azaciv2.ContainerNetworkProtocol {
 	switch pro {
 	case v1.ProtocolUDP:
 		return &ContainerNetworkProtocolUDP

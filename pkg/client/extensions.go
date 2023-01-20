@@ -8,7 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	clientcmdapiv1 "k8s.io/client-go/tools/clientcmd/api/v1"
@@ -31,7 +31,7 @@ var (
 )
 
 // GetKubeProxyExtension gets the kubeProxy extension
-func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*azaci.DeploymentExtensionSpec, error) {
+func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*azaciv2.DeploymentExtensionSpec, error) {
 	name := "virtual-kubelet"
 	var certAuthData []byte
 	var authInfo *clientcmdapi.AuthInfo
@@ -114,9 +114,9 @@ func GetKubeProxyExtension(secretPath, masterURI, clusterCIDR string) (*azaci.De
 		return nil, fmt.Errorf("failed to encode the kubeconfig: %v", err)
 	}
 
-	extension := azaci.DeploymentExtensionSpec{
+	extension := azaciv2.DeploymentExtensionSpec{
 		Name: &ExtensionTypeKubeProxy,
-		Properties: &azaci.DeploymentExtensionSpecProperties{
+		Properties: &azaciv2.DeploymentExtensionSpecProperties{
 			ExtensionType: &ExtensionTypeKubeProxy,
 			Version:       &ExtensionVersion_1,
 			Settings: map[string]string{
@@ -148,10 +148,10 @@ func getKubeconfigAuthInfo(authInfos map[string]*clientcmdapi.AuthInfo) *clientc
 }
 
 // GetRealtimeMetricsExtension gets the realtime extension
-func GetRealtimeMetricsExtension() *azaci.DeploymentExtensionSpec {
-	extension := azaci.DeploymentExtensionSpec{
+func GetRealtimeMetricsExtension() *azaciv2.DeploymentExtensionSpec {
+	extension := azaciv2.DeploymentExtensionSpec{
 		Name: &ExtensionTypeRealtimeMetrics,
-		Properties: &azaci.DeploymentExtensionSpecProperties{
+		Properties: &azaciv2.DeploymentExtensionSpecProperties{
 			ExtensionType:     &ExtensionTypeRealtimeMetrics,
 			Version:           &ExtensionVersion_1,
 			Settings:          map[string]string{},

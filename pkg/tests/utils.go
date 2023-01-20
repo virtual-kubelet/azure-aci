@@ -7,7 +7,7 @@ package tests
 import (
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -33,17 +33,17 @@ var (
 	testCPU    = float64(0.99)
 	testMemory = float64(1.5)
 	port       = int32(80)
-	gpuSKUP100 = azaci.GpuSKUP100
+	gpuSKUP100 = azaciv2.GpuSKUP100
 )
 
-func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*azaci.Container, provisioningState string) *azaci.ContainerGroup {
-	fakeIPAddress := azaci.IPAddress{
+func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*azaciv2.Container, provisioningState string) *azaciv2.ContainerGroup {
+	fakeIPAddress := azaciv2.IPAddress{
 		IP: &FakeIP,
 	}
 	timeAsString := v1.NewTime(cgCreationTime).String()
 	nodeName := "vk"
 
-	return &azaci.ContainerGroup{
+	return &azaciv2.ContainerGroup{
 		Tags: map[string]*string{
 			"CreationTimestamp": &timeAsString,
 			"PodName":           &cgName,
@@ -54,9 +54,9 @@ func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*
 		},
 		Name: &cgName,
 		ID:   &cgName,
-		Properties: &azaci.ContainerGroupPropertiesProperties{
+		Properties: &azaciv2.ContainerGroupPropertiesProperties{
 			Containers: containers,
-			InstanceView: &azaci.ContainerGroupPropertiesInstanceView{
+			InstanceView: &azaciv2.ContainerGroupPropertiesInstanceView{
 				State: &cgState,
 			},
 			ProvisioningState: &provisioningState,
@@ -65,17 +65,17 @@ func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*
 	}
 }
 
-func CreateACIContainersListObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) []*azaci.Container {
-	containerList := append([]*azaci.Container{}, CreateACIContainerObj(currentState, PrevState, startTime, finishTime, hasResources, hasLimits, hasGPU))
+func CreateACIContainersListObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) []*azaciv2.Container {
+	containerList := append([]*azaciv2.Container{}, CreateACIContainerObj(currentState, PrevState, startTime, finishTime, hasResources, hasLimits, hasGPU))
 	return containerList
 }
 
-func CreateACIContainerObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) *azaci.Container {
-	return &azaci.Container{
+func CreateACIContainerObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) *azaciv2.Container {
+	return &azaciv2.Container{
 		Name: &TestContainerName,
-		Properties: &azaci.ContainerProperties{
+		Properties: &azaciv2.ContainerProperties{
 			Image: &TestImageNginx,
-			Ports: []*azaci.ContainerPort{
+			Ports: []*azaciv2.ContainerPort{
 				{
 					Protocol: &util.ContainerNetworkProtocolTCP,
 					Port:     &port,
@@ -83,22 +83,22 @@ func CreateACIContainerObj(currentState, PrevState string, startTime, finishTime
 			},
 			Resources: CreateContainerResources(hasResources, hasLimits, hasGPU),
 			Command:   []*string{},
-			InstanceView: &azaci.ContainerPropertiesInstanceView{
+			InstanceView: &azaciv2.ContainerPropertiesInstanceView{
 				CurrentState:  CreateContainerStateObj(currentState, startTime, finishTime, 0),
 				PreviousState: CreateContainerStateObj(PrevState, cgCreationTime, startTime, 0),
 				RestartCount:  &RestartCount,
-				Events:        []*azaci.Event{},
+				Events:        []*azaciv2.Event{},
 			},
-			LivenessProbe:  &azaci.ContainerProbe{},
-			ReadinessProbe: &azaci.ContainerProbe{},
+			LivenessProbe:  &azaciv2.ContainerProbe{},
+			ReadinessProbe: &azaciv2.ContainerProbe{},
 		},
 	}
 }
 
-func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaci.ResourceRequirements {
+func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaciv2.ResourceRequirements {
 	if hasResources {
-		return &azaci.ResourceRequirements{
-			Requests: &azaci.ResourceRequests{
+		return &azaciv2.ResourceRequirements{
+			Requests: &azaciv2.ResourceRequests{
 				CPU:        &testCPU,
 				MemoryInGB: &testMemory,
 				Gpu:        CreateGPUResource(hasGPU),
@@ -109,9 +109,9 @@ func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaci.Resou
 	return nil
 }
 
-func CreateResourceLimits(hasLimits, hasGPU bool) *azaci.ResourceLimits {
+func CreateResourceLimits(hasLimits, hasGPU bool) *azaciv2.ResourceLimits {
 	if hasLimits {
-		return &azaci.ResourceLimits{
+		return &azaciv2.ResourceLimits{
 			CPU:        &testCPU,
 			MemoryInGB: &testMemory,
 			Gpu:        CreateGPUResource(hasGPU),
@@ -120,9 +120,9 @@ func CreateResourceLimits(hasLimits, hasGPU bool) *azaci.ResourceLimits {
 	return nil
 }
 
-func CreateGPUResource(hasGPU bool) *azaci.GpuResource {
+func CreateGPUResource(hasGPU bool) *azaciv2.GpuResource {
 	if hasGPU {
-		return &azaci.GpuResource{
+		return &azaciv2.GpuResource{
 			Count: &testGPUCount,
 			SKU:   &gpuSKUP100,
 		}
@@ -130,8 +130,8 @@ func CreateGPUResource(hasGPU bool) *azaci.GpuResource {
 	return nil
 }
 
-func CreateContainerStateObj(state string, startTime, finishTime time.Time, exitCode int32) *azaci.ContainerState {
-	return &azaci.ContainerState{
+func CreateContainerStateObj(state string, startTime, finishTime time.Time, exitCode int32) *azaciv2.ContainerState {
+	return &azaciv2.ContainerState{
 		State:        &state,
 		StartTime:    &startTime,
 		ExitCode:     &exitCode,

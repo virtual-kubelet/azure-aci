@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	testutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
@@ -30,7 +30,7 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	}
 	cases := []struct {
 		description           string
-		containerGroup        *azaci.ContainerGroup
+		containerGroup        *azaciv2.ContainerGroup
 		expectedPodPhase      v1.PodPhase
 		expectedPodConditions []v1.PodCondition
 	}{

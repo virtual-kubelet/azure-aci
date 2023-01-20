@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -120,12 +120,12 @@ func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
 	}
 }
 
-func fakeContainerGroup() *azaci.ContainerGroup {
-	return &azaci.ContainerGroup{
-		Properties: &azaci.ContainerGroupPropertiesProperties{
-			Extensions: []*azaci.DeploymentExtensionSpec{
+func fakeContainerGroup() *azaciv2.ContainerGroup {
+	return &azaciv2.ContainerGroup{
+		Properties: &azaciv2.ContainerGroupPropertiesProperties{
+			Extensions: []*azaciv2.DeploymentExtensionSpec{
 				{
-					Properties: &azaci.DeploymentExtensionSpecProperties{
+					Properties: &azaciv2.DeploymentExtensionSpecProperties{
 						ExtensionType: &client.ExtensionTypeKubeProxy,
 						Version:       &client.ExtensionVersion_1,
 						Settings: map[string]string{
@@ -136,7 +136,7 @@ func fakeContainerGroup() *azaci.ContainerGroup {
 					},
 				},
 				{
-					Properties: &azaci.DeploymentExtensionSpecProperties{
+					Properties: &azaciv2.DeploymentExtensionSpecProperties{
 						ExtensionType:     &client.ExtensionTypeRealtimeMetrics,
 						Version:           &client.ExtensionVersion_1,
 						Settings:          map[string]string{},

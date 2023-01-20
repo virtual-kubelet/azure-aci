@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -167,12 +167,12 @@ func (decider *podStatsGetterDecider) GetPodStats(ctx context.Context, pod *v1.P
 	}
 }
 
-func (decider *podStatsGetterDecider) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*azaci.ContainerGroup, error) {
+func (decider *podStatsGetterDecider) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*azaciv2.ContainerGroup, error) {
 	cgName := containerGroupName(pod.Namespace, pod.Name)
 	cacheKey := string(pod.UID)
 	aciContainerGroup, found := decider.cache.Get(cacheKey)
 	if found {
-		return aciContainerGroup.(*azaci.ContainerGroup), nil
+		return aciContainerGroup.(*azaciv2.ContainerGroup), nil
 	}
 	aciCG, err := decider.aciCGGetter.GetContainerGroup(ctx, decider.rgName, cgName)
 	if err != nil {
