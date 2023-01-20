@@ -282,7 +282,9 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	cg := &client.ContainerGroupWrapper{
 		ContainerGroupPropertiesWrapper: &client.ContainerGroupPropertiesWrapper{
-			ContainerGroupProperties: &azaciv2.ContainerGroupProperties{},
+			ContainerGroupProperties: &azaciv2.ContainerGroupProperties{
+				Properties: &azaciv2.ContainerGroupPropertiesProperties{},
+			},
 		},
 	}
 
