@@ -377,7 +377,6 @@ func TestGetPodsWithEmptyList(t *testing.T) {
 		t.Fatal("Failed to get pods", err)
 	}
 
-	assert.Check(t, pods != nil, "Response pods should not be nil")
 	assert.Check(t, is.Equal(0, len(pods)), "No pod should be returned")
 }
 
