@@ -11,8 +11,10 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	_ "github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/dimchansky/utfbom"
@@ -34,6 +36,38 @@ type Config struct {
 	AuthConfig    *Authentication
 	Cloud         cloud.Configuration
 	Authorizer    autorest.Authorizer
+}
+
+// GetMSICredential retrieve MSI credential
+func (c *Config) GetMSICredential(ctx context.Context) (*azidentity.ManagedIdentityCredential, error) {
+	log.G(ctx).Debug("getting token using user identity")
+	opts := &azidentity.ManagedIdentityCredentialOptions{
+		ID: azidentity.ClientID(c.AuthConfig.UserIdentityClientId),
+		ClientOptions: azcore.ClientOptions{
+			Cloud: c.Cloud,
+		}}
+	msiCredential, err := azidentity.NewManagedIdentityCredential(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return msiCredential, nil
+}
+
+// GetSPCredential retrieve SP credential
+func (c *Config) GetSPCredential(ctx context.Context) (*azidentity.ClientSecretCredential, error) {
+	log.G(ctx).Debug("getting token using service principal")
+	opts := &azidentity.ClientSecretCredentialOptions{
+		ClientOptions: azcore.ClientOptions{
+			Cloud: c.Cloud,
+		},
+	}
+	spCredential, err := azidentity.NewClientSecretCredential(c.AuthConfig.TenantID, c.AuthConfig.ClientID, c.AuthConfig.ClientSecret, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return spCredential, nil
 }
 
 // getAuthorizer return autorest authorizer.
@@ -66,7 +100,6 @@ func (c *Config) getAuthorizer(ctx context.Context, resource string) (autorest.A
 			return nil, err
 		}
 	}
-
 	auth = autorest.NewBearerAuthorizer(token)
 	return auth, err
 }

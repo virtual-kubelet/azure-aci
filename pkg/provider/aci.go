@@ -902,13 +902,16 @@ func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 
 //this method is used for both initConainers and containers
 func (p *ACIProvider) getCommand(container v1.Container) []*string {
-	var command, args []*string
+	command := make([]*string, len(container.Command))
 	for c := range container.Command {
 		command[c] = &container.Command[c]
 	}
+
+	args := make([]*string, len(container.Command))
 	for a := range container.Args {
 		args[a] = &container.Args[a]
 	}
+
 	return append(command, args...)
 }
 
