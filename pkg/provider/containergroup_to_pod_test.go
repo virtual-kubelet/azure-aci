@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaci "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	testutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
