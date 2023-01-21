@@ -389,6 +389,7 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 		node := fakeNodeName
 		provisioning := "Creating"
 		var cg = &azaciv2.ContainerGroup{
+			ID:   &cgName,
 			Name: &cgName,
 			Tags: map[string]*string{
 				"CreationTimestamp": &creationTime,
