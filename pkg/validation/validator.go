@@ -1,12 +1,14 @@
 package validation
 
 import (
+	"context"
+
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/pkg/errors"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
 )
 
-func ValidateContainer(container *azaciv2.Container) error {
-
+func ValidateContainer(ctx context.Context, container *azaciv2.Container) error {
 	if container.Name == nil {
 		return errors.Errorf("container name cannot be nil")
 	}
@@ -42,11 +44,11 @@ func ValidateContainer(container *azaciv2.Container) error {
 	if container.Properties.InstanceView.Events == nil {
 		return errors.Errorf("container %s properties Events cannot be nil", *container.Name)
 	}
-
+	log.G(ctx).Infof("container %s was validated successfully!", *container.Name)
 	return nil
 }
 
-func ValidateContainerGroup(cg *azaciv2.ContainerGroup) error {
+func ValidateContainerGroup(ctx context.Context, cg *azaciv2.ContainerGroup) error {
 	if cg.Name == nil {
 		return errors.Errorf("container group Name cannot be nil")
 	}
@@ -78,5 +80,6 @@ func ValidateContainerGroup(cg *azaciv2.ContainerGroup) error {
 			}
 		}
 	}
+	log.G(ctx).Infof("container group %s was validated successfully!", *cg.Name)
 	return nil
 }

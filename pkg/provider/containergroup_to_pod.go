@@ -5,6 +5,7 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"context"
 	"time"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
@@ -12,11 +13,13 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
+	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 )
 
-func (p *ACIProvider) containerGroupToPod(cg *azaciv2.ContainerGroup) (*v1.Pod, error) {
+func (p *ACIProvider) containerGroupToPod(ctx context.Context, cg *azaciv2.ContainerGroup) (*v1.Pod, error) {
 	//cg is validated
 	pod, err := p.resourceManager.GetPod(*cg.Name, *cg.Tags["Namespace"])
 	if err != nil {
@@ -25,7 +28,7 @@ func (p *ACIProvider) containerGroupToPod(cg *azaciv2.ContainerGroup) (*v1.Pod, 
 
 	updatedPod := pod.DeepCopy()
 
-	podState, err := p.getPodStatusFromContainerGroup(cg)
+	podState, err := p.getPodStatusFromContainerGroup(ctx, cg)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +38,9 @@ func (p *ACIProvider) containerGroupToPod(cg *azaciv2.ContainerGroup) (*v1.Pod, 
 	return updatedPod, nil
 }
 
-func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaciv2.ContainerGroup) (*v1.PodStatus, error) {
+func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *azaciv2.ContainerGroup) (*v1.PodStatus, error) {
+	logger := log.G(ctx).WithField("method", "getPodStatusFromContainerGroup")
+
 	// cg is validated
 	allReady := true
 	var firstContainerStartTime, lastUpdateTime time.Time
@@ -44,10 +49,19 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaciv2.ContainerGroup)
 	containersList := cg.Properties.Containers
 
 	for i := range containersList {
-		err := validation.ValidateContainer(containersList[i])
+		var err error
+		retry.OnError(retry.DefaultBackoff,
+			func(err error) bool {
+				return true
+			}, func() error {
+				err = validation.ValidateContainer(ctx, containersList[i])
+				logger.Debugf("container %s has missing fields. retrying the validation...", *containersList[i].Name)
+				return err
+			})
 		if err != nil {
 			return nil, err
 		}
+
 		firstContainerStartTime := containersList[0].Properties.InstanceView.CurrentState.StartTime
 		lastUpdateTime = *firstContainerStartTime
 
@@ -100,8 +114,14 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(cg *azaciv2.ContainerGroup)
 
 func aciContainerStateToContainerState(cs *azaciv2.ContainerState) v1.ContainerState {
 	// cg container state is validated
-	startTime := *cs.StartTime
-	finishTime := *cs.FinishTime
+	finishTime := time.Time{}
+	startTime := time.Time{}
+	if cs.StartTime != nil {
+		startTime = *cs.StartTime
+	}
+	if cs.FinishTime != nil {
+		finishTime = *cs.FinishTime
+	}
 	switch *cs.State {
 	case "Running":
 		return v1.ContainerState{

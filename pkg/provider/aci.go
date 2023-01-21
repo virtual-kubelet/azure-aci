@@ -34,6 +34,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -487,6 +488,7 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 // GetPod returns a pod by name that is running inside ACI
 // returns nil if a pod by that name is not found.
 func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.Pod, error) {
+	logger := log.G(ctx).WithField("method", "GetPod")
 	ctx, span := trace.StartSpan(ctx, "aci.GetPod")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -496,11 +498,19 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	err = validation.ValidateContainerGroup(cg)
+	retry.OnError(retry.DefaultBackoff,
+		func(err error) bool {
+			return true
+		}, func() error {
+			err = validation.ValidateContainerGroup(ctx, cg)
+			logger.Debugf("container group %s has missing fields. retrying the validation...", *cg.Name)
+			return err
+		})
 	if err != nil {
 		return nil, err
 	}
-	return p.containerGroupToPod(cg)
+
+	return p.containerGroupToPod(ctx, cg)
 }
 
 // GetContainerLogs returns the logs of a pod by name that is running inside ACI.
@@ -638,6 +648,7 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 // GetPodStatus returns the status of a pod by name that is running inside ACI
 // returns nil if a pod by that name is not found.
 func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) (*v1.PodStatus, error) {
+	logger := log.G(ctx).WithField("method", "GetPodStatus")
 	ctx, span := trace.StartSpan(ctx, "aci.GetPodStatus")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -647,15 +658,24 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	err = validation.ValidateContainerGroup(cg)
+	retry.OnError(retry.DefaultBackoff,
+		func(err error) bool {
+			return true
+		}, func() error {
+			err = validation.ValidateContainerGroup(ctx, cg)
+			logger.Debugf("container group %s has missing fields. retrying the validation...", *(*cg).Name)
+			return err
+		})
 	if err != nil {
 		return nil, err
 	}
-	return p.getPodStatusFromContainerGroup(cg)
+
+	return p.getPodStatusFromContainerGroup(ctx, cg)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
 func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
+	logger := log.G(ctx).WithField("method", "GetPods")
 	ctx, span := trace.StartSpan(ctx, "aci.GetPods")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -672,7 +692,15 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	pods := make([]*v1.Pod, 0, len(cgs))
 
 	for cgIndex := range cgs {
-		validation.ValidateContainerGroup(cgs[cgIndex])
+
+		retry.OnError(retry.DefaultBackoff,
+			func(err error) bool {
+				return true
+			}, func() error {
+				err = validation.ValidateContainerGroup(ctx, cgs[cgIndex])
+				logger.Debugf("container group %s has missing fields. retrying the validation...", *cgs[cgIndex].Name)
+				return err
+			})
 		if err != nil {
 			return nil, err
 		}
@@ -681,7 +709,7 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 			continue
 		}
 
-		pod, err := p.containerGroupToPod(cgs[cgIndex])
+		pod, err := p.containerGroupToPod(ctx, cgs[cgIndex])
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
 				"name": cgs[cgIndex].Name,

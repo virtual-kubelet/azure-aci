@@ -118,25 +118,25 @@ func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup,
 	logger := log.G(ctx).WithField("method", "CreateContainerGroup")
 	ctx, span := trace.StartSpan(ctx, "client.CreateContainerGroup")
 	defer span.End()
+	cgName := containerGroupName(podNS, podName)
 
 	containerGroup := azaciv2.ContainerGroup{
 		Properties: cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties,
-		Name:       cg.Name,
+		Name:       &cgName,
 		Type:       cg.Type,
 		Identity:   cg.Identity,
 		Location:   cg.Location,
 		Tags:       cg.Tags,
 		ID:         cg.ID,
 	}
-	cgName := containerGroupName(podNS, podName)
-	cg.Name = &cgName
-	var rawResponse *http.Response
 
+	var rawResponse *http.Response
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
-	logger.Infof("creating container group with name: %s", *cg.Name)
-	_, err := a.ContainerGroupClient.BeginCreateOrUpdate(ctxWithResp, resourceGroup, *cg.Name, containerGroup, nil)
+
+	logger.Infof("creating container group with name: %s", cgName)
+	_, err := a.ContainerGroupClient.BeginCreateOrUpdate(ctxWithResp, resourceGroup, cgName, containerGroup, nil)
 	if err != nil {
-		logger.Errorf("an error has occurred while creating container group %s, status code %d", cg.Name, rawResponse.StatusCode)
+		logger.Errorf("an error has occurred while creating container group %s, status code %d", cgName, rawResponse.StatusCode)
 		return err
 	}
 
@@ -152,14 +152,28 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
 	cgName := containerGroupName(namespace, name)
-	response, err := a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, cgName, nil)
+
+	var err error
+	var response azaciv2.ContainerGroupsClientGetResponse
+	retry.OnError(retry.DefaultBackoff, func(err error) bool {
+		return true
+	}, func() error {
+		response, err = a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, cgName, nil)
+		return err
+	})
 	if err != nil {
 		logger.Errorf("an error has occurred while getting container group info %s, status code %d", cgName, rawResponse.StatusCode)
-
 		return nil, err
 	}
 
-	err = validation.ValidateContainerGroup(&response.ContainerGroup)
+	retry.OnError(retry.DefaultBackoff,
+		func(err error) bool {
+			return true
+		}, func() error {
+			err = validation.ValidateContainerGroup(ctx, &response.ContainerGroup)
+			logger.Debugf("container group %s has missing fields. retrying the validation...", cgName)
+			return err
+		})
 	if err != nil {
 		return nil, err
 	}

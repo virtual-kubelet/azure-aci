@@ -62,7 +62,7 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	pods := p.podGetter.GetPods()
 
 	var errGroup errgroup.Group
-	chResult := make(chan stats.PodStats, len(pods))
+	chResult := make(chan *stats.PodStats, len(pods))
 
 	sema := make(chan struct{}, 10)
 	for _, pod := range pods {
@@ -95,8 +95,13 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 				span.SetStatus(err)
 				return errors.Wrapf(err, "error fetching metrics for pods '%s'", pod.Name)
 			}
+			if podMetrics == nil {
+				err := fmt.Errorf("error fetching metrics for pods '%s'. cannot retrieve the pod status", pod.Name)
+				span.SetStatus(err)
+				return err
+			}
 
-			chResult <- *podMetrics
+			chResult <- podMetrics
 			return nil
 		})
 	}
@@ -115,7 +120,7 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	s.Pods = make([]stats.PodStats, 0, len(chResult))
 
 	for stat := range chResult {
-		s.Pods = append(s.Pods, stat)
+		s.Pods = append(s.Pods, *stat)
 	}
 
 	return &s, nil
@@ -153,7 +158,8 @@ func (decider *podStatsGetterDecider) GetPodStats(ctx context.Context, pod *v1.P
 
 	useRealTime := false
 	for _, extension := range aciCG.Properties.Extensions {
-		if extension.Properties.ExtensionType == &client.ExtensionTypeRealtimeMetrics {
+		if extension.Properties.ExtensionType != nil &&
+			*extension.Properties.ExtensionType == client.ExtensionTypeRealtimeMetrics {
 			useRealTime = true
 		}
 	}
