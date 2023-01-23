@@ -42,13 +42,10 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 
 	// cg is validated
 	allReady := true
+	var firstContainerStartTime, lastUpdateTime *time.Time
 
 	containerStatuses := make([]v1.ContainerStatus, 0, len(cg.Properties.Containers))
 	containersList := cg.Properties.Containers
-
-	//init the start/last time
-	firstContainerStartTime := containersList[0].Properties.InstanceView.CurrentState.StartTime
-	lastUpdateTime := firstContainerStartTime
 
 	for i := range containersList {
 		err := validation.ValidateContainer(ctx, containersList[i])
@@ -56,6 +53,9 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 		if err != nil {
 			return nil, err
 		}
+
+		firstContainerStartTime = containersList[i].Properties.InstanceView.CurrentState.StartTime
+		lastUpdateTime = firstContainerStartTime
 
 		containerStatus := v1.ContainerStatus{
 			Name:                 *containersList[i].Name,
