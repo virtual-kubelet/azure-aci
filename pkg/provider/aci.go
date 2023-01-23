@@ -1155,14 +1155,15 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProb
 	// Probes have can have an Exec or HTTP Get Handler.
 	// Create those if they exist, then add to the
 	// ContainerProbe struct
+	var exec *azaciv2.ContainerExec
 	commands := make([]*string, 0)
 	if probe.Handler.Exec != nil {
 		for i := range probe.Handler.Exec.Command {
 			commands = append(commands, &probe.Handler.Exec.Command[i])
 		}
-	}
-	exec := azaciv2.ContainerExec{
-		Command: commands,
+		exec = &azaciv2.ContainerExec{
+			Command: commands,
+		}
 	}
 
 	var httpGET *azaciv2.ContainerHTTPGet
@@ -1194,7 +1195,7 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProb
 	}
 
 	return &azaciv2.ContainerProbe{
-		Exec:                &exec,
+		Exec:                exec,
 		HTTPGet:             httpGET,
 		InitialDelaySeconds: &probe.InitialDelaySeconds,
 		FailureThreshold:    &probe.FailureThreshold,

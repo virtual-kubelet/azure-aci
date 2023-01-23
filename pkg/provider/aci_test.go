@@ -700,6 +700,85 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 	}
 }
 
+func TestGetProbe(t *testing.T) {
+	cases := []struct {
+		description     string
+		podProbe        *v1.Probe
+		podPorts        []v1.ContainerPort
+		expectedCGProbe *azaciv2.ContainerProbe
+		expectedError   error
+	}{
+		{
+			description:     "has_no_probe",
+			podProbe:        testsutil.CreatePodProbeObj(false, false),
+			podPorts:        nil,
+			expectedCGProbe: nil,
+			expectedError:   fmt.Errorf("probe must specify one of \"exec\" and \"httpGet\""),
+		}, {
+			description:     "has_httpGet_and_exec",
+			podProbe:        testsutil.CreatePodProbeObj(true, true),
+			podPorts:        nil,
+			expectedCGProbe: nil,
+			expectedError:   fmt.Errorf("probe may not specify more than one of \"exec\" and \"httpGet\""),
+		}, {
+			description:     "has_httpGet_wrong_port_info",
+			podProbe:        testsutil.CreatePodProbeObj(true, false),
+			podPorts:        testsutil.CreateContainerPortObj("https", 8888),
+			expectedCGProbe: nil,
+			expectedError:   fmt.Errorf("unable to find named port: %s", "http"),
+		}, {
+			description:     "has_exec_with_port_info",
+			podProbe:        testsutil.CreatePodProbeObj(false, true),
+			podPorts:        testsutil.CreateContainerPortObj("http", 8080),
+			expectedCGProbe: testsutil.CreateCGProbeObj(false, true),
+			expectedError:   nil,
+		},
+		{
+			description:     "has_exec_without_port_info",
+			podProbe:        testsutil.CreatePodProbeObj(false, true),
+			podPorts:        nil,
+			expectedCGProbe: testsutil.CreateCGProbeObj(false, true),
+			expectedError:   nil,
+		},
+		{
+			description:     "has_httpGet_with_port_info",
+			podProbe:        testsutil.CreatePodProbeObj(true, false),
+			podPorts:        testsutil.CreateContainerPortObj("http", 8080),
+			expectedCGProbe: testsutil.CreateCGProbeObj(true, false),
+			expectedError:   nil,
+		},
+		{
+			description:     "has_httpGet_without_port_info",
+			podProbe:        testsutil.CreatePodProbeObj(true, false),
+			podPorts:        nil,
+			expectedCGProbe: nil,
+			expectedError:   fmt.Errorf("unable to find named port: %s", "http"),
+		},
+		{
+			description:     "has_httpGet_with_wrong_port_info",
+			podProbe:        testsutil.CreatePodProbeObj(true, false),
+			podPorts:        testsutil.CreateContainerPortObj("https", 8080),
+			expectedCGProbe: nil,
+			expectedError:   fmt.Errorf("unable to find named port: %s", "http"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			cgProbe, err := getProbe(tc.podProbe, tc.podPorts)
+
+			if tc.expectedCGProbe != nil {
+				assert.DeepEqual(t, tc.expectedCGProbe, cgProbe)
+			}
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
+
 func TestCreatePodWithReadinessProbe(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()

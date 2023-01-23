@@ -42,10 +42,13 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 
 	// cg is validated
 	allReady := true
-	var firstContainerStartTime, lastUpdateTime time.Time
 
 	containerStatuses := make([]v1.ContainerStatus, 0, len(cg.Properties.Containers))
 	containersList := cg.Properties.Containers
+
+	//init the start/last time
+	firstContainerStartTime := containersList[0].Properties.InstanceView.CurrentState.StartTime
+	lastUpdateTime := firstContainerStartTime
 
 	for i := range containersList {
 		err := validation.ValidateContainer(ctx, containersList[i])
@@ -53,9 +56,6 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 		if err != nil {
 			return nil, err
 		}
-
-		firstContainerStartTime := containersList[0].Properties.InstanceView.CurrentState.StartTime
-		lastUpdateTime = *firstContainerStartTime
 
 		containerStatus := v1.ContainerStatus{
 			Name:                 *containersList[i].Name,
@@ -74,8 +74,8 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 		}
 
 		containerStartTime := containersList[i].Properties.InstanceView.CurrentState.StartTime
-		if containerStartTime.After(lastUpdateTime) {
-			lastUpdateTime = *containerStartTime
+		if containerStartTime.After(*lastUpdateTime) {
+			lastUpdateTime = containerStartTime
 		}
 
 		// Add to containerStatuses
@@ -94,12 +94,12 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 	}
 	return &v1.PodStatus{
 		Phase:             getPodPhaseFromACIState(*aciState),
-		Conditions:        getPodConditionsFromACIState(*aciState, creationTime, lastUpdateTime, allReady),
+		Conditions:        getPodConditionsFromACIState(*aciState, creationTime, *lastUpdateTime, allReady),
 		Message:           "",
 		Reason:            "",
 		HostIP:            p.internalIP,
 		PodIP:             podIp,
-		StartTime:         &metav1.Time{Time: firstContainerStartTime},
+		StartTime:         &metav1.Time{Time: *firstContainerStartTime},
 		ContainerStatuses: containerStatuses,
 	}, nil
 }

@@ -34,6 +34,7 @@ var (
 	testMemory = float64(1.5)
 	port       = int32(80)
 	gpuSKUP100 = azaciv2.GpuSKUP100
+	scheme     = azaciv2.SchemeHTTP
 )
 
 func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*azaciv2.Container, provisioningState string) *azaciv2.ContainerGroup {
@@ -140,6 +141,46 @@ func CreateContainerStateObj(state string, startTime, finishTime time.Time, exit
 	}
 }
 
+func CreateCGProbeObj(hasHTTPGet, hasExec bool) *azaciv2.ContainerProbe {
+	var bin, c, command, path string
+
+	bin = "/bin/sh"
+	c = "-c"
+	command = "/probes/"
+	path = "/"
+	port := int32(8080)
+	fakeNum := int32(0)
+
+	var exec *azaciv2.ContainerExec
+	var httpGet *azaciv2.ContainerHTTPGet
+
+	if hasExec {
+		exec = &azaciv2.ContainerExec{
+			Command: []*string{
+				&bin,
+				&c,
+				&command,
+			},
+		}
+	}
+	if hasHTTPGet {
+		httpGet = &azaciv2.ContainerHTTPGet{
+			Port:   &port,
+			Path:   &path,
+			Scheme: &scheme,
+		}
+	}
+	return &azaciv2.ContainerProbe{
+		Exec:                exec,
+		HTTPGet:             httpGet,
+		InitialDelaySeconds: &fakeNum,
+		FailureThreshold:    &fakeNum,
+		SuccessThreshold:    &fakeNum,
+		TimeoutSeconds:      &fakeNum,
+		PeriodSeconds:       &fakeNum,
+	}
+}
+
 func GetPodConditions(creationTime, readyConditionTime v1.Time, readyConditionStatus v12.ConditionStatus) []v12.PodCondition {
 	return []v12.PodCondition{
 		{
@@ -213,6 +254,44 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 					},
 				},
 			},
+		},
+	}
+}
+
+func CreatePodProbeObj(hasHTTPGet, hasExec bool) *v12.Probe {
+	var httpGet *v12.HTTPGetAction
+	var exec *v12.ExecAction
+
+	if hasHTTPGet {
+		httpGet = &v12.HTTPGetAction{
+			Port:   intstr.FromString("http"),
+			Path:   "/",
+			Scheme: "http",
+		}
+	}
+	if hasExec {
+		exec = &v12.ExecAction{
+			Command: []string{
+				"/bin/sh",
+				"-c",
+				"/probes/",
+			},
+		}
+	}
+
+	return &v12.Probe{
+		Handler: v12.Handler{
+			HTTPGet: httpGet,
+			Exec:    exec,
+		},
+	}
+}
+
+func CreateContainerPortObj(portName string, containerPort int32) []v12.ContainerPort {
+	return []v12.ContainerPort{
+		{
+			Name:          portName,
+			ContainerPort: containerPort,
 		},
 	}
 }
