@@ -34,7 +34,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/util/retry"
 )
 
 const (
@@ -498,14 +497,8 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	retry.OnError(retry.DefaultBackoff,
-		func(err error) bool {
-			return true
-		}, func() error {
-			err = validation.ValidateContainerGroup(ctx, cg)
-			logger.Debugf("container group %s has missing fields. retrying the validation...", *cg.Name)
-			return err
-		})
+	err = validation.ValidateContainerGroup(ctx, cg)
+	logger.Debugf("container group %s has missing fields. retrying the validation...", *cg.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -658,14 +651,8 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	retry.OnError(retry.DefaultBackoff,
-		func(err error) bool {
-			return true
-		}, func() error {
-			err = validation.ValidateContainerGroup(ctx, cg)
-			logger.Debugf("container group %s has missing fields. retrying the validation...", *(*cg).Name)
-			return err
-		})
+	err = validation.ValidateContainerGroup(ctx, cg)
+	logger.Debugf("container group %s has missing fields. retrying the validation...", *(*cg).Name)
 	if err != nil {
 		return nil, err
 	}
@@ -684,7 +671,6 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if cgs == nil {
 		log.G(ctx).Infof("no container groups found for resource group %s", p.resourceGroup)
 		return nil, nil
@@ -692,15 +678,8 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	pods := make([]*v1.Pod, 0, len(cgs))
 
 	for cgIndex := range cgs {
-
-		retry.OnError(retry.DefaultBackoff,
-			func(err error) bool {
-				return true
-			}, func() error {
-				err = validation.ValidateContainerGroup(ctx, cgs[cgIndex])
-				logger.Debugf("container group %s has missing fields. retrying the validation...", *cgs[cgIndex].Name)
-				return err
-			})
+		err = validation.ValidateContainerGroup(ctx, cgs[cgIndex])
+		logger.Debugf("container group %s has missing fields. retrying the validation...", *cgs[cgIndex].Name)
 		if err != nil {
 			return nil, err
 		}

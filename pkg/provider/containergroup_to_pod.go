@@ -16,7 +16,6 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
 )
 
 func (p *ACIProvider) containerGroupToPod(ctx context.Context, cg *azaciv2.ContainerGroup) (*v1.Pod, error) {
@@ -49,15 +48,8 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 	containersList := cg.Properties.Containers
 
 	for i := range containersList {
-		var err error
-		retry.OnError(retry.DefaultBackoff,
-			func(err error) bool {
-				return true
-			}, func() error {
-				err = validation.ValidateContainer(ctx, containersList[i])
-				logger.Debugf("container %s has missing fields. retrying the validation...", *containersList[i].Name)
-				return err
-			})
+		err := validation.ValidateContainer(ctx, containersList[i])
+		logger.Debugf("container %s has missing fields. retrying the validation...", *containersList[i].Name)
 		if err != nil {
 			return nil, err
 		}

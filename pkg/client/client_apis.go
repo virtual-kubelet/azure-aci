@@ -17,7 +17,6 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
-	"k8s.io/client-go/util/retry"
 )
 
 type AzClientsInterface interface {
@@ -153,30 +152,18 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 
 	cgName := containerGroupName(namespace, name)
 
-	var err error
-	var response azaciv2.ContainerGroupsClientGetResponse
-	retry.OnError(retry.DefaultBackoff, func(err error) bool {
-		return true
-	}, func() error {
-		response, err = a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, cgName, nil)
-		return err
-	})
+	response, err := a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, cgName, nil)
 	if err != nil {
 		logger.Errorf("an error has occurred while getting container group info %s, status code %d", cgName, rawResponse.StatusCode)
 		return nil, err
 	}
 
-	retry.OnError(retry.DefaultBackoff,
-		func(err error) bool {
-			return true
-		}, func() error {
-			err = validation.ValidateContainerGroup(ctx, &response.ContainerGroup)
-			logger.Debugf("container group %s has missing fields. retrying the validation...", cgName)
-			return err
-		})
+	err = validation.ValidateContainerGroup(ctx, &response.ContainerGroup)
+	logger.Debugf("container group %s has missing fields. retrying the validation...", cgName)
 	if err != nil {
 		return nil, err
 	}
+
 	if nodeName != "" && *response.Tags["NodeName"] != nodeName {
 		return nil, errors.Wrapf(err, "container group %s found with mismatching node", cgName)
 	}
@@ -273,27 +260,14 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 		Tail:       logTail,
 		Timestamps: &enableTimestamp,
 	}
-	var err error
-	var result azaciv2.Logs
-	err = retry.OnError(retry.DefaultBackoff,
-		func(err error) bool {
-			return ctx.Err() == nil
-		}, func() error {
-			response, err := a.ContainersClient.ListLogs(ctxWithResp, resourceGroup, cgName, containerName, &options)
-			if err != nil {
-				logger.Debug("error getting container logs, name: %s , container group:  %s, status code %d, retrying",
-					containerName, cgName, rawResponse.StatusCode)
-				return err
-			}
-			result = response.Logs
-			return nil
-		})
+
+	response, err := a.ContainersClient.ListLogs(ctxWithResp, resourceGroup, cgName, containerName, &options)
 	if err != nil {
 		logger.Errorf("error getting container logs, name: %s , container group:  %s, status code %d", containerName, cgName, rawResponse.StatusCode)
 		return nil, err
 	}
 
-	return result.Content, nil
+	return response.Content, nil
 }
 
 func (a *AzClientsAPIs) ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaciv2.ContainerExecRequest) (*azaciv2.ContainerExecResponse, error) {
