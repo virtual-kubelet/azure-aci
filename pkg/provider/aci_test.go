@@ -40,6 +40,7 @@ var (
 	fakeRegion   = getEnv("LOCATION", "westus2")
 	creationTime = "2006-01-02 15:04:05.999999999 -0700 MST"
 	azConfig     auth.Config
+	runningState = "Running"
 )
 
 func getEnv(key, fallback string) string {
@@ -401,7 +402,10 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 			},
 			Properties: &azaciv2.ContainerGroupPropertiesProperties{
 				ProvisioningState: &provisioning,
-				Containers:        testsutil.CreateACIContainersListObj("Running", "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
+				Containers:        testsutil.CreateACIContainersListObj(runningState, "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
+				InstanceView: &azaciv2.ContainerGroupPropertiesInstanceView{
+					State: &runningState,
+				},
 			},
 		}
 		var result []*azaciv2.ContainerGroup
@@ -442,7 +446,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 	aciMocks.MockGetContainerGroupInfo =
 		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 			return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
-				testsutil.CreateACIContainersListObj("Running", "Initializing",
+				testsutil.CreateACIContainersListObj(runningState, "Initializing",
 					testsutil.CgCreationTime.Add(time.Second*2),
 					testsutil.CgCreationTime.Add(time.Second*3),
 					false, false, false), "Succeeded"), nil
@@ -450,7 +454,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 
 	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
 		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
-			testsutil.CreateACIContainersListObj("Running", "Initializing",
+			testsutil.CreateACIContainersListObj(runningState, "Initializing",
 				testsutil.CgCreationTime.Add(time.Second*2),
 				testsutil.CgCreationTime.Add(time.Second*3),
 				false, false, false), "Succeeded")

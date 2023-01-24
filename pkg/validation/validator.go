@@ -64,11 +64,20 @@ func ValidateContainerGroup(ctx context.Context, cg *azaciv2.ContainerGroup) err
 	if cg.Tags == nil {
 		return errors.Errorf("tags list cannot be nil for container group %s", *cg.Name)
 	}
+	if cg.Properties.InstanceView == nil {
+		return errors.Errorf("InstanceView cannot be nil for container group %s", *cg.Name)
+	}
+	if cg.Properties.InstanceView.State == nil {
+		return errors.Errorf("InstanceView state cannot be nil for container group %s", *cg.Name)
+	}
 	if cg.Properties.OSType != nil &&
 		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
 		if cg.Properties.IPAddress == nil {
 			return errors.Errorf("IPAddress cannot be nil for container group %s", *cg.Name)
 		} else {
+			if cg.Properties.ProvisioningState == nil {
+				return errors.Errorf("ProvisioningState cannot be nil for container group %s", *cg.Name)
+			}
 			aciState := *cg.Properties.ProvisioningState
 			if cg.Properties.IPAddress.IP == nil {
 				if aciState == "Running" {
