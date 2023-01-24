@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
-	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
@@ -25,9 +25,9 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	aciMocks := createNewACIMock()
-	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers
-		initContainers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.InitContainers
+	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
+		containers := cg.Properties.Containers
+		initContainers := cg.Properties.InitContainers
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, initContainers != nil, "Container group is nil")

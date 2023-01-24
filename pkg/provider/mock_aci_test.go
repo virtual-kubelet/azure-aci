@@ -4,11 +4,10 @@ import (
 	"context"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
-	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 )
 
-type CreateContainerGroupFunc func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error
+type CreateContainerGroupFunc func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error
 type GetContainerGroupInfoFunc func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error)
 type GetContainerGroupListFunc func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error)
 type ListCapabilitiesFunc func(ctx context.Context, region string) ([]*azaciv2.Capabilities, error)
@@ -57,7 +56,7 @@ func (m *MockACIProvider) GetContainerGroupInfo(ctx context.Context, resourceGro
 	return nil, nil
 }
 
-func (m *MockACIProvider) CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
+func (m *MockACIProvider) CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
 	if m.MockCreateContainerGroup != nil {
 		return m.MockCreateContainerGroup(ctx, resourceGroup, podNS, podName, cg)
 	}

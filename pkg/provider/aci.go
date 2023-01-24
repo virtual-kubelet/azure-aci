@@ -280,20 +280,16 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	cg := &client.ContainerGroupWrapper{
-		ContainerGroupPropertiesWrapper: &client.ContainerGroupPropertiesWrapper{
-			ContainerGroupProperties: &azaciv2.ContainerGroupProperties{
-				Properties: &azaciv2.ContainerGroupPropertiesProperties{},
-			},
-		},
+	cg := &azaciv2.ContainerGroup{
+		Properties: &azaciv2.ContainerGroupPropertiesProperties{},
 	}
 
 	os := azaciv2.OperatingSystemTypes(p.operatingSystem)
 	policy := azaciv2.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
 
 	cg.Location = &p.region
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.RestartPolicy = &policy
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType = &os
+	cg.Properties.RestartPolicy = &policy
+	cg.Properties.OSType = &os
 
 	// get containers
 	containers, err := p.getContainers(pod)
@@ -318,14 +314,14 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		if err != nil {
 			return err
 		}
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.InitContainers = initContainers
+		cg.Properties.InitContainers = initContainers
 	}
 
 	// assign all the things
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers = containers
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes = volumes
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.ImageRegistryCredentials = creds
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Diagnostics = p.getDiagnostics(pod)
+	cg.Properties.Containers = containers
+	cg.Properties.Volumes = volumes
+	cg.Properties.ImageRegistryCredentials = creds
+	cg.Properties.Diagnostics = p.getDiagnostics(pod)
 
 	filterWindowsServiceAccountSecretVolume(ctx, p.operatingSystem, cg)
 
@@ -345,13 +341,13 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		}
 	}
 	if len(ports) > 0 && p.providernetwork.SubnetName == "" {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.IPAddress = &azaciv2.IPAddress{
+		cg.Properties.IPAddress = &azaciv2.IPAddress{
 			Ports: ports,
 			Type:  &util.ContainerGroupIPAddressTypePublic,
 		}
 
 		if dnsNameLabel := pod.Annotations[virtualKubeletDNSNameLabel]; dnsNameLabel != "" {
-			cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.IPAddress.DNSNameLabel = &dnsNameLabel
+			cg.Properties.IPAddress.DNSNameLabel = &dnsNameLabel
 		}
 	}
 
@@ -369,9 +365,9 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	p.providernetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
 
 	// windows containers don't support kube-proxy nor realtime metrics
-	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType != nil &&
-		*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Extensions = p.containerGroupExtensions
+	if cg.Properties.OSType != nil &&
+		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
+		cg.Properties.Extensions = p.containerGroupExtensions
 	}
 
 	log.G(ctx).Infof("start creating pod %v", pod.Name)
@@ -1165,7 +1161,6 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProb
 			Command: commands,
 		}
 	}
-
 	var httpGET *azaciv2.ContainerHTTPGet
 	if probe.Handler.HTTPGet != nil {
 		var portValue int32
@@ -1208,11 +1203,11 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProb
 // Filters service account secret volume for Windows.
 // Service account secret volume gets automatically turned on if not specified otherwise.
 // ACI doesn't support secret volume for Windows, so we need to filter it.
-func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string, cgw *client.ContainerGroupWrapper) {
+func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string, cgw *azaciv2.ContainerGroup) {
 	if strings.EqualFold(osType, "Windows") {
 		serviceAccountSecretVolumeName := make(map[string]bool)
 
-		for index, container := range cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers {
+		for index, container := range cgw.Properties.Containers {
 			volumeMounts := make([]*azaciv2.VolumeMount, 0, len(container.Properties.VolumeMounts))
 			for _, volumeMount := range container.Properties.VolumeMounts {
 				if !strings.EqualFold(serviceAccountSecretMountPath, *volumeMount.MountPath) {
@@ -1221,7 +1216,7 @@ func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string,
 					serviceAccountSecretVolumeName[*volumeMount.Name] = true
 				}
 			}
-			cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers[index].Properties.VolumeMounts = volumeMounts
+			cgw.Properties.Containers[index].Properties.VolumeMounts = volumeMounts
 		}
 
 		if len(serviceAccountSecretVolumeName) == 0 {
@@ -1231,14 +1226,14 @@ func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string,
 		l := log.G(ctx).WithField("containerGroup", cgw.Name)
 		l.Infof("Ignoring service account secret volumes '%v' for Windows", reflect.ValueOf(serviceAccountSecretVolumeName).MapKeys())
 
-		volumes := make([]*azaciv2.Volume, 0, len(cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes))
-		for _, volume := range cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes {
+		volumes := make([]*azaciv2.Volume, 0, len(cgw.Properties.Volumes))
+		for _, volume := range cgw.Properties.Volumes {
 			if _, ok := serviceAccountSecretVolumeName[*volume.Name]; !ok {
 				volumes = append(volumes, volume)
 			}
 		}
 
-		cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes = volumes
+		cgw.Properties.Volumes = volumes
 	}
 }
 

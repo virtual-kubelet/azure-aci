@@ -20,7 +20,6 @@ import (
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
-	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 )
@@ -177,18 +176,18 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg client2.ContainerGroupWrapper, pod *v1.Pod, clusterDomain string) {
+func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg azaciv2.ContainerGroup, pod *v1.Pod, clusterDomain string) {
 	if pn.SubnetName == "" {
 		return
 	}
 
 	subnetID := "/subscriptions/" + pn.VnetSubscriptionID + "/resourceGroups/" + pn.VnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + pn.VnetName + "/subnets/" + pn.SubnetName
 	cgIDList := []*azaciv2.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.SubnetIDs = cgIDList
+	cg.Properties.SubnetIDs = cgIDList
 	// windows containers don't support DNS config
-	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType != nil &&
-		*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
+	if cg.Properties.OSType != nil &&
+		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
+		cg.Properties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
 	}
 }
 

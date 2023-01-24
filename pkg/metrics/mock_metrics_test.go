@@ -10,7 +10,6 @@ import (
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	gomock "github.com/golang/mock/gomock"
-	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	statsv1alpha1 "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	v1 "k8s.io/api/core/v1"
 )
@@ -152,10 +151,10 @@ func (mr *MockpodStatsGetterMockRecorder) GetPodStats(ctx, pod interface{}) *gom
 }
 
 // getContainerGroupFromPod mocks base method.
-func (m *MockpodStatsGetter) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*client.ContainerGroupWrapper, error) {
+func (m *MockpodStatsGetter) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*azaciv2.ContainerGroup, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "getContainerGroupFromPod", ctx, pod)
-	ret0, _ := ret[0].(*client.ContainerGroupWrapper)
+	ret0, _ := ret[0].(*azaciv2.ContainerGroup)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

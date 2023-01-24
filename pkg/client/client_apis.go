@@ -21,7 +21,7 @@ import (
 
 type AzClientsInterface interface {
 	ContainerGroupGetter
-	CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *ContainerGroupWrapper) error
+	CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error
 	GetContainerGroupInfo(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error)
 	GetContainerGroupListResult(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error)
 	ListCapabilities(ctx context.Context, region string) ([]*azaciv2.Capabilities, error)
@@ -113,14 +113,14 @@ func (a *AzClientsAPIs) GetContainerGroup(ctx context.Context, resourceGroup, co
 	return &result.ContainerGroup, nil
 }
 
-func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *ContainerGroupWrapper) error {
+func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
 	logger := log.G(ctx).WithField("method", "CreateContainerGroup")
 	ctx, span := trace.StartSpan(ctx, "client.CreateContainerGroup")
 	defer span.End()
 	cgName := containerGroupName(podNS, podName)
 
 	containerGroup := azaciv2.ContainerGroup{
-		Properties: cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties,
+		Properties: cg.Properties,
 		Name:       &cgName,
 		Type:       cg.Type,
 		Identity:   cg.Identity,
