@@ -10,11 +10,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -472,8 +474,11 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 			false,
 		)
 
-		if updateErr != nil && !errdefs.IsNotFound(updateErr) {
-			log.G(ctx).WithError(updateErr).Errorf("failed to update termination status for cg %v", cgName)
+		if updateErr != nil {
+			var respErr *azcore.ResponseError
+			if errors.As(err, &respErr) && !(respErr.RawResponse.StatusCode == http.StatusNotFound) {
+				log.G(ctx).WithError(updateErr).Errorf("failed to update termination status for cg %v", cgName)
+			}
 		}
 	}
 

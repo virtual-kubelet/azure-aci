@@ -17,7 +17,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
-	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
@@ -123,47 +122,54 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 
 	createSubnet := true
 	response, err := subnetsClient.Get(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
-	if err != nil && !errdefs.IsNotFound(err) {
-		return fmt.Errorf("error while looking up subnet: %v", err)
-	}
-	if errdefs.IsNotFound(err) && pn.SubnetCIDR == "" {
-		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
+	var respErr *azcore.ResponseError
+	if err != nil {
+		if errors.As(err, &respErr) && !(respErr.RawResponse.StatusCode == http.StatusNotFound) {
+			return fmt.Errorf("error while looking up subnet: %v", err)
+		}
+
+		if respErr.RawResponse.StatusCode == http.StatusNotFound && pn.SubnetCIDR == "" {
+			return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
+		}
 	}
 	currentSubnet := response.Subnet
 
-	if err == nil && currentSubnet.Properties.AddressPrefix != nil {
-		if pn.SubnetCIDR == "" {
-			pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
-		}
-		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
-			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
-		}
-		if currentSubnet.Properties.RouteTable != nil {
-			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
-		}
-		if currentSubnet.Properties.ServiceAssociationLinks != nil {
-			for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
-				if l.Properties != nil {
-					if *l.Properties.LinkedResourceType == subnetDelegationService {
-						createSubnet = false
-						break
-					} else {
-						return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
+	if err == nil {
+		if currentSubnet.Properties.AddressPrefix != nil {
+			if pn.SubnetCIDR == "" {
+				pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
+			}
+			if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
+				return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
+			}
+			if currentSubnet.Properties.RouteTable != nil {
+				return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+			}
+			if currentSubnet.Properties.ServiceAssociationLinks != nil {
+				for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
+					if l.Properties != nil && l.Properties.LinkedResourceType != nil {
+						if *l.Properties.LinkedResourceType == subnetDelegationService {
+							createSubnet = false
+							break
+						} else {
+							return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
+						}
 					}
 				}
-			}
-		} else {
-			for _, d := range currentSubnet.Properties.Delegations {
-				if d.Properties != nil && *d.Properties.ServiceName == subnetDelegationService {
-					createSubnet = false
-					break
+			} else {
+				for _, d := range currentSubnet.Properties.Delegations {
+					if d.Properties != nil && d.Properties.ServiceName != nil &&
+						*d.Properties.ServiceName == subnetDelegationService {
+						createSubnet = false
+						break
+					}
 				}
 			}
 		}
 	}
 
 	if createSubnet {
-		logger.Infof("new subnet %s is creating", pn.SubnetName)
+		logger.Debugf("new subnet %s is creating", pn.SubnetName)
 
 		err2 := pn.createACISubnet(ctx, subnetsClient)
 		if err2 != nil {
@@ -239,12 +245,12 @@ func (pn *ProviderNetwork) createACISubnet(ctx context.Context, subnetsClient *a
 	if err != nil {
 		return fmt.Errorf("error creating subnet: %v", err)
 	}
-	resp, err := poller.PollUntilDone(context.TODO(), nil)
+	_, err = poller.PollUntilDone(context.TODO(), nil)
 	if err != nil {
 		return fmt.Errorf("error creating subnet: %v", err)
 	}
-	logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", resp.Name, pn.VnetName, rawResponse.StatusCode)
-	logger.Infof("new subnet %s has been created successfully", resp.Name)
+	logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", pn.SubnetName, pn.VnetName, rawResponse.StatusCode)
+	logger.Infof("new subnet %s has been created successfully", pn.SubnetName)
 	return nil
 }
 
