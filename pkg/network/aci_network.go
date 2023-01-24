@@ -149,8 +149,9 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	if errdefs.IsNotFound(err) && pn.SubnetCIDR == "" {
 		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
 	}
-	if err == nil {
-		currentSubnet := response.Subnet
+	currentSubnet := response.Subnet
+
+	if err == nil && currentSubnet.Properties.AddressPrefix != nil {
 		if pn.SubnetCIDR == "" {
 			pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
 		}
