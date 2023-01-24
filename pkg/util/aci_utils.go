@@ -10,8 +10,21 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	v1 "k8s.io/api/core/v1"
+)
+
+var (
+	// LogTypeContainerInsights to prevent indirect pointer access
+	LogTypeContainerInsights = azaciv2.LogAnalyticsLogTypeContainerInsights
+	// ContainerNetworkProtocolTCP to prevent indirect pointer access
+	ContainerNetworkProtocolTCP = azaciv2.ContainerNetworkProtocolTCP
+	//ContainerNetworkProtocolUDP to prevent indirect pointer access
+	ContainerNetworkProtocolUDP = azaciv2.ContainerNetworkProtocolUDP
+	// ContainerGroupIPAddressTypePublic to prevent indirect pointer access
+	ContainerGroupIPAddressTypePublic = azaciv2.ContainerGroupIPAddressTypePublic
+	// ContainerGroupNetworkProtocolTCP to prevent indirect pointer access
+	ContainerGroupNetworkProtocolTCP = azaciv2.ContainerGroupNetworkProtocolTCP
 )
 
 func GetContainerID(cgID, containerName *string) string {
@@ -42,11 +55,11 @@ func OmitDuplicates(strs []string) []string {
 	return ret
 }
 
-func GetProtocol(pro v1.Protocol) containerinstance.ContainerNetworkProtocol {
+func GetProtocol(pro v1.Protocol) *azaciv2.ContainerNetworkProtocol {
 	switch pro {
 	case v1.ProtocolUDP:
-		return containerinstance.ContainerNetworkProtocolUDP
+		return &ContainerNetworkProtocolUDP
 	default:
-		return containerinstance.ContainerNetworkProtocolTCP
+		return &ContainerNetworkProtocolTCP
 	}
 }

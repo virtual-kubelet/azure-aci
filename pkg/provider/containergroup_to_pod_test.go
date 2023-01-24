@@ -5,10 +5,11 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"context"
 	"testing"
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	testutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
@@ -30,7 +31,7 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	}
 	cases := []struct {
 		description           string
-		containerGroup        *azaci.ContainerGroup
+		containerGroup        *azaciv2.ContainerGroup
 		expectedPodPhase      v1.PodPhase
 		expectedPodConditions []v1.PodCondition
 	}{
@@ -49,7 +50,7 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			expectedStatus, err := provider.getPodStatusFromContainerGroup(tc.containerGroup)
+			expectedStatus, err := provider.getPodStatusFromContainerGroup(context.TODO(), tc.containerGroup)
 			assert.NilError(t, err, "no errors should be returned")
 			assert.Equal(t, tc.expectedPodPhase, expectedStatus.Phase, "Pod phase is not as expected as current container group phase")
 			assert.Equal(t, len(tc.expectedPodConditions), len(expectedStatus.Conditions), "Pod conditions are not as expected")

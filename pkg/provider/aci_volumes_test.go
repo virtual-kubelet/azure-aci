@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"testing"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -61,14 +61,14 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 	initEnabled := provider.enabledFeatures.IsEnabled(context.TODO(), featureflag.InitContainerFeature)
 
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+		containers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers
 		// Check only if init container feature is enabled
 		if initEnabled {
-			initContainers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers
-			assert.Check(t, initContainers[0].VolumeMounts != nil, "Volume mount should be present")
-			assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
-			assert.Check(t, initContainers[0].Command != nil, "Command mount should be present")
-			assert.Check(t, initContainers[0].Image != nil, "Image should be present")
+			initContainers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.InitContainers
+			assert.Check(t, initContainers[0].Properties.VolumeMounts != nil, "Volume mount should be present")
+			assert.Check(t, initContainers[0].Properties.EnvironmentVariables != nil, "Volume mount should be present")
+			assert.Check(t, initContainers[0].Properties.Command != nil, "Command mount should be present")
+			assert.Check(t, initContainers[0].Properties.Image != nil, "Image should be present")
 			assert.Check(t, *initContainers[0].Name == initContainerName, "Name should be correct")
 		}
 
@@ -76,11 +76,11 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", *(containers)[0].Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(3, len(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)), "volume count not match")
-		assert.Check(t, is.Equal(azureFileVolumeName1, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[1].Name), "volume name is not matched")
-		assert.Check(t, is.Equal(fakeShareName1, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[1].AzureFile.ShareName), "volume share name is not matched")
-		assert.Check(t, is.Equal(azureFileVolumeName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].Name), "volume name is not matched")
-		assert.Check(t, is.Equal(fakeShareName2, *(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].AzureFile.ShareName), "volume share name is not matched")
+		assert.Check(t, is.Equal(3, len(cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(azureFileVolumeName1, *(cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes)[1].Name), "volume name is not matched")
+		assert.Check(t, is.Equal(fakeShareName1, *(cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes)[1].AzureFile.ShareName), "volume share name is not matched")
+		assert.Check(t, is.Equal(azureFileVolumeName2, *(cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes)[2].Name), "volume name is not matched")
+		assert.Check(t, is.Equal(fakeShareName2, *(cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes)[2].AzureFile.ShareName), "volume share name is not matched")
 
 		return nil
 	}
@@ -250,9 +250,9 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 
 	encodedSecretVal := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
-		volumes := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes
-		certVal := (*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)[2].Secret["ca.crt"]
+		containers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers
+		volumes := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes
+		certVal := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes[2].Secret["ca.crt"]
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
@@ -264,29 +264,27 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 		return nil
 	}
 
-	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaci.ContainerGroup, error) {
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 		caStr := "ca.crt"
-		node := fakeNodeName
-		cgName := "nginx"
 		provisioningState := "Creating"
-		return &azaci.ContainerGroup{
+		return &azaciv2.ContainerGroup{
 			Tags: map[string]*string{
 				"CreationTimestamp": &creationTime,
 				"PodName":           &podName,
 				"Namespace":         &podNamespace,
-				"ClusterName":       &node,
-				"NodeName":          &node,
+				"ClusterName":       &nodeName,
+				"NodeName":          &nodeName,
 				"UID":               &podName,
 			},
 			Name: &cgName,
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{
+			Properties: &azaciv2.ContainerGroupPropertiesProperties{
 				ProvisioningState: &provisioningState,
-				Volumes: &[]azaci.Volume{
+				Volumes: []*azaciv2.Volume{
 					{
 						Name: &emptyVolumeName,
 					}, {
 						Name: &azureFileVolumeName,
-						AzureFile: &azaci.AzureFileVolume{
+						AzureFile: &azaciv2.AzureFileVolume{
 							ShareName: &fakeShareName1,
 						},
 					}, {
@@ -343,12 +341,12 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
+		containers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
 		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
-		assert.Check(t, is.Equal(2, len(*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes)), "volume count not match")
+		assert.Check(t, is.Equal(2, len(cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Volumes)), "volume count not match")
 
 		return nil
 	}

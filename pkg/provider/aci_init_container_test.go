@@ -26,17 +26,17 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *client.ContainerGroupWrapper) error {
-		containers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers
-		initContainers := *cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers
+		containers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.Containers
+		initContainers := cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.InitContainers
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, initContainers != nil, "Container group is nil")
 		assert.Check(t, is.Equal(len(containers), 2), "1 Container is expected")
 		assert.Check(t, is.Equal(len(initContainers), 2), "2 init containers are expected")
-		assert.Check(t, initContainers[0].VolumeMounts != nil, "Volume mount should be present")
-		assert.Check(t, initContainers[0].EnvironmentVariables != nil, "Volume mount should be present")
-		assert.Check(t, initContainers[0].Command != nil, "Command mount should be present")
-		assert.Check(t, initContainers[0].Image != nil, "Image should be present")
+		assert.Check(t, initContainers[0].Properties.VolumeMounts != nil, "Volume mount should be present")
+		assert.Check(t, initContainers[0].Properties.EnvironmentVariables != nil, "Volume mount should be present")
+		assert.Check(t, initContainers[0].Properties.Command != nil, "Command mount should be present")
+		assert.Check(t, initContainers[0].Properties.Image != nil, "Image should be present")
 		assert.Check(t, *initContainers[0].Name == initContainerName1, "Name should be correct")
 		assert.Check(t, *initContainers[1].Name == initContainerName2, "Name should be correct")
 

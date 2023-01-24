@@ -17,7 +17,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -183,27 +183,28 @@ func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg client2.Co
 	}
 
 	subnetID := "/subscriptions/" + pn.VnetSubscriptionID + "/resourceGroups/" + pn.VnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + pn.VnetName + "/subnets/" + pn.SubnetName
-	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
+	cgIDList := []*azaciv2.ContainerGroupSubnetID{{ID: &subnetID}}
+	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.SubnetIDs = cgIDList
 	// windows containers don't support DNS config
-	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
+	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType != nil &&
+		*cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
+		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Properties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
 	}
 }
 
-func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain string) *azaci.DNSConfiguration {
-	nameServers := make([]string, 0)
+func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain string) *azaciv2.DNSConfiguration {
+	servers := make([]string, 0)
 	searchDomains := make([]string, 0)
 
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
-		nameServers = append(nameServers, kubeDNSIP)
+		servers = append(servers, kubeDNSIP)
 		searchDomains = generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod, clusterDomain)
 	}
 
 	options := make([]string, 0)
 
 	if pod.Spec.DNSConfig != nil {
-		nameServers = util.OmitDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
+		servers = util.OmitDuplicates(append(servers, pod.Spec.DNSConfig.Nameservers...))
 		searchDomains = util.OmitDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
 
 		for _, option := range pod.Spec.DNSConfig.Options {
@@ -215,14 +216,18 @@ func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain str
 		}
 	}
 
-	if len(nameServers) == 0 {
+	if len(servers) == 0 {
 		return nil
 	}
-	nameServers = formDNSNameserversFitsLimits(ctx, nameServers)
+	servers = formDNSNameserversFitsLimits(ctx, servers)
 	domain := formDNSSearchFitsLimits(ctx, searchDomains)
+	nameServers := make([]*string, 0)
+	for s := range servers {
+		nameServers = append(nameServers, &servers[s])
+	}
 	opt := strings.Join(options, " ")
-	result := azaci.DNSConfiguration{
-		NameServers:   &nameServers,
+	result := azaciv2.DNSConfiguration{
+		NameServers:   nameServers,
 		SearchDomains: &domain,
 		Options:       &opt,
 	}

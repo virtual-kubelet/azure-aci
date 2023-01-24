@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -75,7 +76,7 @@ func TestPodStatsGetterDecider(t *testing.T) {
 
 		// Times(1) here because we expect the Container Group be cached
 		mockedAciCgGetter.EXPECT().GetContainerGroup(
-			gomock.Any(), gomock.Any(), gomock.Any()).Return(fakeContainerGroupWrapper(), nil).Times(1)
+			gomock.Any(), gomock.Any(), gomock.Any()).Return(fakeContainerGroup(), nil).Times(1)
 
 		mockedRealtime := NewMockpodStatsGetter(ctrl)
 		mockedRealtime.EXPECT().GetPodStats(gomock.Any(), gomock.Any()).Return(fakePodStatus("pod-1", 0), nil).Times(1)
@@ -119,14 +120,14 @@ func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
 	}
 }
 
-func fakeContainerGroupWrapper() *client.ContainerGroupWrapper {
-	return &client.ContainerGroupWrapper{
-		ContainerGroupPropertiesWrapper: &client.ContainerGroupPropertiesWrapper{
-			Extensions: []*client.Extension{
+func fakeContainerGroup() *azaciv2.ContainerGroup {
+	return &azaciv2.ContainerGroup{
+		Properties: &azaciv2.ContainerGroupPropertiesProperties{
+			Extensions: []*azaciv2.DeploymentExtensionSpec{
 				{
-					Properties: &client.ExtensionProperties{
-						Type:    client.ExtensionTypeKubeProxy,
-						Version: client.ExtensionVersion_1,
+					Properties: &azaciv2.DeploymentExtensionSpecProperties{
+						ExtensionType: &client.ExtensionTypeKubeProxy,
+						Version:       &client.ExtensionVersion_1,
 						Settings: map[string]string{
 							client.KubeProxyExtensionSettingClusterCIDR: "10.240.0.0/16",
 							client.KubeProxyExtensionSettingKubeVersion: client.KubeProxyExtensionKubeVersion,
@@ -135,9 +136,9 @@ func fakeContainerGroupWrapper() *client.ContainerGroupWrapper {
 					},
 				},
 				{
-					Properties: &client.ExtensionProperties{
-						Type:              client.ExtensionTypeRealtimeMetrics,
-						Version:           client.ExtensionVersion_1,
+					Properties: &azaciv2.DeploymentExtensionSpecProperties{
+						ExtensionType:     &client.ExtensionTypeRealtimeMetrics,
+						Version:           &client.ExtensionVersion_1,
 						Settings:          map[string]string{},
 						ProtectedSettings: map[string]string{},
 					},

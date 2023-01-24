@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 )
@@ -17,14 +19,14 @@ const (
 )
 
 type ContainerGroupPropertiesWrapper struct {
-	ContainerGroupProperties *azaci.ContainerGroupProperties
-	Extensions               []*Extension `json:"extensions,omitempty"`
+	ContainerGroupProperties *azaciv2.ContainerGroupProperties
+	Extensions               []*azaciv2.DeploymentExtensionSpec
 }
 
 type ContainerGroupWrapper struct {
 	autorest.Response `json:"-"`
 	// Identity - The identity of the container group, if configured.
-	Identity *azaci.ContainerGroupIdentity `json:"identity,omitempty"`
+	Identity *azaciv2.ContainerGroupIdentity `json:"identity,omitempty"`
 	// ContainerGroupProperties - The container group properties
 	ContainerGroupPropertiesWrapper *ContainerGroupPropertiesWrapper `json:"properties,omitempty"`
 	// ID - READ-ONLY; The resource id.
@@ -98,41 +100,41 @@ func (c *ContainerGroupsClientWrapper) createOrUpdatePreparerWrapper(ctx context
 // MarshalJSON is the custom marshal for ContainerGroupProperties.
 func (cg ContainerGroupPropertiesWrapper) MarshalJSON() ([]byte, error) {
 	objectMap := make(map[string]interface{})
-	if cg.ContainerGroupProperties.Containers != nil {
-		objectMap["containers"] = cg.ContainerGroupProperties.Containers
+	if cg.ContainerGroupProperties.Properties.Containers != nil {
+		objectMap["containers"] = cg.ContainerGroupProperties.Properties.Containers
 	}
-	if cg.ContainerGroupProperties.ImageRegistryCredentials != nil {
-		objectMap["imageRegistryCredentials"] = cg.ContainerGroupProperties.ImageRegistryCredentials
+	if cg.ContainerGroupProperties.Properties.ImageRegistryCredentials != nil {
+		objectMap["imageRegistryCredentials"] = cg.ContainerGroupProperties.Properties.ImageRegistryCredentials
 	}
-	if cg.ContainerGroupProperties.RestartPolicy != "" {
-		objectMap["restartPolicy"] = cg.ContainerGroupProperties.RestartPolicy
+	if cg.ContainerGroupProperties.Properties.RestartPolicy != nil {
+		objectMap["restartPolicy"] = cg.ContainerGroupProperties.Properties.RestartPolicy
 	}
-	if cg.ContainerGroupProperties.IPAddress != nil {
-		objectMap["ipAddress"] = cg.ContainerGroupProperties.IPAddress
+	if cg.ContainerGroupProperties.Properties.IPAddress != nil {
+		objectMap["ipAddress"] = cg.ContainerGroupProperties.Properties.IPAddress
 	}
-	if cg.ContainerGroupProperties.OsType != "" {
-		objectMap["osType"] = cg.ContainerGroupProperties.OsType
+	if cg.ContainerGroupProperties.Properties.OSType != nil {
+		objectMap["osType"] = cg.ContainerGroupProperties.Properties.OSType
 	}
-	if cg.ContainerGroupProperties.Volumes != nil {
-		objectMap["volumes"] = cg.ContainerGroupProperties.Volumes
+	if cg.ContainerGroupProperties.Properties.Volumes != nil {
+		objectMap["volumes"] = cg.ContainerGroupProperties.Properties.Volumes
 	}
-	if cg.ContainerGroupProperties.Diagnostics != nil {
-		objectMap["diagnostics"] = cg.ContainerGroupProperties.Diagnostics
+	if cg.ContainerGroupProperties.Properties.Diagnostics != nil {
+		objectMap["diagnostics"] = cg.ContainerGroupProperties.Properties.Diagnostics
 	}
-	if cg.ContainerGroupProperties.SubnetIds != nil {
-		objectMap["subnetIds"] = cg.ContainerGroupProperties.SubnetIds
+	if cg.ContainerGroupProperties.Properties.SubnetIDs != nil {
+		objectMap["subnetIds"] = cg.ContainerGroupProperties.Properties.SubnetIDs
 	}
-	if cg.ContainerGroupProperties.DNSConfig != nil {
-		objectMap["dnsConfig"] = cg.ContainerGroupProperties.DNSConfig
+	if cg.ContainerGroupProperties.Properties.DNSConfig != nil {
+		objectMap["dnsConfig"] = cg.ContainerGroupProperties.Properties.DNSConfig
 	}
-	if cg.ContainerGroupProperties.Sku != "" {
-		objectMap["sku"] = cg.ContainerGroupProperties.Sku
+	if cg.ContainerGroupProperties.Properties.SKU != nil {
+		objectMap["sku"] = cg.ContainerGroupProperties.Properties.SKU
 	}
-	if cg.ContainerGroupProperties.EncryptionProperties != nil {
-		objectMap["encryptionProperties"] = cg.ContainerGroupProperties.EncryptionProperties
+	if cg.ContainerGroupProperties.Properties.EncryptionProperties != nil {
+		objectMap["encryptionProperties"] = cg.ContainerGroupProperties.Properties.EncryptionProperties
 	}
-	if cg.ContainerGroupProperties.InitContainers != nil {
-		objectMap["initContainers"] = cg.ContainerGroupProperties.InitContainers
+	if cg.ContainerGroupProperties.Properties.InitContainers != nil {
+		objectMap["initContainers"] = cg.ContainerGroupProperties.Properties.InitContainers
 	}
 	if cg.Extensions != nil {
 		objectMap["extensions"] = cg.Extensions

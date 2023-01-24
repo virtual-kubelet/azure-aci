@@ -8,6 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	statsv1alpha1 "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
@@ -98,10 +99,10 @@ func (m *MockContainerGroupGetter) EXPECT() *MockContainerGroupGetterMockRecorde
 }
 
 // GetContainerGroup mocks base method.
-func (m *MockContainerGroupGetter) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*client.ContainerGroupWrapper, error) {
+func (m *MockContainerGroupGetter) GetContainerGroup(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetContainerGroupInfo", ctx, resourceGroup, containerGroupName)
-	ret0, _ := ret[0].(*client.ContainerGroupWrapper)
+	ret0, _ := ret[0].(*azaciv2.ContainerGroup)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
