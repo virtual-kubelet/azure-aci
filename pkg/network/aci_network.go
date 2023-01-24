@@ -113,36 +113,16 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	ctx, span := trace.StartSpan(ctx, "network.setupNetwork")
 	defer span.End()
 
-	logger.Debug("getting azure credential")
-
-	var err error
-	var credential azcore.TokenCredential
-	isUserIdentity := len(azConfig.AuthConfig.ClientID) == 0
-
-	if isUserIdentity {
-		credential, err = azConfig.GetMSICredential(ctx)
-	} else {
-		credential, err = azConfig.GetSPCredential(ctx)
-	}
+	subnetsClient, err := getSubnetClient(ctx, azConfig)
 	if err != nil {
-		return errors.Wrap(err, "an error has occurred while creating getting credential ")
-	}
-
-	options := arm.ClientOptions{
-		ClientOptions: azcore.ClientOptions{
-			Cloud: azConfig.Cloud,
-		},
+		return err
 	}
 
 	var rawResponse *http.Response
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
-	subnetsClient, err := aznetworkv2.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID, credential, &options)
-	if err != nil {
-		return errors.Wrap(err, "an error has occurred while creating subnet client")
-	}
 	createSubnet := true
-	response, err := subnetsClient.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
+	response, err := subnetsClient.Get(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
 	if err != nil && !errdefs.IsNotFound(err) {
 		return fmt.Errorf("error while looking up subnet: %v", err)
 	}
@@ -183,34 +163,88 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	}
 
 	if createSubnet {
-		logger.Debug("creating a subnet")
+		logger.Infof("new subnet %s is creating", pn.SubnetName)
 
-		subnet := aznetworkv2.Subnet{
-			Name: &pn.SubnetName,
-			Properties: &aznetworkv2.SubnetPropertiesFormat{
-				AddressPrefix: &pn.SubnetCIDR,
-				Delegations: []*aznetworkv2.Delegation{
-					{
-						Name: &delegationName,
-						Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
-							ServiceName: &serviceName,
-							Actions:     []*string{&subnetAction},
-						},
+		err2 := pn.createACISubnet(ctx, subnetsClient)
+		if err2 != nil {
+			return err2
+		}
+	}
+
+	logger.Debug("setup network is successful")
+	return nil
+}
+
+func getSubnetClient(ctx context.Context, azConfig *auth.Config) (*aznetworkv2.SubnetsClient, error) {
+	logger := log.G(ctx).WithField("method", "getSubnetClient")
+	ctx, span := trace.StartSpan(ctx, "network.getSubnetClient")
+	defer span.End()
+
+	logger.Debug("getting azure credential")
+
+	var err error
+	var credential azcore.TokenCredential
+	isUserIdentity := len(azConfig.AuthConfig.ClientID) == 0
+
+	if isUserIdentity {
+		credential, err = azConfig.GetMSICredential(ctx)
+	} else {
+		credential, err = azConfig.GetSPCredential(ctx)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "an error has occurred while creating getting credential ")
+	}
+
+	options := arm.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Cloud: azConfig.Cloud,
+		},
+	}
+
+	subnetsClient, err := aznetworkv2.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID, credential, &options)
+	if err != nil {
+		return nil, errors.Wrap(err, "an error has occurred while creating subnet client")
+	}
+	return subnetsClient, nil
+}
+
+// createACISubnet create new subnet for ACI
+func (pn *ProviderNetwork) createACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) error {
+	logger := log.G(ctx).WithField("method", "createACISubnet")
+	ctx, span := trace.StartSpan(ctx, "network.createACISubnet")
+	defer span.End()
+
+	logger.Debug("creating a subnet")
+
+	subnet := aznetworkv2.Subnet{
+		Name: &pn.SubnetName,
+		Properties: &aznetworkv2.SubnetPropertiesFormat{
+			AddressPrefix: &pn.SubnetCIDR,
+			Delegations: []*aznetworkv2.Delegation{
+				{
+					Name: &delegationName,
+					Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
+						ServiceName: &serviceName,
+						Actions:     []*string{&subnetAction},
 					},
 				},
 			},
-		}
-		poller, err := subnetsClient.BeginCreateOrUpdate(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet, nil)
-		if err != nil {
-			return fmt.Errorf("error creating subnet: %v", err)
-		}
-		resp, err := poller.PollUntilDone(context.TODO(), nil)
-		if err != nil {
-			return fmt.Errorf("error creating subnet: %v", err)
-		}
-		logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", resp.Name, pn.VnetName, rawResponse.StatusCode)
-		logger.Infof("new subnet %s has been created successfully", resp.Name)
+		},
 	}
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+
+	poller, err := subnetsClient.BeginCreateOrUpdate(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet, nil)
+	if err != nil {
+		return fmt.Errorf("error creating subnet: %v", err)
+	}
+	resp, err := poller.PollUntilDone(context.TODO(), nil)
+	if err != nil {
+		return fmt.Errorf("error creating subnet: %v", err)
+	}
+	logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", resp.Name, pn.VnetName, rawResponse.StatusCode)
+	logger.Infof("new subnet %s has been created successfully", resp.Name)
 	return nil
 }
 
