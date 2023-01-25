@@ -2,13 +2,13 @@ image:
   secretName: virtual-kubelet-aci-acr
   repository: mcr.microsoft.com
   name: oss/virtual-kubelet/virtual-kubelet
-  tag: 1.4.9
+  tag: 1.4.10
   pullPolicy: Always
 
 initImage:
   repository: mcr.microsoft.com
   name: init-validation
-  tag: 0.1.0
+  tag: 1.4.10
   pullPolicy: Always
 
 namespace: vk-azure-aci
