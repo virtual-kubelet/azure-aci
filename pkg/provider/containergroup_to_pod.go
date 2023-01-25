@@ -13,7 +13,6 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
-	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -38,8 +37,6 @@ func (p *ACIProvider) containerGroupToPod(ctx context.Context, cg *azaciv2.Conta
 }
 
 func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *azaciv2.ContainerGroup) (*v1.PodStatus, error) {
-	logger := log.G(ctx).WithField("method", "getPodStatusFromContainerGroup")
-
 	// cg is validated
 	allReady := true
 	var firstContainerStartTime, lastUpdateTime time.Time
@@ -49,7 +46,6 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 
 	for i := range containersList {
 		err := validation.ValidateContainer(ctx, containersList[i])
-		logger.Debugf("container %s has missing fields. retrying the validation...", *containersList[i].Name)
 		if err != nil {
 			return nil, err
 		}
