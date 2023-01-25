@@ -159,7 +159,6 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 	}
 
 	err = validation.ValidateContainerGroup(ctx, &response.ContainerGroup)
-	logger.Debugf("container group %s has missing fields. retrying the validation...", cgName)
 	if err != nil {
 		return nil, err
 	}

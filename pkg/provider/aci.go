@@ -483,7 +483,6 @@ func (p *ACIProvider) deleteContainerGroup(ctx context.Context, podNS, podName s
 // GetPod returns a pod by name that is running inside ACI
 // returns nil if a pod by that name is not found.
 func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.Pod, error) {
-	logger := log.G(ctx).WithField("method", "GetPod")
 	ctx, span := trace.StartSpan(ctx, "aci.GetPod")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -494,7 +493,6 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 	}
 
 	err = validation.ValidateContainerGroup(ctx, cg)
-	logger.Debugf("container group %s has missing fields. retrying the validation...", *cg.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -637,7 +635,6 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 // GetPodStatus returns the status of a pod by name that is running inside ACI
 // returns nil if a pod by that name is not found.
 func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) (*v1.PodStatus, error) {
-	logger := log.G(ctx).WithField("method", "GetPodStatus")
 	ctx, span := trace.StartSpan(ctx, "aci.GetPodStatus")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -648,7 +645,6 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 	}
 
 	err = validation.ValidateContainerGroup(ctx, cg)
-	logger.Debugf("container group %s has missing fields. retrying the validation...", *(*cg).Name)
 	if err != nil {
 		return nil, err
 	}
@@ -658,7 +654,6 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 
 // GetPods returns a list of all pods known to be running within ACI.
 func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
-	logger := log.G(ctx).WithField("method", "GetPods")
 	ctx, span := trace.StartSpan(ctx, "aci.GetPods")
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
@@ -675,7 +670,6 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 
 	for cgIndex := range cgs {
 		err = validation.ValidateContainerGroup(ctx, cgs[cgIndex])
-		logger.Debugf("container group %s has missing fields. retrying the validation...", *cgs[cgIndex].Name)
 		if err != nil {
 			return nil, err
 		}
