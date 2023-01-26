@@ -63,6 +63,11 @@ const (
 	containerExitCodePodDeleted int32 = 0
 )
 
+const (
+	confidentialComputeSkuLabel = "virtual-kubelet.io/container-sku"
+	confidentialComputeCcePolicyLabel = "virtual-kubelet.io/confidential-compute-cce-policy"
+)
+
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
 	azClientsAPIs            client.AzClientsInterface
@@ -315,6 +320,12 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 			return err
 		}
 		cg.Properties.InitContainers = initContainers
+	}
+
+	// confidential compute proeprties
+	if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature) {
+		// set confidentialComputeProperties
+		p.setConfidentialComputeProperties(ctx, pod, cg)
 	}
 
 	// assign all the things
@@ -1112,6 +1123,29 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 		containers = append(containers, &aciContainer)
 	}
 	return containers, nil
+}
+
+func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod *v1.Pod, cg *azaciv2.ContainerGroup) {
+	containerGroupSku := pod.Annotations[confidentialComputeSkuLabel]
+	ccePolicy := pod.Annotations[confidentialComputeCcePolicyLabel]
+	confidentialSku := azaciv2.ContainerGroupSKUConfidential
+
+	l := log.G(ctx).WithField("containerGroup", cg.Name)
+
+	if ccePolicy != "" {
+		cg.Properties.SKU = &confidentialSku
+		confidentialComputeProperties := azaciv2.ConfidentialComputeProperties{
+			CcePolicy : &ccePolicy,
+		}
+		cg.Properties.ConfidentialComputeProperties = &confidentialComputeProperties
+	    l.Infof("Setting confidential compute properties with CCE Policy")
+
+	} else if strings.ToLower(containerGroupSku) == "confidential" {
+		cg.Properties.SKU = &confidentialSku
+	    l.Infof("Setting confidential container group SKU")
+	}
+
+	l.Infof("no annotations for confidential SKU")
 }
 
 func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {
