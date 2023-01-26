@@ -5,10 +5,11 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
   pull_request_target:
     branches:
+      - master
       - release-**
-    types: [opened]
     paths:
       - '.github/workflows/chart.yml'
       - 'charts/**'
@@ -24,6 +25,7 @@ env:
 
 jobs:
   export-registry:
+    if: contains(github.event.pull_request.title, 'update manifest and helm charts') || (contains(github.event.pull_request.title, 'helm'))
     runs-on: ubuntu-20.04
     outputs:
       registry: ${{ steps.export.outputs.registry }}

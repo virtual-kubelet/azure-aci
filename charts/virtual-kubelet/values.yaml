@@ -7,8 +7,8 @@ image:
 
 initImage:
   repository: mcr.microsoft.com
-  name: init-validation
-  tag: 1.4.10
+  name: oss/virtual-kubelet/init-validation
+  tag: 0.1.0
   pullPolicy: Always
 
 namespace: vk-azure-aci
@@ -38,6 +38,7 @@ trace:
 
 providers:
   azure:
+    enableRealTimeMetrics: true
     ## Set to true if deploying to Azure Kubernetes Service (AKS), otherwise false
     targetAKS: true
     clientId:
