@@ -20,7 +20,7 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=aks-addon-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2}"
+: "${LOCATION:=eastus2ieuap}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=aks-addon--test}"
