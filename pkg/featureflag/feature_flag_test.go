@@ -20,6 +20,11 @@ func TestIsEnabled(t *testing.T) {
 			feature:       InitContainerFeature,
 			shouldEnabled: false,
 		},
+		{
+			description:   fmt.Sprintf(" %s feature should not be enabled", ConfidentialComputeFeature),
+			feature:       ConfidentialComputeFeature,
+			shouldEnabled: false,
+		},
 	}
 	for i, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
