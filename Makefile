@@ -35,6 +35,7 @@ OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
 INIT_IMG_TAG ?= 0.1.0
+K8S_VERSION ?= 1.23.12
 
 
 ## --------------------------------------
@@ -92,15 +93,28 @@ clean:
 .PHONY: test
 test:
 	@echo running tests
-	LOCATION=$(LOCATION) AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+	LOCATION=$(LOCATION) AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
+	LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) \
+	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
 
 .PHONY: e2e-test
 e2e-test:
-	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) \
+ 	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
+ 	INIT_IMG_REPO=$(INIT_IMG_REPO) INIT_IMG_TAG=$(INIT_IMG_TAG) \
+ 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
+ 	K8S_VERSION=$(K8S_VERSION) \
+ 	$(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
 
 .PHONY: aks-addon-e2e-test
 aks-addon-e2e-test:
-	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_ADDON_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) \
+	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
+	INIT_IMG_REPO=$(INIT_IMG_REPO) INIT_IMG_TAG=$(INIT_IMG_TAG) \
+	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
+	K8S_VERSION=$(K8S_VERSION) \
+	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+
 .PHONY: vet
 vet:
 	@go vet ./... #$(packages)
