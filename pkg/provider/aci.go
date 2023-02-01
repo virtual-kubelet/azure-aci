@@ -1138,11 +1138,11 @@ func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod 
 			CcePolicy : &ccePolicy,
 		}
 		cg.Properties.ConfidentialComputeProperties = &confidentialComputeProperties
-	    l.Infof("Setting confidential compute properties with CCE Policy")
+	    l.Infof("setting confidential compute properties with CCE Policy")
 
 	} else if strings.ToLower(containerGroupSku) == "confidential" {
 		cg.Properties.SKU = &confidentialSku
-	    l.Infof("Setting confidential container group SKU")
+	    l.Infof("setting confidential container group SKU")
 	}
 
 	l.Infof("no annotations for confidential SKU")
