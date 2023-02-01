@@ -131,11 +131,6 @@ lint: $(GOLANGCI_LINT)
 lint-full: $(GOLANGCI_LINT) ## Run slower linters to detect possible issues
 	$(GOLANGCI_LINT) run -v --fast=false
 
-.PHONY: check-mod
-check-mod: # verifies that module changes for go.mod and go.sum are checked in
-	# @chmod a+x hack/ci/check_mods.sh
-	@hack/ci/check_mods.sh
-
 .PHONY: mod
 mod:
 	@go mod tidy
