@@ -15,7 +15,10 @@ const (
 	ConfidentialComputeFeature = "confidential-compute"
 )
 
-var enabledFeatures = []string{}
+var enabledFeatures = []string{
+	InitContainerFeature,
+	ConfidentialComputeFeature,
+}
 
 type FlagIdentifier struct {
 	enabledFeatures []string
