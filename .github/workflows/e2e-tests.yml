@@ -10,6 +10,7 @@ on:
     branches:
       - master
       - release-**
+    types: [ opened, ready_for_review, reopened ]
     paths:
       - '.github/workflows/chart.yml'
       - 'charts/**'
