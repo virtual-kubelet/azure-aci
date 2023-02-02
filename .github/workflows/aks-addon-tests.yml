@@ -7,6 +7,7 @@ concurrency:
 on:
   pull_request_target:
     branches: [master]
+    types: [ opened, ready_for_review, reopened ]
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
   push:
     branches: [master]
