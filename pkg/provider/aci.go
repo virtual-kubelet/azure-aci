@@ -370,7 +370,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		cg.Properties.Extensions = p.containerGroupExtensions
 	}
 
-	log.G(ctx).Infof("start creating pod %v", pod.Name)
+	log.G(ctx).Debugf("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
 }
@@ -428,7 +428,7 @@ func (p *ACIProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	log.G(ctx).Infof("start deleting pod %v", pod.Name)
+	log.G(ctx).Debugf("start deleting pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers.
 	return p.deleteContainerGroup(ctx, pod.Namespace, pod.Name)
 }
