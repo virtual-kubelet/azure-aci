@@ -31,7 +31,7 @@ func main() {
 
 	logger := logrus.StandardLogger()
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
-	_ = logruscli.Config{LogLevel: "debug"}
+	_ = logruscli.Config{LogLevel: "info"}
 
 	log.G(ctx).Debug("Init container started")
 
