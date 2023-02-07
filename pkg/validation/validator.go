@@ -44,7 +44,7 @@ func ValidateContainer(ctx context.Context, container *azaciv2.Container) error 
 	if container.Properties.InstanceView.Events == nil {
 		return errors.Errorf("container %s properties Events cannot be nil", *container.Name)
 	}
-	log.G(ctx).Infof("container %s was validated successfully!", *container.Name)
+	log.G(ctx).Debugf("container %s was validated successfully!", *container.Name)
 	return nil
 }
 
@@ -89,6 +89,6 @@ func ValidateContainerGroup(ctx context.Context, cg *azaciv2.ContainerGroup) err
 			}
 		}
 	}
-	log.G(ctx).Infof("container group %s was validated successfully!", *cg.Name)
+	log.G(ctx).Debugf("container group %s was validated successfully!", *cg.Name)
 	return nil
 }

@@ -102,7 +102,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 
 		// Handle the case for the EmptyDir.
 		if podVolumes[i].EmptyDir != nil {
-			log.G(ctx).Info("empty volume name ", podVolumes[i].Name)
+			log.G(ctx).Debugf("empty volume name ", podVolumes[i].Name)
 			volumes = append(volumes, &azaciv2.Volume{
 				Name:     &podVolumes[i].Name,
 				EmptyDir: map[string]interface{}{},
@@ -178,7 +178,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 		}
 
 		if podVolumes[i].Projected != nil {
-			log.G(ctx).Info("Found projected volume")
+			log.G(ctx).Debug("Found projected volume")
 			paths := make(map[string]*string)
 
 			for _, source := range podVolumes[i].Projected.Sources {
