@@ -22,7 +22,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
 
-VERSION ?= v1.4.12
+VERSION ?= v1.5.0
 REGISTRY ?= ghcr.io
 IMG_NAME ?= virtual-kubelet
 INIT_IMG_NAME ?= init-validation
@@ -35,7 +35,9 @@ OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
 INIT_IMG_TAG ?= 0.1.0
+K8S_VERSION ?= 1.23.12
 
+BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 
 ## --------------------------------------
 ## Tooling Binaries
@@ -61,8 +63,10 @@ docker-buildx-builder:
 
 .PHONY: docker-build-image
 docker-build-image: docker-buildx-builder
-	docker buildx build \
+	 docker buildx build \
 		--file docker/virtual-kubelet/Dockerfile \
+		--build-arg BUILD_VERSION=$(IMG_TAG) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--output=$(OUTPUT_TYPE) \
 		--platform="$(BUILDPLATFORM)" \
 		--pull \
@@ -77,9 +81,6 @@ docker-build-init-image: docker-buildx-builder
 		--pull \
 		--tag $(INIT_IMAGE):$(INIT_IMG_TAG) .
 
-.PHONY: build
-build: bin/virtual-kubelet
-
 .PHONY: clean
 clean: files := bin/virtual-kubelet bin/virtual-kubelet.tgz
 clean:
@@ -92,15 +93,28 @@ clean:
 .PHONY: test
 test:
 	@echo running tests
-	LOCATION=$(LOCATION) AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+	LOCATION=$(LOCATION) AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
+	LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) \
+	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
 
 .PHONY: e2e-test
 e2e-test:
-	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) \
+ 	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
+ 	INIT_IMG_REPO=$(INIT_IMG_NAME) INIT_IMG_TAG=$(INIT_IMG_TAG) \
+ 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
+ 	K8S_VERSION=$(K8S_VERSION) \
+ 	$(AKS_E2E_SCRIPT) go test -timeout 60m -v ./e2e
 
 .PHONY: aks-addon-e2e-test
 aks-addon-e2e-test:
-	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) $(AKS_ADDON_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) \
+	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
+	INIT_IMG_REPO=$(INIT_IMG_NAME) INIT_IMG_TAG=$(INIT_IMG_TAG) \
+	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
+	K8S_VERSION=$(K8S_VERSION) \
+	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 60m -v ./e2e
+
 .PHONY: vet
 vet:
 	@go vet ./... #$(packages)
@@ -116,11 +130,6 @@ lint: $(GOLANGCI_LINT)
 .PHONY: lint-full
 lint-full: $(GOLANGCI_LINT) ## Run slower linters to detect possible issues
 	$(GOLANGCI_LINT) run -v --fast=false
-
-.PHONY: check-mod
-check-mod: # verifies that module changes for go.mod and go.sum are checked in
-	# @chmod a+x hack/ci/check_mods.sh
-	@hack/ci/check_mods.sh
 
 .PHONY: mod
 mod:
@@ -143,20 +152,6 @@ test-loganalytics-json:
 	@echo Building log analytics credentials
 	chmod a+x hack/ci/create_loganalytics_auth.sh
 	hack/ci/create_loganalytics_auth.sh
-
-bin/virtual-kubelet: BUILD_VERSION          ?= $(IMG_TAG)
-bin/virtual-kubelet: BUILD_DATE             ?= $(shell date -u '+%Y-%m-%d-%H:%M UTC')
-bin/virtual-kubelet: VERSION_FLAGS    := -ldflags='-X "main.buildVersion=$(BUILD_VERSION)" -X "main.buildTime=$(BUILD_DATE)"'
-
-FILTER_TESTS = $(filter-out $(wildcard **/*_test.go), $1)
-FILTER_E2E = $(filter-out $(wildcard e2e/**), $1)
-FILTER_HACK = $(filter-out $(wildcard hack/**), $1)
-GO_FILES = $(wildcard **/*.go)
-GO_BIN_DEPS = $(call FILTER_HACK, $(call FILTER_TESTS, $(call FILTER_E2E, $(GO_FILES))))
-
-# Add dependencies for all .go files except those in e2e and test files.
-bin/%: $(GO_BIN_DEPS)
-	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -o bin/$(*) $(VERSION_FLAGS) ./cmd/$(*)
 
 .PHONY: release-manifest
 release-manifest:
