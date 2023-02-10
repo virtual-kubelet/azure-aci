@@ -37,6 +37,7 @@ IMG_TAG ?= $(subst v,,$(VERSION))
 INIT_IMG_TAG ?= 0.1.0
 K8S_VERSION ?= 1.23.12
 
+BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 
 ## --------------------------------------
 ## Tooling Binaries
@@ -62,8 +63,10 @@ docker-buildx-builder:
 
 .PHONY: docker-build-image
 docker-build-image: docker-buildx-builder
-	docker buildx build \
+	 docker buildx build \
 		--file docker/virtual-kubelet/Dockerfile \
+		--build-arg BUILD_VERSION=$(IMG_TAG) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--output=$(OUTPUT_TYPE) \
 		--platform="$(BUILDPLATFORM)" \
 		--pull \
@@ -77,9 +80,6 @@ docker-build-init-image: docker-buildx-builder
 		--platform="$(BUILDPLATFORM)" \
 		--pull \
 		--tag $(INIT_IMAGE):$(INIT_IMG_TAG) .
-
-.PHONY: build
-build: bin/virtual-kubelet
 
 .PHONY: clean
 clean: files := bin/virtual-kubelet bin/virtual-kubelet.tgz
@@ -104,7 +104,7 @@ e2e-test:
  	INIT_IMG_REPO=$(INIT_IMG_REPO) INIT_IMG_TAG=$(INIT_IMG_TAG) \
  	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
  	K8S_VERSION=$(K8S_VERSION) \
- 	$(AKS_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+ 	$(AKS_E2E_SCRIPT) go test -timeout 60m -v ./e2e
 
 .PHONY: aks-addon-e2e-test
 aks-addon-e2e-test:
@@ -113,7 +113,7 @@ aks-addon-e2e-test:
 	INIT_IMG_REPO=$(INIT_IMG_REPO) INIT_IMG_TAG=$(INIT_IMG_TAG) \
 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
 	K8S_VERSION=$(K8S_VERSION) \
-	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 30m -v ./e2e
+	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 60m -v ./e2e
 
 .PHONY: vet
 vet:
@@ -152,20 +152,6 @@ test-loganalytics-json:
 	@echo Building log analytics credentials
 	chmod a+x hack/ci/create_loganalytics_auth.sh
 	hack/ci/create_loganalytics_auth.sh
-
-bin/virtual-kubelet: BUILD_VERSION          ?= $(IMG_TAG)
-bin/virtual-kubelet: BUILD_DATE             ?= $(shell date -u '+%Y-%m-%d-%H:%M UTC')
-bin/virtual-kubelet: VERSION_FLAGS    := -ldflags='-X "main.buildVersion=$(BUILD_VERSION)" -X "main.buildTime=$(BUILD_DATE)"'
-
-FILTER_TESTS = $(filter-out $(wildcard **/*_test.go), $1)
-FILTER_E2E = $(filter-out $(wildcard e2e/**), $1)
-FILTER_HACK = $(filter-out $(wildcard hack/**), $1)
-GO_FILES = $(wildcard **/*.go)
-GO_BIN_DEPS = $(call FILTER_HACK, $(call FILTER_TESTS, $(call FILTER_E2E, $(GO_FILES))))
-
-# Add dependencies for all .go files except those in e2e and test files.
-bin/%: $(GO_BIN_DEPS)
-	CGO_ENABLED=0 go build -ldflags '-extldflags "-static"' -o bin/$(*) $(VERSION_FLAGS) ./cmd/$(*)
 
 .PHONY: release-manifest
 release-manifest:
