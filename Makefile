@@ -38,6 +38,7 @@ INIT_IMG_TAG ?= 0.1.0
 K8S_VERSION ?= 1.23.12
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
+BUILD_VERSION_VAR := $(IMAGE)/pkg/version.BuildVersion
 
 ## --------------------------------------
 ## Tooling Binaries
@@ -65,6 +66,7 @@ docker-buildx-builder:
 docker-build-image: docker-buildx-builder
 	 docker buildx build \
 		--file docker/virtual-kubelet/Dockerfile \
+		--build-arg BUILD_VERSION_VAR=$(BUILD_VERSION_VAR) \
 		--build-arg BUILD_VERSION=$(IMG_TAG) \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
 		--output=$(OUTPUT_TYPE) \
