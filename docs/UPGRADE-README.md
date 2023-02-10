@@ -11,7 +11,7 @@ Install [Helm](https://helm.sh/docs/intro/quickstart/#install-helm)
 ### Clone the project
 
 ```shell
-$ export RELEASE_TAG=1.4.13
+$ export RELEASE_TAG=1.4.14
 $ git clone https://github.com/virtual-kubelet/azure-aci.git
 $ cd azure-aci
 $ git checkout v$RELEASE_TAG
