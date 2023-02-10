@@ -4,6 +4,7 @@ ARG TARGETARCH
 ARG TARGETVARIANT
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
 ARG BUILD_VERSION
+ARG BUILD_VERSION_VAR
 ARG BUILD_DATE
 SHELL ["/bin/bash", "-c"]
 WORKDIR /workspace
@@ -23,7 +24,7 @@ COPY . .
 RUN --mount=type=cache,target=${GOCACHE} \
     --mount=type=cache,id=vk-azure-aci,sharing=locked,target=/go/pkg/mod \
      CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GO111MODULE=on go build \
-    -ldflags "-X main.BuildVersion=$BUILD_VERSION" -ldflags "-X main.BuildTime=${BUILD_DATE}" \
+    -ldflags "-X $BUILD_VERSION_VAR=$BUILD_VERSION" -ldflags "-X main.BuildTime=${BUILD_DATE}" \
     -ldflags '-extldflags "-static"' \
     -o bin/virtual-kubelet cmd/virtual-kubelet/*
 
