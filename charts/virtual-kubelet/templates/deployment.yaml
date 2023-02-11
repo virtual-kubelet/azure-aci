@@ -118,6 +118,8 @@ spec:
         image: "{{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         env:
+        - name: BUILD_VERSION
+          value: {{ .Values.image.tag}}
         - name: KUBELET_PORT
           value: "10250"
         - name: APISERVER_CERT_LOCATION

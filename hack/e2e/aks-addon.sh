@@ -159,7 +159,7 @@ kubectl create configmap test-vars -n kube-system \
   --from-literal=cluster_subnet_cidr="$CLUSTER_SUBNET_CIDR" \
   --from-literal=aci_subnet_name="$ACI_SUBNET_NAME"
 
-sed -e "s|TEST_INIT_IMAGE|$IMG_URL/$INIT_IMG_REPO:$INIT_IMG_TAG|g" -e "s|TEST_IMAGE|$IMG_URL/$IMG_REPO:$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
+sed -e "s|TEST_INIT_IMAGE|$IMG_URL/$INIT_IMG_REPO:$INIT_IMG_TAG|g" -e "s|TEST_IMAGE|$IMG_URL/$IMG_REPO:$IMG_TAG|g" -e "s|IMG_VERSION|$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
 
 kubectl wait --for=condition=available deploy "virtual-kubelet-azure-aci" -n kube-system --timeout=300s
 

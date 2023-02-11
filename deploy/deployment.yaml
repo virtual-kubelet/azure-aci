@@ -80,6 +80,8 @@ spec:
         image: TEST_IMAGE
         imagePullPolicy: Always
         env:
+        - name: BUILD_VERSION
+          value: IMG_VERSION
         - name: KUBELET_PORT
           value: "10250"
         - name: AKS_CREDENTIAL_LOCATION

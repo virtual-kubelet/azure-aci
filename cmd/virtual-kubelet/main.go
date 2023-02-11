@@ -38,7 +38,6 @@ import (
 )
 
 var (
-	buildVersion    = "N/A"
 	buildTime       = "N/A"
 	k8sVersion      = "v1.19.10" // This should follow the version of k8s.io/client-go we are importing
 	numberOfWorkers = 50
@@ -62,6 +61,12 @@ func main() {
 	if err != nil {
 		log.G(ctx).Fatal(err)
 	}
+
+	buildVersion := os.Getenv("BUILD_VERSION")
+	if buildVersion != "" {
+		buildVersion = strings.Replace(buildVersion, "v", "", -1)
+	}
+
 	o.Provider = "azure"
 	o.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
 	o.PodSyncWorkers = numberOfWorkers
