@@ -31,6 +31,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -199,7 +203,7 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 		return nil
 	}
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -249,7 +253,7 @@ func TestCreatePodWithWindowsOS(t *testing.T) {
 		return nil
 	}
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -318,7 +322,7 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -374,7 +378,7 @@ func TestCreatePodWithGPU(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -412,7 +416,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -477,7 +481,7 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -500,7 +504,7 @@ func TestGetPodsWithEmptyList(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -571,7 +575,7 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 		}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -622,7 +626,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 		return result, nil
 	}
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), podLister)
+		NewMockSecretLister(mockCtrl), podLister, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -709,12 +713,16 @@ func createNewACIMock() *MockACIProvider {
 	})
 }
 
-func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMapLister, secretMocker *MockSecretLister, podMocker *MockPodLister) (*ACIProvider, error) {
+func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMapLister, secretMocker *MockSecretLister, podMocker *MockPodLister, kubeClient kubernetes.Interface) (*ACIProvider, error) {
 	ctx := context.TODO()
 
 	err := setAuthConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	if kubeClient == nil {
+		kubeClient = fake.NewSimpleClientset()
 	}
 
 	err = os.Setenv("ACI_VNET_NAME", fakeVnetName)
@@ -751,7 +759,7 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 	cfg.Node.Name = fakeNodeName
 	cfg.Node.Status.NodeInfo.OperatingSystem = operatingSystem
 
-	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local", kubeClient)
 	if err != nil {
 		return nil, err
 	}
@@ -786,7 +794,7 @@ func TestConfigureNode(t *testing.T) {
 	}
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -822,7 +830,7 @@ func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -859,7 +867,7 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -976,7 +984,7 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -1110,7 +1118,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 			}
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -1150,7 +1158,7 @@ func TestGetPodWithContainerID(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), podLister)
+		NewMockSecretLister(mockCtrl), podLister, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -1315,7 +1323,7 @@ func TestDeleteContainerGroup(t *testing.T) {
 			}
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				NewMockSecretLister(mockCtrl), podLister)
+				NewMockSecretLister(mockCtrl), podLister, nil)
 			if err != nil {
 				t.Fatal("failed to create the test provider", err)
 			}
@@ -1389,7 +1397,7 @@ func TestGetPodStatus(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -1552,7 +1560,7 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 			tc.callSecretMocks(mockSecretLister)
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				mockSecretLister, NewMockPodLister(mockCtrl))
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("failed to create the test provider", err)
 			}
@@ -1695,7 +1703,7 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 			tc.callSecretMocks(mockSecretLister)
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				mockSecretLister, NewMockPodLister(mockCtrl))
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("failed to create the test provider", err)
 			}
@@ -1736,7 +1744,7 @@ func TestGetContainerLogs(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -1798,7 +1806,7 @@ func TestGetGPUSKU(t *testing.T) {
 	aciMocks := createNewACIMock()
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -1860,4 +1868,85 @@ func TestGetGPUSKU(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFetchStandardPodsEvents(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: podName,
+		},
+		Spec: corev1.PodSpec{},
+	}
+
+	cg := testsutil.CreateContainerGroupObj(containerGroupName(podNamespace, podNamespace), "", "Succeeded",
+		testsutil.CreateACIContainersListObj(runningState, "Initializing",
+			testsutil.CgCreationTime.Add(time.Second*2),
+			testsutil.CgCreationTime.Add(time.Second*3),
+			false, false, false), "Succeeded")
+	now := time.Now().Add(-10 * time.Second)
+	cg.Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "mount failed", "cg event", "Warning"),
+	}
+	cg.Properties.Containers[0].Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "container started", "cg container event", "Normal"),
+	}
+
+	aciMocks := createNewACIMock()
+	aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
+		return cg, nil
+	}
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+		return aciMocks.MockGetContainerGroup(ctx, resourceGroup, containerGroupName(name, namespace))
+	}
+	podLister := NewMockPodLister(mockCtrl)
+	podLister.EXPECT().List(labels.Everything()).Times(2).Return([]*corev1.Pod{pod}, nil)
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), podLister, nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	podsTracker := &PodsTracker{
+		pods:           podLister,
+		updateCb:       func(pod *corev1.Pod) {},
+		handler:        provider,
+		lastEventCheck: time.UnixMicro(0),
+	}
+
+	fakeRecorder := record.NewFakeRecorder(2)
+	podsTracker.eventRecorder = fakeRecorder
+	podsTracker.updatePodsLoop(context.Background())
+	close(fakeRecorder.Events)
+	broadcastEvents := make([]string, 0)
+	for evt := range fakeRecorder.Events {
+		broadcastEvents = append(broadcastEvents, evt)
+	}
+	assert.DeepEqual(t, []string{
+		"Warning cg event mount failed",
+		"Normal cg container event container started",
+	}, broadcastEvents)
+
+	fakeRecorder = record.NewFakeRecorder(2)
+	podsTracker.eventRecorder = fakeRecorder
+	now = time.Now().Add(10 * time.Second)
+	cg.Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "mount failed 2", "cg event", "InvalidType"),
+	}
+	cg.Properties.Containers[0].Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "container started 2", "cg container event", "Normal"),
+	}
+	podsTracker.updatePodsLoop(context.Background())
+	close(fakeRecorder.Events)
+	broadcastEvents = broadcastEvents[0:0]
+	for evt := range fakeRecorder.Events {
+		broadcastEvents = append(broadcastEvents, evt)
+	}
+	assert.DeepEqual(t, []string{
+		"Warning cg event mount failed 2",
+		"Normal cg container event container started 2",
+	}, broadcastEvents)
 }
