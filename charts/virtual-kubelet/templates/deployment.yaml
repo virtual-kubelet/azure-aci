@@ -22,7 +22,7 @@ spec:
     {{- if .Values.useVKVersion2 }}
       initContainers:
         - name: init-validation
-          image: "{{ .Values.initImage.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.tag }}"
+          image: "{{ .Values.initImage.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.initTag }}"
           imagePullPolicy: {{ .Values.initImage.pullPolicy }}
           env:
           - name: USE_VK_VERSION_2
