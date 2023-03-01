@@ -411,6 +411,30 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 		result = append(result, cg)
 		return result, nil
 	}
+	aciMocks.MockGetContainerGroupInfo =
+		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+			node := fakeNodeName
+			provisioning := "Creating"
+			return &azaciv2.ContainerGroup{
+				ID:   &cgName,
+				Name: &cgName,
+				Tags: map[string]*string{
+					"CreationTimestamp": &creationTime,
+					"PodName":           &cgName,
+					"Namespace":         &cgName,
+					"ClusterName":       &node,
+					"NodeName":          &node,
+					"UID":               &cgName,
+				},
+				Properties: &azaciv2.ContainerGroupPropertiesProperties{
+					ProvisioningState: &provisioning,
+					Containers:        testsutil.CreateACIContainersListObj(runningState, "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, false, false),
+					InstanceView: &azaciv2.ContainerGroupPropertiesInstanceView{
+						State: &runningState,
+					},
+				},
+			}, nil
+		}
 
 	provider, err := createTestProvider(aciMocks, nil)
 	if err != nil {
@@ -448,7 +472,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 				testsutil.CreateACIContainersListObj(runningState, "Initializing",
 					testsutil.CgCreationTime.Add(time.Second*2),
 					testsutil.CgCreationTime.Add(time.Second*3),
-					false, false, false), "Succeeded"), nil
+					true, true, true), "Succeeded"), nil
 		}
 
 	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
@@ -584,7 +608,6 @@ func createTestProvider(aciMocks *MockACIProvider, resourceManager *manager.Reso
 	if err != nil {
 		return nil, err
 	}
-
 	err = os.Setenv("ACI_RESOURCE_GROUP", fakeResourceGroup)
 	if err != nil {
 		return nil, err
@@ -958,7 +981,6 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 
 			err = provider.CreatePod(context.Background(), pod)
 			assert.Check(t, err == nil, "Not expected to return error")
-
 		})
 	}
 }
@@ -986,7 +1008,7 @@ func TestGetPodWithContainerID(t *testing.T) {
 	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 
 		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
-			testsutil.CreateACIContainersListObj(runningState, "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), false, false, false), "Succeeded")
+			testsutil.CreateACIContainersListObj(runningState, "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true), "Succeeded")
 		cgID = *cg.ID
 		return cg, nil
 	}
