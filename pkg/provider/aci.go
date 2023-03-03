@@ -713,7 +713,7 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 				log.G(ctx).WithFields(log.Fields{
 					"name": *cgName,
 					"id":   *cg.ID,
-				}).Warnf("container group %s node name does match %s", *cgName, p.nodeName)
+				}).Warnf("container group %s node name does not match %s", *cgName, p.nodeName)
 				continue
 			}
 		} else {
