@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	InitContainerFeature = "init-container"
+	InitContainerFeature       = "init-container"
 	ConfidentialComputeFeature = "confidential-compute"
 )
 
