@@ -124,6 +124,8 @@ spec:
           value: /etc/virtual-kubelet/cert.pem
         - name: APISERVER_KEY_LOCATION
           value: /etc/virtual-kubelet/key.pem
+        - name: APISERVER_CA_CERT_LOCATION
+          value: /etc/kubernetes/certs/ca.crt
         - name: VKUBELET_POD_IP
           valueFrom:
             fieldRef:
