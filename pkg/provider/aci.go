@@ -722,7 +722,6 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 				"id":   *cg.ID,
 			}).Warnf("container group %s node name should not be nil", *cgName)
 			continue
-
 		}
 
 		pod, err3 := p.containerGroupToPod(ctx, cg)

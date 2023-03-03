@@ -108,5 +108,10 @@ func main() {
 		}, v1.EventTypeWarning, "InitFailed", "VNet config setup failed")
 		log.G(ctx).Fatal("cannot setup the VNet configuration ", err)
 	}
+	recorder.Eventf(&v1.ObjectReference{
+		Kind:      "Pod",
+		Name:      podName,
+		Namespace: podNamespace,
+	}, v1.EventTypeNormal, "InitSuccess", "initial setup for virtual kubelet Azure ACI is successful")
 	log.G(ctx).Info("initial setup for virtual kubelet Azure ACI is successful")
 }
