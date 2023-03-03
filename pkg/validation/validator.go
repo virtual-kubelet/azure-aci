@@ -12,14 +12,14 @@ func ValidateContainer(ctx context.Context, container *azaciv2.Container) error 
 	if container.Name == nil {
 		return errors.Errorf("container name cannot be nil")
 	}
+	if container.Properties == nil {
+		return errors.Errorf("container %s properties cannot be nil", *container.Name)
+	}
 	if container.Properties.Ports == nil {
 		return errors.Errorf("container %s Ports cannot be nil", *container.Name)
 	}
 	if container.Properties.Image == nil {
 		return errors.Errorf("container %s Image cannot be nil", *container.Name)
-	}
-	if container.Properties == nil {
-		return errors.Errorf("container %s properties cannot be nil", *container.Name)
 	}
 	if container.Properties.InstanceView == nil {
 		return errors.Errorf("container %s properties InstanceView cannot be nil", *container.Name)
@@ -73,7 +73,11 @@ func ValidateContainerGroup(ctx context.Context, cg *azaciv2.ContainerGroup) err
 	if cg.Properties.OSType != nil &&
 		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
 		if cg.Properties.IPAddress == nil {
-			return errors.Errorf("IPAddress cannot be nil for container group %s", *cg.Name)
+			// In some use cases, ACI sets IPAddress as nil which can cause issues. We have to patch the struct to make the workflow continue.
+			emptyIP := ""
+			cg.Properties.IPAddress = &azaciv2.IPAddress{
+				IP: &emptyIP,
+			}
 		} else {
 			if cg.Properties.ProvisioningState == nil {
 				return errors.Errorf("ProvisioningState cannot be nil for container group %s", *cg.Name)
