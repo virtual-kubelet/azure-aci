@@ -34,7 +34,7 @@ E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
-INIT_IMG_TAG ?= 0.1.0
+INIT_IMG_TAG ?= 0.2.0
 K8S_VERSION ?= 1.23.12
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
