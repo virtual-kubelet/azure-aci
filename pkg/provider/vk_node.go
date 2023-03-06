@@ -7,6 +7,7 @@ package provider
 import (
 	"context"
 	"os"
+	"strings"
 
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
@@ -25,6 +26,11 @@ func (p *ACIProvider) ConfigureNode(ctx context.Context, node *v1.Node) {
 	node.Status.NodeInfo.OperatingSystem = p.operatingSystem
 	node.ObjectMeta.Labels["alpha.service-controller.kubernetes.io/exclude-balancer"] = "true"
 	node.ObjectMeta.Labels["node.kubernetes.io/exclude-from-external-load-balancers"] = "true"
+
+	// report both old and new styles of OS information
+	os := strings.ToLower(p.operatingSystem)
+	node.ObjectMeta.Labels["beta.kubernetes.io/os"] = os
+	node.ObjectMeta.Labels["kubernetes.io/os"] = os
 
 	// Virtual node would be skipped for cloud provider operations (e.g. CP should not add route).
 	node.ObjectMeta.Labels["kubernetes.azure.com/managed"] = "false"
