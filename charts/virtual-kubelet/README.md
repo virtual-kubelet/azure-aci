@@ -62,7 +62,7 @@ The following table lists the configurable parameters of the azure-aci chart and
 | image.tag                                      | Image release version/tag.                                                                                            | `latest`                              |
 | image.pullPolicy                               | Image pull policy.                                                                                                    | `Always`                              | 
 | initImage.name                                 | Init container image name.                                                                                            | `oss/virtual-kubelet/init-validation` |
-| initImage.initTag                              | Init container image release version/tag.                                                                             | `0.1.0`                               |
+| initImage.initTag                              | Init container image release version/tag.                                                                             | `0.2.0`                               |
 | initImage.pullPolicy                           | Init container image pull policy.                                                                                     | `Always`                              |
 | nodeName                                       | The node name that will be assigned to be the VK one.                                                                 | `virtual-node-aci-linux-helm`         |
 | nodeOsType                                     | The node/VM type. Values should be `Windows` or `Linux`.                                                              | `Linux`                               |
