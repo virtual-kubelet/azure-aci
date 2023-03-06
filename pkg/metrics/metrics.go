@@ -145,6 +145,7 @@ func (p *ACIPodMetricsProvider) GetMetricsResource(ctx context.Context) ([]*dto.
 		span.SetStatus(err)
 		return nil, err
 	}
+
 	registry := compbasemetrics.NewKubeRegistry()
 	registry.CustomMustRegister(collectors.NewKubeletResourceMetricsCollector(statsSummary))
 
@@ -153,7 +154,6 @@ func (p *ACIPodMetricsProvider) GetMetricsResource(ctx context.Context) ([]*dto.
 		span.SetStatus(err)
 		return nil, errors.Wrapf(err, "error gathering metrics from collector")
 	}
-	fmt.Println(metricFamily)
 	return metricFamily, nil
 }
 

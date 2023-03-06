@@ -67,6 +67,55 @@ func TestGetStatsSummary(t *testing.T) {
 	}
 }
 
+func TestGetMetricsResource(t *testing.T) {
+	testCases := map[string]map[string]uint64{
+		"two pods cases": {
+			"pod1": uint64(1000),
+			"pod2": uint64(2000),
+		},
+	}
+
+	for testName, test := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockedPodGetter := NewMockPodGetter(ctrl)
+			mockedPodStatsGetter := NewMockpodStatsGetter(ctrl)
+			podMetricsProvider := NewACIPodMetricsProvider("node-1", "rg", mockedPodGetter, nil)
+			podMetricsProvider.podStatsGetter = mockedPodStatsGetter
+			mockedPodGetter.EXPECT().GetPods().Return(fakePod(getMapKeys(test))).AnyTimes()
+			for podName, cpu := range test {
+				mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
+			}
+			ctx := context.Background()
+			actuallyMetricsResource, err := podMetricsProvider.GetMetricsResource(ctx)
+			assert.NilError(t, err)
+			for _, metricFamily := range actuallyMetricsResource {
+				if *metricFamily.Name == "pod_cpu_usage_seconds_total" {
+					assert.Equal(t, uint64(*metricFamily.Metric[0].Counter.Value), test[*metricFamily.Metric[0].Label[1].Value])
+					assert.Equal(t, uint64(*metricFamily.Metric[1].Counter.Value), test[*metricFamily.Metric[1].Label[1].Value])
+				}
+				if *metricFamily.Name == "pod_memory_working_set_types" {
+					assert.Equal(t, uint64(*metricFamily.Metric[0].Gauge.Value), test[*metricFamily.Metric[0].Label[1].Value])
+					assert.Equal(t, uint64(*metricFamily.Metric[1].Gauge.Value), test[*metricFamily.Metric[1].Label[1].Value])
+				}
+				if *metricFamily.Name == "container_cpu_usage_seconds_total" {
+					assert.Equal(t, uint64(*metricFamily.Metric[0].Counter.Value), test[*metricFamily.Metric[0].Label[2].Value])
+					assert.Equal(t, uint64(*metricFamily.Metric[1].Counter.Value), test[*metricFamily.Metric[1].Label[2].Value])
+				}
+				if *metricFamily.Name == "container_memory_working_set_types" {
+					assert.Equal(t, uint64(*metricFamily.Metric[0].Gauge.Value), test[*metricFamily.Metric[0].Label[2].Value])
+					assert.Equal(t, uint64(*metricFamily.Metric[1].Gauge.Value), test[*metricFamily.Metric[1].Label[2].Value])
+				}
+				if *metricFamily.Name == "container_start_time_seconds" {
+					assert.Check(t, metricFamily.Metric[0].Gauge.Value != nil)
+					assert.Check(t, metricFamily.Metric[1].Gauge.Value != nil)
+				}
+			}
+		})
+	}
+}
 func TestPodStatsGetterDecider(t *testing.T) {
 	t.Run("useRealtimeMetricsAndContainerGroupCacheTakeEffective", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -110,12 +159,30 @@ func fakePod(podNames []string) []*v1.Pod {
 }
 
 func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
+	nanosec := cpu * 1e9
 	return &stats.PodStats{
 		PodRef: stats.PodReference{
 			Name: podName,
 		},
 		CPU: &stats.CPUStats{
 			UsageNanoCores: &cpu,
+			UsageCoreNanoSeconds: &nanosec,
+		},
+		Memory: &stats.MemoryStats{
+			WorkingSetBytes: &cpu,
+		},
+		Containers: []stats.ContainerStats{
+			stats.ContainerStats{
+				Name: "testcontainer",
+				StartTime: metav1.NewTime(time.Now()),
+				CPU: &stats.CPUStats{
+					UsageNanoCores: &cpu,
+					UsageCoreNanoSeconds: &nanosec,
+				},
+				Memory: &stats.MemoryStats{
+					WorkingSetBytes: &cpu,
+				},
+			},
 		},
 	}
 }
