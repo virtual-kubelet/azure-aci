@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
+	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
@@ -105,8 +106,9 @@ func (a *AzClientsAPIs) GetContainerGroup(ctx context.Context, resourceGroup, co
 	if err != nil {
 		if rawResponse.StatusCode == http.StatusNotFound {
 			logger.Errorf("failed to query Container Group %s, not found", containerGroupName)
-			return nil, err
+			return nil, errdefs.NotFound("cg is not found")
 		}
+		logger.Errorf("an error has occurred while getting container group info %s, status code %d", containerGroupName, rawResponse.StatusCode)
 		return nil, err
 	}
 
@@ -154,6 +156,9 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 
 	response, err := a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, cgName, nil)
 	if err != nil {
+		if rawResponse != nil && rawResponse.StatusCode == http.StatusNotFound {
+			return nil, errdefs.NotFound("cg is not found")
+		}
 		logger.Errorf("an error has occurred while getting container group info %s, status code %d", cgName, rawResponse.StatusCode)
 		return nil, err
 	}

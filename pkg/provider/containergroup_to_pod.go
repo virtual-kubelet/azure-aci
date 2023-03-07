@@ -13,13 +13,23 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
+	errdef "github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func (p *ACIProvider) containerGroupToPod(ctx context.Context, cg *azaciv2.ContainerGroup) (*v1.Pod, error) {
 	//cg is validated
-	pod, err := p.resourceManager.GetPod(*cg.Name, *cg.Tags["Namespace"])
+	pod, err := p.resourceManager.GetPod(*cg.Tags["PodName"], *cg.Tags["Namespace"])
+	// in case pod got deleted, we want to continue the workflow to kick off clean dangling pods
+	if errdef.IsNotFound(err) || pod == nil {
+		return &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      *cg.Tags["PodName"],
+				Namespace: *cg.Tags["Namespace"],
+			},
+		}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -220,17 +230,16 @@ func getACIResourceMetaFromContainerGroup(cg *azaciv2.ContainerGroup) (*string, 
 	// Use the Provisioning State if it's not Succeeded,
 	// otherwise use the state of the instance.
 	aciState := cg.Properties.ProvisioningState
-	if *aciState == "Succeeded" {
+	if aciState != nil && (*aciState == "Succeeded") {
 		aciState = cg.Properties.InstanceView.State
 	}
 
 	var creationTime time.Time
 
 	// cg tags is validated
-	ts := *cg.Tags["CreationTimestamp"]
 
-	if ts != "" {
-		t, err := time.Parse(tests.TimeLayout, ts)
+	if cg.Tags != nil && cg.Tags["CreationTimestamp"] != nil {
+		t, err := time.Parse(tests.TimeLayout, *cg.Tags["CreationTimestamp"])
 		if err != nil {
 			return nil, time.Now(), errors.Errorf("unable to parse the creation timestamp for container group %s", *cg.Name)
 		}

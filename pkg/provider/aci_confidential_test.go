@@ -21,8 +21,8 @@ import (
 func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 
 	initContainerName1 := "init-container-1"
-	ccePolicyString	   := "eyJhbGxvd19hbGwiOiB0cnVlLCAiY29udGFpbmVycyI6IHsibGVuZ3RoIjogMCwgImVsZW1lbnRzIjogbnVsbH19"
-	mockCtrl           := gomock.NewController(t)
+	ccePolicyString := "eyJhbGxvd19hbGwiOiB0cnVlLCAiY29udGFpbmVycyI6IHsibGVuZ3RoIjogMCwgImVsZW1lbnRzIjogbnVsbH19"
+	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 	aciMocks := createNewACIMock()
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
@@ -32,7 +32,7 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, initContainers != nil, "Container group is nil")
-		if (len(initContainers) > 0) {
+		if len(initContainers) > 0 {
 			assert.Check(t, is.Equal(len(containers), 2), "2 Containers are expected")
 			assert.Check(t, is.Equal(len(initContainers), 1), "2 init containers are expected")
 			assert.Check(t, initContainers[0].Properties.VolumeMounts != nil, "Volume mount should be present")
@@ -41,7 +41,7 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 			assert.Check(t, initContainers[0].Properties.Image != nil, "Image should be present")
 			assert.Check(t, *initContainers[0].Name == initContainerName1, "Name should be correct")
 		}
-		if (confidentialComputeProperties != nil) {
+		if confidentialComputeProperties != nil {
 			assert.Check(t, confidentialComputeProperties.CcePolicy != nil, "CCE policy should not be nil")
 			assert.Check(t, *confidentialComputeProperties.CcePolicy == ccePolicyString, "CCE policy should match")
 		}

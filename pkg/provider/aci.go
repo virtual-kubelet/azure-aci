@@ -64,7 +64,7 @@ const (
 )
 
 const (
-	confidentialComputeSkuLabel = "virtual-kubelet.io/container-sku"
+	confidentialComputeSkuLabel       = "virtual-kubelet.io/container-sku"
 	confidentialComputeCcePolicyLabel = "virtual-kubelet.io/confidential-compute-cce-policy"
 )
 
@@ -680,25 +680,62 @@ func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	pods := make([]*v1.Pod, 0, len(cgs))
 
 	for cgIndex := range cgs {
-		err = validation.ValidateContainerGroup(ctx, cgs[cgIndex])
-		if err != nil {
-			return nil, err
-		}
-
-		if cgs[cgIndex].Tags["NodeName"] != &p.nodeName {
+		cgName := cgs[cgIndex].Name
+		if cgName == nil {
 			continue
 		}
-
-		pod, err := p.containerGroupToPod(ctx, cgs[cgIndex])
+		// The GetContainerGroupListResult API doesn't return InstanceView status which can cause nil.
+		// For that, we had to get the CG info one more time.
+		cg, err := p.azClientsAPIs.GetContainerGroup(ctx, p.resourceGroup, *cgName)
+		// CG might get deleted between the getlist and get calls
+		if errdefs.IsNotFound(err) || cg == nil {
+			continue
+		}
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
-				"name": cgs[cgIndex].Name,
-				"id":   cgs[cgIndex].ID,
-			}).WithError(err).Errorf("error converting container group %s to pod", cgs[cgIndex].Name)
-
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).WithError(err).Errorf("error getting container group %s", *cgName)
 			continue
 		}
-		pods = append(pods, pod)
+
+		err2 := validation.ValidateContainerGroup(ctx, cg)
+		if err2 != nil {
+			log.G(ctx).WithFields(log.Fields{
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).WithError(err2).Errorf("error validating container group %s", *cgName)
+			continue
+		}
+
+		if cg.Tags != nil && cg.Tags["NodeName"] != nil {
+			if *cg.Tags["NodeName"] != p.nodeName {
+				log.G(ctx).WithFields(log.Fields{
+					"name": *cgName,
+					"id":   *cg.ID,
+				}).Warnf("container group %s node name does not match %s", *cgName, p.nodeName)
+				continue
+			}
+		} else {
+			log.G(ctx).WithFields(log.Fields{
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).Warnf("container group %s node name should not be nil", *cgName)
+			continue
+		}
+
+		pod, err3 := p.containerGroupToPod(ctx, cg)
+		if err3 != nil {
+			log.G(ctx).WithFields(log.Fields{
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).WithError(err3).Errorf("error converting container group %s to pod", *cgName)
+			continue
+		}
+
+		if pod != nil {
+			pods = append(pods, pod)
+		}
 	}
 
 	return pods, nil
@@ -1135,14 +1172,14 @@ func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod 
 	if ccePolicy != "" {
 		cg.Properties.SKU = &confidentialSku
 		confidentialComputeProperties := azaciv2.ConfidentialComputeProperties{
-			CcePolicy : &ccePolicy,
+			CcePolicy: &ccePolicy,
 		}
 		cg.Properties.ConfidentialComputeProperties = &confidentialComputeProperties
-	    l.Infof("setting confidential compute properties with CCE Policy")
+		l.Infof("setting confidential compute properties with CCE Policy")
 
 	} else if strings.ToLower(containerGroupSku) == "confidential" {
 		cg.Properties.SKU = &confidentialSku
-	    l.Infof("setting confidential container group SKU")
+		l.Infof("setting confidential container group SKU")
 	}
 
 	l.Infof("no annotations for confidential SKU")
