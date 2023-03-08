@@ -7,7 +7,6 @@ package main
 import (
 	"context"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -52,16 +51,6 @@ func main() {
 	defer eventBroadcast.Shutdown()
 
 	recorder := eventBroadcast.NewRecorder(scheme.Scheme, v1.EventSource{Component: "virtual kubelet"})
-	vkVersion, err := strconv.ParseBool(os.Getenv("USE_VK_VERSION_2"))
-	if err != nil {
-		log.G(ctx).Warn("cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1. Skipping init container checks")
-		return
-	}
-
-	if !vkVersion {
-		log.G(ctx).Warn("the provider will use VK version 1. Skipping init container checks")
-		return
-	}
 
 	setupBackoff := wait.Backoff{
 		Steps:    50,

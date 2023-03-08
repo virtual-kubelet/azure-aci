@@ -13,8 +13,6 @@ initImage:
 
 namespace: vk-azure-aci
 
-useVKVersion2: true
-
 nodeName: "virtual-node-aci-linux-helm"
 nodeOsType: "Linux"
 monitoredNamespace: ""

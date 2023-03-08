@@ -52,8 +52,6 @@ spec:
             configMapKeyRef:
               name: test-vars
               key: kube_dns_ip
-        - name: USE_VK_VERSION_2
-          value: "true"
         - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
           valueFrom:
             configMapKeyRef:
@@ -120,8 +118,6 @@ spec:
               name: test-vars
               key: kube_dns_ip
         - name: ENABLE_REAL_TIME_METRICS
-          value: "true"
-        - name: USE_VK_VERSION_2
           value: "true"
         - name: VIRTUALNODE_USER_IDENTITY_CLIENTID
           valueFrom:
