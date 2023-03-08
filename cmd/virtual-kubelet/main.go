@@ -16,8 +16,6 @@ package main
 
 import (
 	"context"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -25,7 +23,6 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	azproviderv2 "github.com/virtual-kubelet/azure-aci/pkg/provider"
-	azproviderv1 "github.com/virtual-kubelet/azure-aci/provider"
 	cli "github.com/virtual-kubelet/node-cli"
 	logruscli "github.com/virtual-kubelet/node-cli/logrus"
 	opencensuscli "github.com/virtual-kubelet/node-cli/opencensus"
@@ -66,37 +63,26 @@ func main() {
 	o.Version = strings.Join([]string{k8sVersion, "vk-azure-aci", buildVersion}, "-")
 	o.PodSyncWorkers = numberOfWorkers
 
-	vkVersion, err := strconv.ParseBool(os.Getenv("USE_VK_VERSION_2"))
-	if err != nil {
-		log.G(ctx).Warn("cannot get USE_VK_VERSION_2 environment variable, the provider will use VK version 1")
-		vkVersion = false
-	}
-
 	var azACIAPIs *client.AzClientsAPIs
 	azConfig := auth.Config{}
 
-	if vkVersion {
-		//Setup config
-		err = azConfig.SetAuthConfig(ctx)
-		if err != nil {
-			log.G(ctx).Fatal(err)
-		}
-
-		azACIAPIs, err = client.NewAzClientsAPIs(ctx, azConfig)
-		if err != nil {
-			log.G(ctx).Fatal(err)
-		}
+	//Setup config
+	err = azConfig.SetAuthConfig(ctx)
+	if err != nil {
+		log.G(ctx).Fatal(err)
 	}
+
+	azACIAPIs, err = client.NewAzClientsAPIs(ctx, azConfig)
+	if err != nil {
+		log.G(ctx).Fatal(err)
+	}
+
 	run := func(ctx context.Context) error {
 		node, err := cli.New(ctx,
 			cli.WithBaseOpts(o),
 			cli.WithCLIVersion(buildVersion, buildTime),
 			cli.WithProvider("azure", func(cfg provider.InitConfig) (provider.Provider, error) {
-				if vkVersion {
-					return azproviderv2.NewACIProvider(ctx, cfg.ConfigPath, azConfig, azACIAPIs, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort, cfg.KubeClusterDomain)
-				} else {
-					return azproviderv1.NewACIProvider(cfg.ConfigPath, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort, cfg.KubeClusterDomain)
-				}
+				return azproviderv2.NewACIProvider(ctx, cfg.ConfigPath, azConfig, azACIAPIs, cfg.ResourceManager, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort, cfg.KubeClusterDomain)
 			}),
 			cli.WithPersistentFlags(logConfig.FlagSet()),
 			cli.WithPersistentPreRunCallback(func() error {

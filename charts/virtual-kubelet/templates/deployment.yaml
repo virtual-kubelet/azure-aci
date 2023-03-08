@@ -19,14 +19,11 @@ spec:
       labels:
         app: {{ template "vk.fullname" . }}
     spec:
-    {{- if .Values.useVKVersion2 }}
       initContainers:
         - name: init-validation
           image: "{{ .Values.initImage.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.initTag }}"
           imagePullPolicy: {{ .Values.initImage.pullPolicy }}
           env:
-          - name: USE_VK_VERSION_2
-            value: "true"
           - name: KUBELET_PORT
             value: "10250"
           - name: APISERVER_CERT_LOCATION
@@ -112,7 +109,6 @@ spec:
           - name: aks-credential
             mountPath: "/etc/aks/azure.json"
             {{- end }}
-    {{- end }}
       containers:
       - name: {{ template "vk.fullname" . }}
         image: "{{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
@@ -202,10 +198,6 @@ spec:
           value: "true"
 {{- end }}
 {{- end }}
-{{- end }}
-{{- if .Values.useVKVersion2 }}
-        - name: USE_VK_VERSION_2
-          value: "true"
 {{- end }}
         volumeMounts:
         - name: credentials
