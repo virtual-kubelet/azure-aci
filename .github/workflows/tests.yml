@@ -10,6 +10,9 @@ on:
       - master
       - release-**
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
+  push:
+    branches: [master]
+    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:
   # Common versions
