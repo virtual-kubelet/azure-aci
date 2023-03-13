@@ -18,7 +18,7 @@ spec:
       requests:
         cpu: "1"
         memory: 1G
-  - image: k8s.gcr.io/hpa-example
+  - image: registry.k8s.io/hpa-example
     imagePullPolicy: Always
     name: hpa-example
     ports:
