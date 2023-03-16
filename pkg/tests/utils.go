@@ -50,6 +50,7 @@ func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*
 			"PodName":           &cgName,
 			"Namespace":         &cgNamespace,
 			"NodeName":          &nodeName,
+			"ClusterName":       &nodeName,
 			"UID":               &cgName,
 		},
 		Name: &cgName,

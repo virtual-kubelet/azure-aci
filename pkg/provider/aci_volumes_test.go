@@ -250,6 +250,7 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 				"CreationTimestamp": &creationTime,
 				"PodName":           &podName,
 				"Namespace":         &podNamespace,
+				"ClusterName":       &nodeName,
 				"NodeName":          &nodeName,
 				"UID":               &podName,
 			},

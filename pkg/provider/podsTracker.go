@@ -180,15 +180,12 @@ func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool 
 			}
 			return true
 		}
-
 		return false
 	}
 
 	if err != nil {
 		log.G(ctx).WithError(err).Errorf("failed to retrieve pod %v status from provider", pod.Name)
-		return false
 	}
-
 	return false
 }
 
