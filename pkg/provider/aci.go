@@ -26,14 +26,17 @@ import (
 	"github.com/virtual-kubelet/azure-aci/pkg/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
+	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	corev1listers "k8s.io/client-go/listers/core/v1"
+
+	"github.com/cpuguy83/dockercfg"
 )
 
 const (
@@ -71,8 +74,10 @@ const (
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
 	azClientsAPIs            client.AzClientsInterface
-	resourceManager          *manager.ResourceManager
 	containerGroupExtensions []*azaciv2.DeploymentExtensionSpec
+	secretL                  corev1listers.SecretLister
+	configL                  corev1listers.ConfigMapLister
+	podsL                    corev1listers.PodLister
 	enabledFeatures          *featureflag.FlagIdentifier
 	providernetwork          network.ProviderNetwork
 
@@ -165,7 +170,7 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, rm *manager.ResourceManager, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
+func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, pCfg nodeutil.ProviderConfig, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
 	var p ACIProvider
 	var err error
 
@@ -184,7 +189,9 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	p.enabledFeatures = featureflag.InitFeatureFlag(ctx)
 
 	p.azClientsAPIs = azAPIs
-	p.resourceManager = rm
+	p.configL = pCfg.ConfigMaps
+	p.secretL = pCfg.Secrets
+	p.podsL = pCfg.Pods
 	p.clusterDomain = clusterDomain
 	p.operatingSystem = operatingSystem
 	p.nodeName = nodeName
@@ -266,7 +273,7 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		}
 	}
 
-	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.azClientsAPIs)
+	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(p.nodeName, p.resourceGroup, p.podsL, p.azClientsAPIs)
 	return &p, err
 }
 
@@ -366,7 +373,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	podCreationTimestamp := pod.CreationTimestamp.String()
 	cg.Tags = map[string]*string{
 		"PodName":           &pod.Name,
-		"ClusterName":       &pod.ClusterName,
 		"NodeName":          &pod.Spec.NodeName,
 		"Namespace":         &pod.Namespace,
 		"UID":               &podUID,
@@ -667,6 +673,7 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	ctx, span := trace.StartSpan(ctx, "aci.GetPods")
 	defer span.End()
+
 	ctx = addAzureAttributes(ctx, span, p)
 
 	cgs, err := p.azClientsAPIs.GetContainerGroupListResult(ctx, p.resourceGroup)
@@ -751,7 +758,7 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 	// Capture the notifier to be used for communicating updates to VK
 	p.tracker = &PodsTracker{
-		rm:       p.resourceManager,
+		pods:     p.podsL,
 		updateCb: notifierCb,
 		handler:  p,
 	}
@@ -798,17 +805,10 @@ func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
 	return p.deleteContainerGroup(ctx, ns, name)
 }
 
-// implement NodeProvider
-
-// Ping checks if the node is still active/ready.
-func (p *ACIProvider) Ping(ctx context.Context) error {
-	return nil
-}
-
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]*azaciv2.ImageRegistryCredential, error) {
 	ips := make([]*azaciv2.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	for _, ref := range pod.Spec.ImagePullSecrets {
-		secret, err := p.resourceManager.GetSecret(ref.Name, pod.Namespace)
+		secret, err := p.secretL.Secrets(pod.Namespace).Get(ref.Name)
 		if err != nil {
 			return ips, err
 		}
@@ -864,15 +864,25 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*azaciv2.Imag
 	return &cred, nil
 }
 
-func makeRegistryCredentialFromDockerConfig(server string, configEntry DockerConfigEntry) (*azaciv2.ImageRegistryCredential, error) {
+func makeRegistryCredentialFromDockerConfig(server string, configEntry dockercfg.AuthConfig) (*azaciv2.ImageRegistryCredential, error) {
 	if configEntry.Username == "" {
 		return nil, fmt.Errorf("no username present in auth config for server: %s", server)
 	}
 
+	username := configEntry.Username
+	password := configEntry.Password
+	if configEntry.Auth != "" {
+		var err error
+		username, password, err = dockercfg.DecodeBase64Auth(configEntry)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding docker auth: %w", err)
+		}
+	}
+
 	cred := azaciv2.ImageRegistryCredential{
 		Server:   &server,
-		Username: &configEntry.Username,
-		Password: &configEntry.Password,
+		Username: &username,
+		Password: &password,
 	}
 
 	return &cred, nil
@@ -913,15 +923,15 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []*azaciv2.ImageRegistryC
 	}
 
 	// Will use K8s config models to handle marshaling (including auth field handling).
-	var cfgJson DockerConfigJSON
+	var cfgJson dockercfg.Config
 
 	err = json.Unmarshal(repoData, &cfgJson)
 	if err != nil {
 		return ips, err
 	}
 
-	auths := cfgJson.Auths
-	if len(cfgJson.Auths) == 0 {
+	auths := cfgJson.AuthConfigs
+	if len(auths) == 0 {
 		return ips, fmt.Errorf("malformed dockerconfigjson in secret")
 	}
 
@@ -937,7 +947,7 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []*azaciv2.ImageRegistryC
 	return ips, err
 }
 
-//verify if Container is properly declared for the use on ACI
+// verify if Container is properly declared for the use on ACI
 func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	if len(container.Command) == 0 && len(container.Args) > 0 {
 		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
@@ -945,7 +955,7 @@ func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	return nil
 }
 
-//this method is used for both initConainers and containers
+// this method is used for both initConainers and containers
 func (p *ACIProvider) getCommand(container v1.Container) []*string {
 	command := make([]*string, 0)
 	for c := range container.Command {
@@ -960,7 +970,7 @@ func (p *ACIProvider) getCommand(container v1.Container) []*string {
 	return append(command, args...)
 }
 
-//get VolumeMounts declared on Container as []aci.VolumeMount
+// get VolumeMounts declared on Container as []aci.VolumeMount
 func (p *ACIProvider) getVolumeMounts(container v1.Container) []*azaciv2.VolumeMount {
 	volumeMounts := make([]*azaciv2.VolumeMount, 0, len(container.VolumeMounts))
 	for i := range container.VolumeMounts {
@@ -973,7 +983,7 @@ func (p *ACIProvider) getVolumeMounts(container v1.Container) []*azaciv2.VolumeM
 	return volumeMounts
 }
 
-//get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
+// get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
 func (p *ACIProvider) getEnvironmentVariables(container v1.Container) []*azaciv2.EnvironmentVariable {
 	environmentVariable := make([]*azaciv2.EnvironmentVariable, 0, len(container.Env))
 	for i := range container.Env {
@@ -985,7 +995,7 @@ func (p *ACIProvider) getEnvironmentVariables(container v1.Container) []*azaciv2
 	return environmentVariable
 }
 
-//get InitContainers defined in Pod as []aci.InitContainerDefinition
+// get InitContainers defined in Pod as []aci.InitContainerDefinition
 func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv2.InitContainerDefinition, error) {
 	initContainers := make([]*azaciv2.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for i, initContainer := range pod.Spec.InitContainers {
@@ -1205,31 +1215,31 @@ func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {
 
 func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProbe, error) {
 
-	if probe.Handler.Exec != nil && probe.Handler.HTTPGet != nil {
+	if probe.ProbeHandler.Exec != nil && probe.ProbeHandler.HTTPGet != nil {
 		return nil, fmt.Errorf("probe may not specify more than one of \"exec\" and \"httpGet\"")
 	}
 
-	if probe.Handler.Exec == nil && probe.Handler.HTTPGet == nil {
+	if probe.ProbeHandler.Exec == nil && probe.ProbeHandler.HTTPGet == nil {
 		return nil, fmt.Errorf("probe must specify one of \"exec\" and \"httpGet\"")
 	}
 
-	// Probes have can have an Exec or HTTP Get Handler.
+	// Probes have can have an Exec or HTTP Get ProbeHandler.
 	// Create those if they exist, then add to the
 	// ContainerProbe struct
 	var exec *azaciv2.ContainerExec
 	commands := make([]*string, 0)
-	if probe.Handler.Exec != nil {
-		for i := range probe.Handler.Exec.Command {
-			commands = append(commands, &probe.Handler.Exec.Command[i])
+	if probe.ProbeHandler.Exec != nil {
+		for i := range probe.ProbeHandler.Exec.Command {
+			commands = append(commands, &probe.ProbeHandler.Exec.Command[i])
 		}
 		exec = &azaciv2.ContainerExec{
 			Command: commands,
 		}
 	}
 	var httpGET *azaciv2.ContainerHTTPGet
-	if probe.Handler.HTTPGet != nil {
+	if probe.ProbeHandler.HTTPGet != nil {
 		var portValue int32
-		port := probe.Handler.HTTPGet.Port
+		port := probe.ProbeHandler.HTTPGet.Port
 		switch port.Type {
 		case intstr.Int:
 			portValue = int32(port.IntValue())
@@ -1246,10 +1256,10 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProb
 			}
 		}
 
-		scheme := azaciv2.Scheme(probe.Handler.HTTPGet.Scheme)
+		scheme := azaciv2.Scheme(probe.ProbeHandler.HTTPGet.Scheme)
 		httpGET = &azaciv2.ContainerHTTPGet{
 			Port:   &portValue,
-			Path:   &probe.Handler.HTTPGet.Path,
+			Path:   &probe.ProbeHandler.HTTPGet.Path,
 			Scheme: &scheme,
 		}
 	}

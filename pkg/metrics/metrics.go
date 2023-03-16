@@ -15,6 +15,8 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 )
 
 const (
@@ -24,15 +26,15 @@ const (
 type ACIPodMetricsProvider struct {
 	nodeName       string
 	metricsSync    sync.Mutex
-	podGetter      client.PodGetter
+	podGetter      corev1listers.PodLister
 	aciCGGetter    client.ContainerGroupGetter
 	podStatsGetter client.PodStatsGetter
 }
 
-func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter client.PodGetter, aciCGGetter client.ContainerGroupGetter) *ACIPodMetricsProvider {
+func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podLister corev1listers.PodLister, aciCGGetter client.ContainerGroupGetter) *ACIPodMetricsProvider {
 	provider := ACIPodMetricsProvider{
 		nodeName:    nodeName,
-		podGetter:   podGetter,
+		podGetter:   podLister,
 		aciCGGetter: aciCGGetter,
 	}
 
@@ -59,7 +61,10 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	default:
 	}
 
-	pods := p.podGetter.GetPods()
+	pods, err := p.podGetter.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 
 	var errGroup errgroup.Group
 	chResult := make(chan *stats.PodStats, len(pods))

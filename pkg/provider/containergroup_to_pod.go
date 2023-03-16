@@ -20,7 +20,7 @@ import (
 
 func (p *ACIProvider) containerGroupToPod(ctx context.Context, cg *azaciv2.ContainerGroup) (*v1.Pod, error) {
 	//cg is validated
-	pod, err := p.resourceManager.GetPod(*cg.Tags["PodName"], *cg.Tags["Namespace"])
+	pod, err := p.podsL.Pods(*cg.Tags["Namespace"]).Get(*cg.Name)
 	// in case pod got deleted, we want to continue the workflow to kick off clean dangling pods
 	if errdef.IsNotFound(err) || pod == nil {
 		return &v1.Pod{

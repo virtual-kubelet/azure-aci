@@ -17,7 +17,7 @@ func WrapCachedPodStatsGetter(ttlSeconds int, getter client.PodStatsGetter) *cac
 	}
 }
 
-//Adding cache capability into podStatsGetter
+// Adding cache capability into podStatsGetter
 type cachePodStatsGetter struct {
 	wrappedGetter client.PodStatsGetter
 	cache         *cache.Cache
