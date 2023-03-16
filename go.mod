@@ -1,6 +1,6 @@
 module github.com/virtual-kubelet/azure-aci
 
-go 1.18
+go 1.19
 
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.4.12
