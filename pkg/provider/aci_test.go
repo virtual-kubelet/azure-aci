@@ -644,7 +644,7 @@ func TestConfigureNode(t *testing.T) {
 		Status: v1.NodeStatus{
 			NodeInfo: v1.NodeSystemInfo{
 				Architecture:   "amd64",
-				KubeletVersion: "1.18.4",
+				KubeletVersion: "1.21.0",
 			},
 		},
 	}
