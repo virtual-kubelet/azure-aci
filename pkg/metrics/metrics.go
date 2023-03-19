@@ -3,10 +3,10 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"sync"
 	"time"
 
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
@@ -15,6 +15,8 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	"golang.org/x/sync/errgroup"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	corev1listers "k8s.io/client-go/listers/core/v1"
 )
 
 const (
@@ -24,15 +26,15 @@ const (
 type ACIPodMetricsProvider struct {
 	nodeName       string
 	metricsSync    sync.Mutex
-	podGetter      client.PodGetter
+	podGetter      corev1listers.PodLister
 	aciCGGetter    client.ContainerGroupGetter
 	podStatsGetter client.PodStatsGetter
 }
 
-func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podGetter client.PodGetter, aciCGGetter client.ContainerGroupGetter) *ACIPodMetricsProvider {
+func NewACIPodMetricsProvider(nodeName, aciResourcegroup string, podLister corev1listers.PodLister, aciCGGetter client.ContainerGroupGetter) *ACIPodMetricsProvider {
 	provider := ACIPodMetricsProvider{
 		nodeName:    nodeName,
-		podGetter:   podGetter,
+		podGetter:   podLister,
 		aciCGGetter: aciCGGetter,
 	}
 
@@ -59,10 +61,13 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	default:
 	}
 
-	pods := p.podGetter.GetPods()
+	pods, err := p.podGetter.List(labels.Everything())
+	if err != nil {
+		log.L.WithError(err).Errorf("failed to retrieve pods list")
+	}
 
 	var errGroup errgroup.Group
-	chResult := make(chan stats.PodStats, len(pods))
+	chResult := make(chan *stats.PodStats, len(pods))
 
 	sema := make(chan struct{}, 10)
 	for _, pod := range pods {
@@ -95,8 +100,13 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 				span.SetStatus(err)
 				return errors.Wrapf(err, "error fetching metrics for pods '%s'", pod.Name)
 			}
+			if podMetrics == nil {
+				err := fmt.Errorf("error fetching metrics for pods '%s'. cannot retrieve the pod status", pod.Name)
+				span.SetStatus(err)
+				return err
+			}
 
-			chResult <- *podMetrics
+			chResult <- podMetrics
 			return nil
 		})
 	}
@@ -115,7 +125,7 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	s.Pods = make([]stats.PodStats, 0, len(chResult))
 
 	for stat := range chResult {
-		s.Pods = append(s.Pods, stat)
+		s.Pods = append(s.Pods, *stat)
 	}
 
 	return &s, nil
@@ -152,8 +162,9 @@ func (decider *podStatsGetterDecider) GetPodStats(ctx context.Context, pod *v1.P
 	}
 
 	useRealTime := false
-	for _, extension := range aciCG.ContainerGroupPropertiesWrapper.Extensions {
-		if extension.Properties.Type == client.ExtensionTypeRealtimeMetrics {
+	for _, extension := range aciCG.Properties.Extensions {
+		if extension.Properties.ExtensionType != nil &&
+			*extension.Properties.ExtensionType == client.ExtensionTypeRealtimeMetrics {
 			useRealTime = true
 		}
 	}
@@ -167,19 +178,16 @@ func (decider *podStatsGetterDecider) GetPodStats(ctx context.Context, pod *v1.P
 	}
 }
 
-func (decider *podStatsGetterDecider) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*client.ContainerGroupWrapper, error) {
+func (decider *podStatsGetterDecider) getContainerGroupFromPod(ctx context.Context, pod *v1.Pod) (*azaciv2.ContainerGroup, error) {
 	cgName := containerGroupName(pod.Namespace, pod.Name)
 	cacheKey := string(pod.UID)
 	aciContainerGroup, found := decider.cache.Get(cacheKey)
 	if found {
-		return aciContainerGroup.(*client.ContainerGroupWrapper), nil
+		return aciContainerGroup.(*azaciv2.ContainerGroup), nil
 	}
 	aciCG, err := decider.aciCGGetter.GetContainerGroup(ctx, decider.rgName, cgName)
 	if err != nil {
-		if aciCG != nil && aciCG.StatusCode == http.StatusNotFound {
-			return nil, errors.Wrapf(err, "failed to query Container Group %s, not found it", cgName)
-		}
-		return nil, errors.Wrapf(err, "failed to query Container Group %s", cgName)
+		return nil, err
 	}
 	decider.cache.Set(cacheKey, aciCG, cache.DefaultExpiration)
 	return aciCG, nil

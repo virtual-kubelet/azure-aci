@@ -6,17 +6,23 @@ import (
 	"fmt"
 	"os"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+)
+
+const (
+	LogAnalyticsMetadataKeyPodUUID           string = "pod-uuid"
+	LogAnalyticsMetadataKeyNodeName          string = "node-name"
+	LogAnalyticsMetadataKeyClusterResourceID string = "cluster-resource-id"
 )
 
 // NewContainerGroupDiagnostics creates a container group diagnostics object
-func NewContainerGroupDiagnostics(logAnalyticsID, logAnalyticsKey string) (*azaci.ContainerGroupDiagnostics, error) {
+func NewContainerGroupDiagnostics(logAnalyticsID, logAnalyticsKey string) (*azaciv2.ContainerGroupDiagnostics, error) {
 	if logAnalyticsID == "" || logAnalyticsKey == "" {
 		return nil, errors.New("log Analytics configuration requires both the workspace ID and Key")
 	}
 
-	return &azaci.ContainerGroupDiagnostics{
-		LogAnalytics: &azaci.LogAnalytics{
+	return &azaciv2.ContainerGroupDiagnostics{
+		LogAnalytics: &azaciv2.LogAnalytics{
 			WorkspaceID:  &logAnalyticsID,
 			WorkspaceKey: &logAnalyticsKey,
 		},
@@ -24,7 +30,7 @@ func NewContainerGroupDiagnostics(logAnalyticsID, logAnalyticsKey string) (*azac
 }
 
 // NewContainerGroupDiagnosticsFromFile creates a container group diagnostics object from the specified file
-func NewContainerGroupDiagnosticsFromFile(filepath string) (*azaci.ContainerGroupDiagnostics, error) {
+func NewContainerGroupDiagnosticsFromFile(filepath string) (*azaciv2.ContainerGroupDiagnostics, error) {
 	analyticsDataFile, err := os.Open(filepath)
 	defer analyticsDataFile.Close()
 	if err != nil {
@@ -45,12 +51,12 @@ func NewContainerGroupDiagnosticsFromFile(filepath string) (*azaci.ContainerGrou
 	}
 
 	// Unmarshal the log analytics file.
-	var logAnalytics azaci.LogAnalytics
+	var logAnalytics azaciv2.LogAnalytics
 	if err := json.Unmarshal(analyticsData, &logAnalytics); err != nil {
 		return nil, err
 	}
 
-	return &azaci.ContainerGroupDiagnostics{
+	return &azaciv2.ContainerGroupDiagnostics{
 		LogAnalytics: &logAnalytics,
 	}, err
 }

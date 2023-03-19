@@ -10,10 +10,13 @@ on:
       - master
       - release-**
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
+  push:
+    branches: [master]
+    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:
   # Common versions
-  GO_VERSION: '1.18'
+  GO_VERSION: '1.19'
 
 jobs:
   tests:
@@ -31,7 +34,7 @@ jobs:
     environment: test
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION  }}
 

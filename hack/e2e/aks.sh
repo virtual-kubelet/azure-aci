@@ -20,15 +20,17 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2}"
+: "${LOCATION:=eastus2euap}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
 : "${WIN_CHART_NAME:=vk-aci-test-win-aks}"
 : "${TEST_NODE_NAME:=vk-aci-test-aks}"
 : "${TEST_WINDOWS_NODE_NAME:=vk-aci-test-win-aks}"
+: "${INIT_IMG_REPO:=oss/virtual-kubelet/init-validation}"
 : "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
 : "${IMG_URL:=mcr.microsoft.com}"
+: "${INIT_IMG_TAG:=0.1.0}"
 : "${VNET_RANGE=10.0.0.0/8}"
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
@@ -38,6 +40,7 @@ fi
 : "${ACR_NAME=vkacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
+: "${K8S_VERSION:=1.23.12}"
 
 error() {
     echo "$@" >&2
@@ -81,8 +84,9 @@ az acr create --resource-group "$RESOURCE_GROUP" \
 if [ "$E2E_TARGET" = "pr" ]; then
   az acr login --name "$ACR_NAME"
   IMG_URL=$ACR_NAME.azurecr.io
-  IMG_REPO="virtual-kubelet"
-  OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$ACR_NAME.azurecr.io/$IMG_REPO make docker-build-image
+  OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$IMG_URL/$IMG_REPO make docker-build-image
+  OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$IMG_URL/$INIT_IMG_REPO make docker-build-init-image
+
 fi
 echo -e "\n......Creating ACR.........[DONE]\n"
 
@@ -132,6 +136,7 @@ echo -e "\n......Creating AKS Cluster.........[DONE]\n"
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
+    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -148,6 +153,7 @@ else
 
 az aks create \
     -g "$RESOURCE_GROUP" \
+    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -213,6 +219,9 @@ helm install \
     --set "image.repository=${IMG_URL}"  \
     --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
+    --set "initImage.repository=${IMG_URL}"  \
+    --set "initImage.name=${INIT_IMG_REPO}" \
+    --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_NODE_NAME}" \
     --set providers.azure.vnet.enabled=true \
     --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
@@ -242,6 +251,9 @@ helm install \
     --set "image.repository=${IMG_URL}"  \
     --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
+    --set "initImage.repository=${IMG_URL}"  \
+    --set "initImage.name=${INIT_IMG_REPO}" \
+    --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
     --set "providers.azure.masterUri=$MASTER_URI" \
     "$WIN_CHART_NAME" \
@@ -264,7 +276,7 @@ echo -e "\n......Initialize environment variabled needed for E2e tests\n"
 az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -o tsv)
 
-az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string $AZURE_STORAGE_CONNECTION_STRING
+az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
 CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $CSI_DRIVER_STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv)
 
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME

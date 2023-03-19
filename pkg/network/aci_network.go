@@ -8,18 +8,21 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
+	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	aznetwork "github.com/Azure/azure-sdk-for-go/services/network/mgmt/2021-05-01/network"
-	"github.com/virtual-kubelet/azure-aci/client/network"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	aznetworkv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
-	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 )
@@ -32,6 +35,12 @@ const (
 	subnetDelegationService = "Microsoft.ContainerInstance/containerGroups"
 )
 
+var (
+	delegationName = "aciDelegation"
+	serviceName    = "Microsoft.ContainerInstance/containerGroups"
+	subnetAction   = "Microsoft.Network/virtualNetworks/subnets/action"
+)
+
 type ProviderNetwork struct {
 	VnetSubscriptionID string
 	VnetName           string
@@ -42,20 +51,27 @@ type ProviderNetwork struct {
 }
 
 func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Config) error {
+	ctx, span := trace.StartSpan(ctx, "network.SetVNETConfig")
+	defer span.End()
+
 	// the VNET subscription ID by default is authentication subscription ID.
 	// We need to override when using cross subscription virtual network resource
 	pn.VnetSubscriptionID = azConfig.AuthConfig.SubscriptionID
 	if vnetSubscriptionID := os.Getenv("ACI_VNET_SUBSCRIPTION_ID"); vnetSubscriptionID != "" {
+		log.G(ctx).Debug("ACI VNet subscription ID env variable ACI_VNET_SUBSCRIPTION_ID is set")
 		pn.VnetSubscriptionID = vnetSubscriptionID
 	}
 
 	if vnetName := os.Getenv("ACI_VNET_NAME"); vnetName != "" {
+		log.G(ctx).Debug("ACI VNet name env variable ACI_VNET_NAME is set")
 		pn.VnetName = vnetName
 	} else if pn.VnetName == "" {
 		return errors.New("vnet name can not be empty please set ACI_VNET_NAME")
 	}
 
 	if vnetResourceGroup := os.Getenv("ACI_VNET_RESOURCE_GROUP"); vnetResourceGroup != "" {
+		log.G(ctx).Debug("ACI VNet resource group env variable ACI_VNET_RESOURCE_GROUP is set")
+
 		pn.VnetResourceGroup = vnetResourceGroup
 	} else if pn.VnetResourceGroup == "" {
 		return errors.New("vnet resourceGroup can not be empty please set ACI_VNET_RESOURCE_GROUP")
@@ -63,15 +79,17 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 
 	// Set subnet properties.
 	if subnetName := os.Getenv("ACI_SUBNET_NAME"); pn.VnetName != "" && subnetName != "" {
+		log.G(ctx).Debug("ACI subnet name env variable ACI_SUBNET_NAME is set")
 		pn.SubnetName = subnetName
 	}
 
 	if subnetCIDR := os.Getenv("ACI_SUBNET_CIDR"); subnetCIDR != "" {
+		log.G(ctx).Debug("ACI subnet CIDR env variable ACI_SUBNET_CIDR is set")
 		if pn.SubnetName == "" {
 			return fmt.Errorf("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR")
 		}
 		if _, _, err := net.ParseCIDR(subnetCIDR); err != nil {
-			return fmt.Errorf("error parsing provided subnet range: %v", err)
+			return fmt.Errorf("error parsing provided subnet CIDR: %v", err)
 		}
 		pn.SubnetCIDR = subnetCIDR
 	}
@@ -82,6 +100,7 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 		}
 
 		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
+			log.G(ctx).Debug("kube DNS IP env variable KUBE_DNS_IP is set")
 			pn.KubeDNSIP = kubeDNSIP
 		}
 	}
@@ -89,105 +108,180 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 }
 
 func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Config) error {
-	c := aznetwork.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID)
-	c.Authorizer = azConfig.Authorizer
+	logger := log.G(ctx).WithField("method", "setupNetwork")
+	ctx, span := trace.StartSpan(ctx, "network.setupNetwork")
+	defer span.End()
+
+	subnetsClient, err := getSubnetClient(ctx, azConfig)
+	if err != nil {
+		return err
+	}
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
 	createSubnet := true
-	subnet, err := c.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, "")
-	if err != nil && !network.IsNotFound(err) {
-		return fmt.Errorf("error while looking up subnet: %v", err)
+	response, err := subnetsClient.Get(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
+	var respErr *azcore.ResponseError
+	if err != nil {
+		if errors.As(err, &respErr) && !(respErr.RawResponse.StatusCode == http.StatusNotFound) {
+			return fmt.Errorf("error while looking up subnet: %v", err)
+		}
+
+		if respErr.RawResponse.StatusCode == http.StatusNotFound && pn.SubnetCIDR == "" {
+			return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
+		}
 	}
-	if network.IsNotFound(err) && pn.SubnetCIDR == "" {
-		return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
-	}
+	currentSubnet := response.Subnet
+
 	if err == nil {
-		if pn.SubnetCIDR == "" {
-			pn.SubnetCIDR = *subnet.SubnetPropertiesFormat.AddressPrefix
-		}
-		if pn.SubnetCIDR != *subnet.SubnetPropertiesFormat.AddressPrefix {
-			return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *subnet.SubnetPropertiesFormat.AddressPrefix, pn.SubnetCIDR)
-		}
-		if subnet.SubnetPropertiesFormat.RouteTable != nil {
-			return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *subnet.SubnetPropertiesFormat.RouteTable.ID)
-		}
-		if subnet.SubnetPropertiesFormat.ServiceAssociationLinks != nil {
-			for _, l := range *subnet.SubnetPropertiesFormat.ServiceAssociationLinks {
-				if l.ServiceAssociationLinkPropertiesFormat != nil {
-					if *l.ServiceAssociationLinkPropertiesFormat.LinkedResourceType == subnetDelegationService {
-						createSubnet = false
-						break
-					} else {
-						return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
+		if currentSubnet.Properties.AddressPrefix != nil {
+			if pn.SubnetCIDR == "" {
+				pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
+			}
+			if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
+				return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
+			}
+			if currentSubnet.Properties.RouteTable != nil {
+				return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+			}
+			if currentSubnet.Properties.ServiceAssociationLinks != nil {
+				for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
+					if l.Properties != nil && l.Properties.LinkedResourceType != nil {
+						if *l.Properties.LinkedResourceType == subnetDelegationService {
+							createSubnet = false
+							break
+						} else {
+							return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
+						}
 					}
 				}
-			}
-		} else {
-			for _, d := range *subnet.SubnetPropertiesFormat.Delegations {
-				if d.ServiceDelegationPropertiesFormat != nil && *d.ServiceDelegationPropertiesFormat.ServiceName == subnetDelegationService {
-					createSubnet = false
-					break
+			} else {
+				for _, d := range currentSubnet.Properties.Delegations {
+					if d.Properties != nil && d.Properties.ServiceName != nil &&
+						*d.Properties.ServiceName == subnetDelegationService {
+						createSubnet = false
+						break
+					}
 				}
 			}
 		}
 	}
 
 	if createSubnet {
-		var (
-			delegationName = "aciDelegation"
-			serviceName    = "Microsoft.ContainerInstance/containerGroups"
-			subnetAction   = "Microsoft.Network/virtualNetworks/subnets/action"
-		)
+		logger.Debugf("new subnet %s is creating", pn.SubnetName)
 
-		subnet = aznetwork.Subnet{
-			Name: &pn.SubnetName,
-			SubnetPropertiesFormat: &aznetwork.SubnetPropertiesFormat{
-				AddressPrefix: &pn.SubnetCIDR,
-				Delegations: &[]aznetwork.Delegation{
-					{
-						Name: &delegationName,
-						ServiceDelegationPropertiesFormat: &aznetwork.ServiceDelegationPropertiesFormat{
-							ServiceName: &serviceName,
-							Actions:     &[]string{subnetAction},
-						},
-					},
-				},
-			},
-		}
-		_, err = c.CreateOrUpdate(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet)
-		if err != nil {
-			return fmt.Errorf("error creating subnet: %v", err)
+		err2 := pn.createACISubnet(ctx, subnetsClient)
+		if err2 != nil {
+			return err2
 		}
 	}
+
+	logger.Debug("setup network is successful")
 	return nil
 }
 
-func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg client2.ContainerGroupWrapper, pod *v1.Pod, clusterDomain string) {
+func getSubnetClient(ctx context.Context, azConfig *auth.Config) (*aznetworkv2.SubnetsClient, error) {
+	logger := log.G(ctx).WithField("method", "getSubnetClient")
+	ctx, span := trace.StartSpan(ctx, "network.getSubnetClient")
+	defer span.End()
+
+	logger.Debug("getting azure credential")
+
+	var err error
+	var credential azcore.TokenCredential
+	isUserIdentity := len(azConfig.AuthConfig.ClientID) == 0
+
+	if isUserIdentity {
+		credential, err = azConfig.GetMSICredential(ctx)
+	} else {
+		credential, err = azConfig.GetSPCredential(ctx)
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "an error has occurred while creating getting credential ")
+	}
+
+	options := arm.ClientOptions{
+		ClientOptions: azcore.ClientOptions{
+			Cloud: azConfig.Cloud,
+		},
+	}
+
+	subnetsClient, err := aznetworkv2.NewSubnetsClient(azConfig.AuthConfig.SubscriptionID, credential, &options)
+	if err != nil {
+		return nil, errors.Wrap(err, "an error has occurred while creating subnet client")
+	}
+	return subnetsClient, nil
+}
+
+// createACISubnet create new subnet for ACI
+func (pn *ProviderNetwork) createACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) error {
+	logger := log.G(ctx).WithField("method", "createACISubnet")
+	ctx, span := trace.StartSpan(ctx, "network.createACISubnet")
+	defer span.End()
+
+	logger.Debug("creating a subnet")
+
+	subnet := aznetworkv2.Subnet{
+		Name: &pn.SubnetName,
+		Properties: &aznetworkv2.SubnetPropertiesFormat{
+			AddressPrefix: &pn.SubnetCIDR,
+			Delegations: []*aznetworkv2.Delegation{
+				{
+					Name: &delegationName,
+					Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
+						ServiceName: &serviceName,
+						Actions:     []*string{&subnetAction},
+					},
+				},
+			},
+		},
+	}
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+
+	poller, err := subnetsClient.BeginCreateOrUpdate(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet, nil)
+	if err != nil {
+		return fmt.Errorf("error creating subnet: %v", err)
+	}
+	_, err = poller.PollUntilDone(context.TODO(), nil)
+	if err != nil {
+		return fmt.Errorf("error creating subnet: %v", err)
+	}
+	logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", pn.SubnetName, pn.VnetName, rawResponse.StatusCode)
+	logger.Infof("new subnet %s has been created successfully", pn.SubnetName)
+	return nil
+}
+
+func (pn *ProviderNetwork) AmendVnetResources(ctx context.Context, cg azaciv2.ContainerGroup, pod *v1.Pod, clusterDomain string) {
 	if pn.SubnetName == "" {
 		return
 	}
 
 	subnetID := "/subscriptions/" + pn.VnetSubscriptionID + "/resourceGroups/" + pn.VnetResourceGroup + "/providers/Microsoft.Network/virtualNetworks/" + pn.VnetName + "/subnets/" + pn.SubnetName
-	cgIDList := []azaci.ContainerGroupSubnetID{{ID: &subnetID}}
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.SubnetIds = &cgIDList
+	cgIDList := []*azaciv2.ContainerGroupSubnetID{{ID: &subnetID}}
+	cg.Properties.SubnetIDs = cgIDList
 	// windows containers don't support DNS config
-	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
+	if cg.Properties.OSType != nil &&
+		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
+		cg.Properties.DNSConfig = getDNSConfig(ctx, pod, pn.KubeDNSIP, clusterDomain)
 	}
 }
 
-func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain string) *azaci.DNSConfiguration {
-	nameServers := make([]string, 0)
+func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain string) *azaciv2.DNSConfiguration {
+	servers := make([]string, 0)
 	searchDomains := make([]string, 0)
 
 	if pod.Spec.DNSPolicy == v1.DNSClusterFirst || pod.Spec.DNSPolicy == v1.DNSClusterFirstWithHostNet {
-		nameServers = append(nameServers, kubeDNSIP)
+		servers = append(servers, kubeDNSIP)
 		searchDomains = generateSearchesForDNSClusterFirst(pod.Spec.DNSConfig, pod, clusterDomain)
 	}
 
 	options := make([]string, 0)
 
 	if pod.Spec.DNSConfig != nil {
-		nameServers = util.OmitDuplicates(append(nameServers, pod.Spec.DNSConfig.Nameservers...))
+		servers = util.OmitDuplicates(append(servers, pod.Spec.DNSConfig.Nameservers...))
 		searchDomains = util.OmitDuplicates(append(searchDomains, pod.Spec.DNSConfig.Searches...))
 
 		for _, option := range pod.Spec.DNSConfig.Options {
@@ -199,14 +293,18 @@ func getDNSConfig(ctx context.Context, pod *v1.Pod, kubeDNSIP, clusterDomain str
 		}
 	}
 
-	if len(nameServers) == 0 {
+	if len(servers) == 0 {
 		return nil
 	}
-	nameServers = formDNSNameserversFitsLimits(ctx, nameServers)
+	servers = formDNSNameserversFitsLimits(ctx, servers)
 	domain := formDNSSearchFitsLimits(ctx, searchDomains)
+	nameServers := make([]*string, 0)
+	for s := range servers {
+		nameServers = append(nameServers, &servers[s])
+	}
 	opt := strings.Join(options, " ")
-	result := azaci.DNSConfiguration{
-		NameServers:   &nameServers,
+	result := azaciv2.DNSConfiguration{
+		NameServers:   nameServers,
 		SearchDomains: &domain,
 		Options:       &opt,
 	}

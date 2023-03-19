@@ -16,27 +16,29 @@ import (
 	"time"
 	"regexp"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/azure-aci/client/aci"
 	"github.com/virtual-kubelet/azure-aci/pkg/analytics"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
-	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
+	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics"
 	"github.com/virtual-kubelet/azure-aci/pkg/network"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
+	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
+	corev1listers "k8s.io/client-go/listers/core/v1"
+
+	"github.com/cpuguy83/dockercfg"
 )
 
 const (
@@ -53,9 +55,6 @@ const (
 	AzureFileDriverName         = "file.csi.azure.com"
 	azureFileStorageAccountName = "azurestorageaccountname"
 	azureFileStorageAccountKey  = "azurestorageaccountkey"
-
-	LogAnalyticsMetadataKeyNodeName          string = "node-name"
-	LogAnalyticsMetadataKeyClusterResourceID string = "cluster-resource-id"
 )
 
 const (
@@ -69,11 +68,18 @@ const (
 	containerExitCodePodDeleted int32 = 0
 )
 
+const (
+	confidentialComputeSkuLabel       = "virtual-kubelet.io/container-sku"
+	confidentialComputeCcePolicyLabel = "virtual-kubelet.io/confidential-compute-cce-policy"
+)
+
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
-	azClientsAPIs            client2.AzClientsInterface
-	resourceManager          *manager.ResourceManager
-	containerGroupExtensions []*client2.Extension
+	azClientsAPIs            client.AzClientsInterface
+	containerGroupExtensions []*azaciv2.DeploymentExtensionSpec
+	secretL                  corev1listers.SecretLister
+	configL                  corev1listers.ConfigMapLister
+	podsL                    corev1listers.PodLister
 	enabledFeatures          *featureflag.FlagIdentifier
 	providernetwork          network.ProviderNetwork
 
@@ -85,10 +91,10 @@ type ACIProvider struct {
 	memory             string
 	pods               string
 	gpu                string
-	gpuSKUs            []azaci.GpuSku
+	gpuSKUs            []azaciv2.GpuSKU
 	internalIP         string
 	daemonEndpointPort int32
-	diagnostics        *azaci.ContainerGroupDiagnostics
+	diagnostics        *azaciv2.ContainerGroupDiagnostics
 	clusterDomain      string
 	tracker            *PodsTracker
 
@@ -166,7 +172,7 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client2.AzClientsInterface, rm *manager.ResourceManager, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
+func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, pCfg nodeutil.ProviderConfig, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
 	var p ACIProvider
 	var err error
 
@@ -185,7 +191,9 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	p.enabledFeatures = featureflag.InitFeatureFlag(ctx)
 
 	p.azClientsAPIs = azAPIs
-	p.resourceManager = rm
+	p.configL = pCfg.ConfigMaps
+	p.secretL = pCfg.Secrets
+	p.podsL = pCfg.Pods
 	p.clusterDomain = clusterDomain
 	p.operatingSystem = operatingSystem
 	p.nodeName = nodeName
@@ -223,10 +231,10 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 
 	if clusterResourceID := os.Getenv("CLUSTER_RESOURCE_ID"); clusterResourceID != "" {
 		if p.diagnostics != nil && p.diagnostics.LogAnalytics != nil {
-			p.diagnostics.LogAnalytics.LogType = azaci.LogAnalyticsLogTypeContainerInsights
+			p.diagnostics.LogAnalytics.LogType = &util.LogTypeContainerInsights
 			p.diagnostics.LogAnalytics.Metadata = map[string]*string{
-				LogAnalyticsMetadataKeyClusterResourceID: &clusterResourceID,
-				LogAnalyticsMetadataKeyNodeName:          &nodeName,
+				analytics.LogAnalyticsMetadataKeyClusterResourceID: &clusterResourceID,
+				analytics.LogAnalyticsMetadataKeyNodeName:          &nodeName,
 			}
 		}
 	}
@@ -259,7 +267,7 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 
 	if p.providernetwork.SubnetName != "" {
 		// windows containers don't support kube-proxy nor realtime metrics
-		if p.operatingSystem != string(azaci.OperatingSystemTypesWindows) {
+		if p.operatingSystem != string(azaciv2.OperatingSystemTypesWindows) {
 			err = p.setACIExtensions(ctx)
 			if err != nil {
 				return nil, err
@@ -267,7 +275,7 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		}
 	}
 
-	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(nodeName, p.resourceGroup, p.resourceManager, p.azClientsAPIs)
+	p.ACIPodMetricsProvider = metrics.NewACIPodMetricsProvider(p.nodeName, p.resourceGroup, p.podsL, p.azClientsAPIs)
 	return &p, err
 }
 
@@ -286,15 +294,16 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	cg := &client2.ContainerGroupWrapper{
-		ContainerGroupPropertiesWrapper: &client2.ContainerGroupPropertiesWrapper{
-			ContainerGroupProperties: &azaci.ContainerGroupProperties{},
-		},
+	cg := &azaciv2.ContainerGroup{
+		Properties: &azaciv2.ContainerGroupPropertiesProperties{},
 	}
 
+	os := azaciv2.OperatingSystemTypes(p.operatingSystem)
+	policy := azaciv2.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
+
 	cg.Location = &p.region
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.RestartPolicy = azaci.ContainerGroupRestartPolicy(pod.Spec.RestartPolicy)
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType = azaci.OperatingSystemTypes(p.operatingSystem)
+	cg.Properties.RestartPolicy = &policy
+	cg.Properties.OSType = &os
 
 	// get containers
 	containers, err := p.getContainers(pod)
@@ -330,40 +339,46 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		if err != nil {
 			return err
 		}
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.InitContainers = &initContainers
+		cg.Properties.InitContainers = initContainers
+	}
+
+	// confidential compute proeprties
+	if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature) {
+		// set confidentialComputeProperties
+		p.setConfidentialComputeProperties(ctx, pod, cg)
 	}
 
 	// assign all the things
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers = containers
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.ImageRegistryCredentials = creds
-	cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Diagnostics = p.getDiagnostics(pod)
+	cg.Properties.Containers = containers
+	cg.Properties.Volumes = volumes
+	cg.Properties.ImageRegistryCredentials = creds
+	cg.Properties.Diagnostics = p.getDiagnostics(pod)
 
 	filterWindowsServiceAccountSecretVolume(ctx, p.operatingSystem, cg)
 
 	// create ipaddress if containerPort is used
 	count := 0
-	for _, container := range *containers {
-		count = count + len(*container.Ports)
+	for _, container := range containers {
+		count = count + len(container.Properties.Ports)
 	}
-	ports := make([]azaci.Port, 0, count)
-	for c := range *containers {
-		containerPorts := ((*containers)[c]).Ports
-		for p := range *containerPorts {
-			ports = append(ports, azaci.Port{
-				Port:     (*containerPorts)[p].Port,
-				Protocol: azaci.ContainerGroupNetworkProtocolTCP,
+	ports := make([]*azaciv2.Port, 0, count)
+	for c := range containers {
+		containerPorts := containers[c].Properties.Ports
+		for p := range containerPorts {
+			ports = append(ports, &azaciv2.Port{
+				Port:     containerPorts[p].Port,
+				Protocol: &util.ContainerGroupNetworkProtocolTCP,
 			})
 		}
 	}
 	if len(ports) > 0 && p.providernetwork.SubnetName == "" {
-		cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress = &azaci.IPAddress{
-			Ports: &ports,
-			Type:  azaci.ContainerGroupIPAddressTypePublic,
+		cg.Properties.IPAddress = &azaciv2.IPAddress{
+			Ports: ports,
+			Type:  &util.ContainerGroupIPAddressTypePublic,
 		}
 
 		if dnsNameLabel := pod.Annotations[virtualKubeletDNSNameLabel]; dnsNameLabel != "" {
-			cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.IPAddress.DNSNameLabel = &dnsNameLabel
+			cg.Properties.IPAddress.DNSNameLabel = &dnsNameLabel
 		}
 	}
 
@@ -371,7 +386,6 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	podCreationTimestamp := pod.CreationTimestamp.String()
 	cg.Tags = map[string]*string{
 		"PodName":           &pod.Name,
-		"ClusterName":       &pod.ClusterName,
 		"NodeName":          &pod.Spec.NodeName,
 		"Namespace":         &pod.Namespace,
 		"UID":               &podUID,
@@ -381,11 +395,12 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	p.providernetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
 
 	// windows containers don't support kube-proxy nor realtime metrics
-	if cg.ContainerGroupPropertiesWrapper.ContainerGroupProperties.OsType != azaci.OperatingSystemTypesWindows {
-		cg.ContainerGroupPropertiesWrapper.Extensions = p.containerGroupExtensions
+	if cg.Properties.OSType != nil &&
+		*cg.Properties.OSType != azaciv2.OperatingSystemTypesWindows {
+		cg.Properties.Extensions = p.containerGroupExtensions
 	}
 
-	log.G(ctx).Infof("start creating pod %v", pod.Name)
+	log.G(ctx).Debugf("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
 }
@@ -435,7 +450,7 @@ func (p *ACIProvider) setACIExtensions(ctx context.Context) error {
 		clusterCIDR = "10.240.0.0/16"
 	}
 
-	kubeExtensions, err := client2.GetKubeProxyExtension(serviceAccountSecretMountPath, masterURI, clusterCIDR)
+	kubeExtensions, err := client.GetKubeProxyExtension(serviceAccountSecretMountPath, masterURI, clusterCIDR)
 	if err != nil {
 		return fmt.Errorf("error creating kube proxy extension: %v", err)
 	}
@@ -444,17 +459,19 @@ func (p *ACIProvider) setACIExtensions(ctx context.Context) error {
 
 	enableRealTimeMetricsExtension := os.Getenv("ENABLE_REAL_TIME_METRICS")
 	if enableRealTimeMetricsExtension == "true" {
-		realtimeExtension := client2.GetRealtimeMetricsExtension()
+		realtimeExtension := client.GetRealtimeMetricsExtension()
 		p.containerGroupExtensions = append(p.containerGroupExtensions, realtimeExtension)
 	}
 	return nil
 }
 
-func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *azaci.ContainerGroupDiagnostics {
-	if p.diagnostics != nil && p.diagnostics.LogAnalytics != nil && p.diagnostics.LogAnalytics.LogType == azaci.LogAnalyticsLogTypeContainerInsights {
+func (p *ACIProvider) getDiagnostics(pod *v1.Pod) *azaciv2.ContainerGroupDiagnostics {
+	if p.diagnostics != nil && p.diagnostics.LogAnalytics != nil &&
+		p.diagnostics.LogAnalytics.LogType != nil &&
+		*p.diagnostics.LogAnalytics.LogType == azaciv2.LogAnalyticsLogTypeContainerInsights {
 		d := *p.diagnostics
 		uID := string(pod.ObjectMeta.UID)
-		d.LogAnalytics.Metadata[aci.LogAnalyticsMetadataKeyPodUUID] = &uID
+		d.LogAnalytics.Metadata[analytics.LogAnalyticsMetadataKeyPodUUID] = &uID
 		return &d
 	}
 	return p.diagnostics
@@ -475,7 +492,7 @@ func (p *ACIProvider) DeletePod(ctx context.Context, pod *v1.Pod) error {
 	defer span.End()
 	ctx = addAzureAttributes(ctx, span, p)
 
-	log.G(ctx).Infof("start deleting pod %v", pod.Name)
+	log.G(ctx).Debugf("start deleting pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers.
 	return p.deleteContainerGroup(ctx, pod.Namespace, pod.Name)
 }
@@ -539,11 +556,12 @@ func (p *ACIProvider) GetPod(ctx context.Context, namespace, name string) (*v1.P
 		return nil, err
 	}
 
-	err = validation.ValidateContainerGroup(cg)
+	err = validation.ValidateContainerGroup(ctx, cg)
 	if err != nil {
 		return nil, err
 	}
-	return p.containerGroupToPod(cg)
+
+	return p.containerGroupToPod(ctx, cg)
 }
 
 // GetContainerLogs returns the logs of a pod by name that is running inside ACI.
@@ -596,9 +614,9 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	cols := int32(60)
 	rows := int32(120)
 	cmdParam := strings.Join(cmd, " ")
-	req := azaci.ContainerExecRequest{
+	req := azaciv2.ContainerExecRequest{
 		Command: &cmdParam,
-		TerminalSize: &azaci.ContainerExecRequestTerminalSize{
+		TerminalSize: &azaciv2.ContainerExecRequestTerminalSize{
 			Cols: &cols,
 			Rows: &rows,
 		},
@@ -690,50 +708,88 @@ func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) 
 		return nil, err
 	}
 
-	err = validation.ValidateContainerGroup(cg)
+	err = validation.ValidateContainerGroup(ctx, cg)
 	if err != nil {
 		return nil, err
 	}
-	return p.getPodStatusFromContainerGroup(cg)
+
+	return p.getPodStatusFromContainerGroup(ctx, cg)
 }
 
 // GetPods returns a list of all pods known to be running within ACI.
 func (p *ACIProvider) GetPods(ctx context.Context) ([]*v1.Pod, error) {
 	ctx, span := trace.StartSpan(ctx, "aci.GetPods")
 	defer span.End()
+
 	ctx = addAzureAttributes(ctx, span, p)
 
 	cgs, err := p.azClientsAPIs.GetContainerGroupListResult(ctx, p.resourceGroup)
 	if err != nil {
 		return nil, err
 	}
-
 	if cgs == nil {
 		log.G(ctx).Infof("no container groups found for resource group %s", p.resourceGroup)
 		return nil, nil
 	}
-	pods := make([]*v1.Pod, 0, len(*cgs))
+	pods := make([]*v1.Pod, 0, len(cgs))
 
-	for cgIndex := range *cgs {
-		validation.ValidateContainerGroup(&(*cgs)[cgIndex])
-		if err != nil {
-			return nil, err
-		}
-
-		if (*cgs)[cgIndex].Tags["NodeName"] != &p.nodeName {
+	for cgIndex := range cgs {
+		cgName := cgs[cgIndex].Name
+		if cgName == nil {
 			continue
 		}
-
-		pod, err := p.containerGroupToPod(&(*cgs)[cgIndex])
+		// The GetContainerGroupListResult API doesn't return InstanceView status which can cause nil.
+		// For that, we had to get the CG info one more time.
+		cg, err := p.azClientsAPIs.GetContainerGroup(ctx, p.resourceGroup, *cgName)
+		// CG might get deleted between the getlist and get calls
+		if errdefs.IsNotFound(err) || cg == nil {
+			continue
+		}
 		if err != nil {
 			log.G(ctx).WithFields(log.Fields{
-				"name": (*cgs)[cgIndex].Name,
-				"id":   (*cgs)[cgIndex].ID,
-			}).WithError(err).Errorf("error converting container group %s to pod", (*cgs)[cgIndex].Name)
-
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).WithError(err).Errorf("error getting container group %s", *cgName)
 			continue
 		}
-		pods = append(pods, pod)
+
+		err2 := validation.ValidateContainerGroup(ctx, cg)
+		if err2 != nil {
+			log.G(ctx).WithFields(log.Fields{
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).WithError(err2).Errorf("error validating container group %s", *cgName)
+			continue
+		}
+
+		if cg.Tags != nil && cg.Tags["NodeName"] != nil {
+			if *cg.Tags["NodeName"] != p.nodeName {
+				log.G(ctx).WithFields(log.Fields{
+					"name": *cgName,
+					"id":   *cg.ID,
+				}).Warnf("container group %s node name does not match %s", *cgName, p.nodeName)
+				continue
+			}
+		} else {
+			log.G(ctx).WithFields(log.Fields{
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).Warnf("container group %s node name should not be nil", *cgName)
+			continue
+		}
+
+		pod, err3 := p.containerGroupToPod(ctx, cg)
+		if err3 != nil {
+			log.G(ctx).WithFields(log.Fields{
+				"name": *cgName,
+				"id":   *cg.ID,
+			}).WithError(err3).Errorf("error converting container group %s to pod", *cgName)
+			continue
+		}
+
+		if pod != nil {
+			pods = append(pods, pod)
+		}
 	}
 
 	return pods, nil
@@ -749,7 +805,7 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 	// Capture the notifier to be used for communicating updates to VK
 	p.tracker = &PodsTracker{
-		rm:       p.resourceManager,
+		pods:     p.podsL,
 		updateCb: notifierCb,
 		handler:  p,
 	}
@@ -796,19 +852,12 @@ func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
 	return p.deleteContainerGroup(ctx, ns, name)
 }
 
-// implement NodeProvider
-
-// Ping checks if the node is still active/ready.
-func (p *ACIProvider) Ping(ctx context.Context) error {
-	return nil
-}
-
-func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) (*[]azaci.ImageRegistryCredential, error) {
-	ips := make([]azaci.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
+func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]*azaciv2.ImageRegistryCredential, error) {
+	ips := make([]*azaciv2.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	for _, ref := range pod.Spec.ImagePullSecrets {
-		secret, err := p.resourceManager.GetSecret(ref.Name, pod.Namespace)
+		secret, err := p.secretL.Secrets(pod.Namespace).Get(ref.Name)
 		if err != nil {
-			return &ips, err
+			return ips, err
 		}
 		if secret == nil {
 			return nil, fmt.Errorf("error getting image pull secret")
@@ -823,14 +872,14 @@ func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) (*[]azaci.ImageRegistryCr
 		}
 
 		if err != nil {
-			return &ips, err
+			return ips, err
 		}
 
 	}
-	return &ips, nil
+	return ips, nil
 }
 
-func makeRegistryCredential(server string, authConfig AuthConfig) (*azaci.ImageRegistryCredential, error) {
+func makeRegistryCredential(server string, authConfig AuthConfig) (*azaciv2.ImageRegistryCredential, error) {
 	username := authConfig.Username
 	password := authConfig.Password
 
@@ -853,7 +902,7 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*azaci.ImageR
 		password = parts[1]
 	}
 
-	cred := azaci.ImageRegistryCredential{
+	cred := azaciv2.ImageRegistryCredential{
 		Server:   &server,
 		Username: &username,
 		Password: &password,
@@ -862,21 +911,31 @@ func makeRegistryCredential(server string, authConfig AuthConfig) (*azaci.ImageR
 	return &cred, nil
 }
 
-func makeRegistryCredentialFromDockerConfig(server string, configEntry DockerConfigEntry) (*azaci.ImageRegistryCredential, error) {
+func makeRegistryCredentialFromDockerConfig(server string, configEntry dockercfg.AuthConfig) (*azaciv2.ImageRegistryCredential, error) {
 	if configEntry.Username == "" {
 		return nil, fmt.Errorf("no username present in auth config for server: %s", server)
 	}
 
-	cred := azaci.ImageRegistryCredential{
+	username := configEntry.Username
+	password := configEntry.Password
+	if configEntry.Auth != "" {
+		var err error
+		username, password, err = dockercfg.DecodeBase64Auth(configEntry)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding docker auth: %w", err)
+		}
+	}
+
+	cred := azaciv2.ImageRegistryCredential{
 		Server:   &server,
-		Username: &configEntry.Username,
-		Password: &configEntry.Password,
+		Username: &username,
+		Password: &password,
 	}
 
 	return &cred, nil
 }
 
-func readDockerCfgSecret(secret *v1.Secret, ips []azaci.ImageRegistryCredential) ([]azaci.ImageRegistryCredential, error) {
+func readDockerCfgSecret(secret *v1.Secret, ips []*azaciv2.ImageRegistryCredential) ([]*azaciv2.ImageRegistryCredential, error) {
 	var err error
 	var authConfigs map[string]AuthConfig
 	repoData, ok := secret.Data[v1.DockerConfigKey]
@@ -896,13 +955,13 @@ func readDockerCfgSecret(secret *v1.Secret, ips []azaci.ImageRegistryCredential)
 			return ips, err
 		}
 
-		ips = append(ips, *cred)
+		ips = append(ips, cred)
 	}
 
 	return ips, err
 }
 
-func readDockerConfigJSONSecret(secret *v1.Secret, ips []azaci.ImageRegistryCredential) ([]azaci.ImageRegistryCredential, error) {
+func readDockerConfigJSONSecret(secret *v1.Secret, ips []*azaciv2.ImageRegistryCredential) ([]*azaciv2.ImageRegistryCredential, error) {
 	var err error
 	repoData, ok := secret.Data[v1.DockerConfigJsonKey]
 
@@ -911,15 +970,15 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []azaci.ImageRegistryCred
 	}
 
 	// Will use K8s config models to handle marshaling (including auth field handling).
-	var cfgJson DockerConfigJSON
+	var cfgJson dockercfg.Config
 
 	err = json.Unmarshal(repoData, &cfgJson)
 	if err != nil {
 		return ips, err
 	}
 
-	auths := cfgJson.Auths
-	if len(cfgJson.Auths) == 0 {
+	auths := cfgJson.AuthConfigs
+	if len(auths) == 0 {
 		return ips, fmt.Errorf("malformed dockerconfigjson in secret")
 	}
 
@@ -929,13 +988,13 @@ func readDockerConfigJSONSecret(secret *v1.Secret, ips []azaci.ImageRegistryCred
 			return ips, err
 		}
 
-		ips = append(ips, *cred)
+		ips = append(ips, cred)
 	}
 
 	return ips, err
 }
 
-//verify if Container is properly declared for the use on ACI
+// verify if Container is properly declared for the use on ACI
 func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	if len(container.Command) == 0 && len(container.Args) > 0 {
 		return errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
@@ -943,40 +1002,49 @@ func (p *ACIProvider) verifyContainer(container *v1.Container) error {
 	return nil
 }
 
-//this method is used for both initConainers and containers
-func (p *ACIProvider) getCommand(container *v1.Container) *[]string {
-	command := append(container.Command, container.Args...)
-	return &command
+// this method is used for both initConainers and containers
+func (p *ACIProvider) getCommand(container v1.Container) []*string {
+	command := make([]*string, 0)
+	for c := range container.Command {
+		command = append(command, &container.Command[c])
+	}
+
+	args := make([]*string, 0)
+	for a := range container.Args {
+		args = append(args, &container.Args[a])
+	}
+
+	return append(command, args...)
 }
 
-//get VolumeMounts declared on Container as []aci.VolumeMount
-func (p *ACIProvider) getVolumeMounts(container *v1.Container) *[]azaci.VolumeMount {
-	volumeMounts := make([]azaci.VolumeMount, 0, len(container.VolumeMounts))
+// get VolumeMounts declared on Container as []aci.VolumeMount
+func (p *ACIProvider) getVolumeMounts(container v1.Container) []*azaciv2.VolumeMount {
+	volumeMounts := make([]*azaciv2.VolumeMount, 0, len(container.VolumeMounts))
 	for i := range container.VolumeMounts {
-		volumeMounts = append(volumeMounts, azaci.VolumeMount{
+		volumeMounts = append(volumeMounts, &azaciv2.VolumeMount{
 			Name:      &container.VolumeMounts[i].Name,
 			MountPath: &container.VolumeMounts[i].MountPath,
 			ReadOnly:  &container.VolumeMounts[i].ReadOnly,
 		})
 	}
-	return &volumeMounts
+	return volumeMounts
 }
 
-//get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
-func (p *ACIProvider) getEnvironmentVariables(container *v1.Container) *[]azaci.EnvironmentVariable {
-	environmentVariable := make([]azaci.EnvironmentVariable, 0, len(container.Env))
+// get EnvironmentVariables declared on Container as []aci.EnvironmentVariable
+func (p *ACIProvider) getEnvironmentVariables(container v1.Container) []*azaciv2.EnvironmentVariable {
+	environmentVariable := make([]*azaciv2.EnvironmentVariable, 0, len(container.Env))
 	for i := range container.Env {
 		if container.Env[i].Value != "" {
 			envVar := getACIEnvVar(container.Env[i])
 			environmentVariable = append(environmentVariable, envVar)
 		}
 	}
-	return &environmentVariable
+	return environmentVariable
 }
 
-//get InitContainers defined in Pod as []aci.InitContainerDefinition
-func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]azaci.InitContainerDefinition, error) {
-	initContainers := make([]azaci.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
+// get InitContainers defined in Pod as []aci.InitContainerDefinition
+func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv2.InitContainerDefinition, error) {
+	initContainers := make([]*azaciv2.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for i, initContainer := range pod.Spec.InitContainers {
 		err := p.verifyContainer(&initContainer)
 		if err != nil {
@@ -1005,23 +1073,23 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]aza
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
 		}
 
-		newInitContainer := azaci.InitContainerDefinition{
+		newInitContainer := azaciv2.InitContainerDefinition{
 			Name: &pod.Spec.InitContainers[i].Name,
-			InitContainerPropertiesDefinition: &azaci.InitContainerPropertiesDefinition{
+			Properties: &azaciv2.InitContainerPropertiesDefinition{
 				Image:                &pod.Spec.InitContainers[i].Image,
-				Command:              p.getCommand(&pod.Spec.InitContainers[i]),
-				VolumeMounts:         p.getVolumeMounts(&pod.Spec.InitContainers[i]),
-				EnvironmentVariables: p.getEnvironmentVariables(&pod.Spec.InitContainers[i]),
+				Command:              p.getCommand(pod.Spec.InitContainers[i]),
+				VolumeMounts:         p.getVolumeMounts(pod.Spec.InitContainers[i]),
+				EnvironmentVariables: p.getEnvironmentVariables(pod.Spec.InitContainers[i]),
 			},
 		}
 
-		initContainers = append(initContainers, newInitContainer)
+		initContainers = append(initContainers, &newInitContainer)
 	}
 	return initContainers, nil
 }
 
-func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
-	containers := make([]azaci.Container, 0, len(pod.Spec.Containers))
+func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
+	containers := make([]*azaciv2.Container, 0, len(pod.Spec.Containers))
 
 	podContainers := pod.Spec.Containers
 	for c := range podContainers {
@@ -1029,46 +1097,41 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 		if len(podContainers[c].Command) == 0 && len(podContainers[c].Args) > 0 {
 			return nil, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
 		}
-		cmd := append(podContainers[c].Command, podContainers[c].Args...)
-		ports := make([]azaci.ContainerPort, 0, len(podContainers[c].Ports))
-		aciContainer := azaci.Container{
+		cmd := p.getCommand(podContainers[c])
+		ports := make([]*azaciv2.ContainerPort, 0, len(podContainers[c].Ports))
+		aciContainer := azaciv2.Container{
 			Name: &podContainers[c].Name,
-			ContainerProperties: &azaci.ContainerProperties{
+			Properties: &azaciv2.ContainerProperties{
 				Image:   &podContainers[c].Image,
-				Command: &cmd,
-				Ports:   &ports,
+				Command: cmd,
+				Ports:   ports,
 			},
 		}
 
 		for i := range podContainers[c].Ports {
-			containerPorts := aciContainer.Ports
-			containerPortsList := append(*containerPorts, azaci.ContainerPort{
+			aciContainer.Properties.Ports = append(aciContainer.Properties.Ports, &azaciv2.ContainerPort{
 				Port:     &podContainers[c].Ports[i].ContainerPort,
 				Protocol: util.GetProtocol(podContainers[c].Ports[i].Protocol),
 			})
-			aciContainer.Ports = &containerPortsList
 		}
 
-		volMount := make([]azaci.VolumeMount, 0, len(podContainers[c].VolumeMounts))
-		aciContainer.VolumeMounts = &volMount
+		volMount := make([]*azaciv2.VolumeMount, 0, len(podContainers[c].VolumeMounts))
+		aciContainer.Properties.VolumeMounts = volMount
 		for v := range podContainers[c].VolumeMounts {
-			vol := aciContainer.VolumeMounts
-			volList := append(*vol, azaci.VolumeMount{
+			aciContainer.Properties.VolumeMounts = append(aciContainer.Properties.VolumeMounts, &azaciv2.VolumeMount{
 				Name:      &podContainers[c].VolumeMounts[v].Name,
 				MountPath: &podContainers[c].VolumeMounts[v].MountPath,
 				ReadOnly:  &podContainers[c].VolumeMounts[v].ReadOnly,
 			})
-			aciContainer.VolumeMounts = &volList
 		}
 
-		initEnv := make([]azaci.EnvironmentVariable, 0, len(podContainers[c].Env))
-		aciContainer.EnvironmentVariables = &initEnv
+		initEnv := make([]*azaciv2.EnvironmentVariable, 0, len(podContainers[c].Env))
+		aciContainer.Properties.EnvironmentVariables = initEnv
 		for _, e := range podContainers[c].Env {
-			env := aciContainer.EnvironmentVariables
 			if e.Value != "" {
 				envVar := getACIEnvVar(e)
-				envList := append(*env, envVar)
-				aciContainer.EnvironmentVariables = &envList
+				envList := append(aciContainer.Properties.EnvironmentVariables, envVar)
+				aciContainer.Properties.EnvironmentVariables = envList
 			}
 		}
 
@@ -1090,8 +1153,8 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			}
 		}
 
-		aciContainer.Resources = &azaci.ResourceRequirements{
-			Requests: &azaci.ResourceRequests{
+		aciContainer.Properties.Resources = &azaciv2.ResourceRequirements{
+			Requests: &azaciv2.ResourceRequests{
 				CPU:        &cpuRequest,
 				MemoryInGB: &memoryRequest,
 			},
@@ -1108,7 +1171,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			if _, ok := podContainers[c].Resources.Limits[v1.ResourceMemory]; ok {
 				memoryLimit = float64(podContainers[c].Resources.Limits.Memory().Value()/100000000.00) / 10.00
 			}
-			aciContainer.Resources.Limits = &azaci.ResourceLimits{
+			aciContainer.Properties.Resources.Limits = &azaciv2.ResourceLimits{
 				CPU:        &cpuLimit,
 				MemoryInGB: &memoryLimit,
 			}
@@ -1125,13 +1188,13 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 
 				count := int32(gpu.Value())
 
-				gpuResource := &azaci.GpuResource{
+				gpuResource := &azaciv2.GpuResource{
 					Count: &count,
-					Sku:   azaci.GpuSku(sku),
+					SKU:   &sku,
 				}
 
-				aciContainer.Resources.Requests.Gpu = gpuResource
-				aciContainer.Resources.Limits.Gpu = gpuResource
+				aciContainer.Properties.Resources.Requests.Gpu = gpuResource
+				aciContainer.Properties.Resources.Limits.Gpu = gpuResource
 			}
 		}
 
@@ -1140,7 +1203,7 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			if err != nil {
 				return nil, err
 			}
-			aciContainer.LivenessProbe = probe
+			aciContainer.Properties.LivenessProbe = probe
 		}
 
 		if podContainers[c].ReadinessProbe != nil {
@@ -1148,15 +1211,38 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) (*[]azaci.Container, error) {
 			if err != nil {
 				return nil, err
 			}
-			aciContainer.ReadinessProbe = probe
+			aciContainer.Properties.ReadinessProbe = probe
 		}
 
-		containers = append(containers, aciContainer)
+		containers = append(containers, &aciContainer)
 	}
-	return &containers, nil
+	return containers, nil
 }
 
-func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaci.GpuSku, error) {
+func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod *v1.Pod, cg *azaciv2.ContainerGroup) {
+	containerGroupSku := pod.Annotations[confidentialComputeSkuLabel]
+	ccePolicy := pod.Annotations[confidentialComputeCcePolicyLabel]
+	confidentialSku := azaciv2.ContainerGroupSKUConfidential
+
+	l := log.G(ctx).WithField("containerGroup", cg.Name)
+
+	if ccePolicy != "" {
+		cg.Properties.SKU = &confidentialSku
+		confidentialComputeProperties := azaciv2.ConfidentialComputeProperties{
+			CcePolicy: &ccePolicy,
+		}
+		cg.Properties.ConfidentialComputeProperties = &confidentialComputeProperties
+		l.Infof("setting confidential compute properties with CCE Policy")
+
+	} else if strings.ToLower(containerGroupSku) == "confidential" {
+		cg.Properties.SKU = &confidentialSku
+		l.Infof("setting confidential container group SKU")
+	}
+
+	l.Infof("no annotations for confidential SKU")
+}
+
+func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {
 	if len(p.gpuSKUs) == 0 {
 		return "", fmt.Errorf("the pod requires GPU resource, but ACI doesn't provide GPU enabled container group in region %s", p.region)
 	}
@@ -1174,30 +1260,33 @@ func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaci.GpuSku, error) {
 	return p.gpuSKUs[0], nil
 }
 
-func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe, error) {
+func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaciv2.ContainerProbe, error) {
 
-	if probe.Handler.Exec != nil && probe.Handler.HTTPGet != nil {
+	if probe.ProbeHandler.Exec != nil && probe.ProbeHandler.HTTPGet != nil {
 		return nil, fmt.Errorf("probe may not specify more than one of \"exec\" and \"httpGet\"")
 	}
 
-	if probe.Handler.Exec == nil && probe.Handler.HTTPGet == nil {
+	if probe.ProbeHandler.Exec == nil && probe.ProbeHandler.HTTPGet == nil {
 		return nil, fmt.Errorf("probe must specify one of \"exec\" and \"httpGet\"")
 	}
 
-	// Probes have can have an Exec or HTTP Get Handler.
+	// Probes have can have an Exec or HTTP Get ProbeHandler.
 	// Create those if they exist, then add to the
 	// ContainerProbe struct
-	var exec *azaci.ContainerExec
-	if probe.Handler.Exec != nil {
-		exec = &azaci.ContainerExec{
-			Command: &(probe.Handler.Exec.Command),
+	var exec *azaciv2.ContainerExec
+	commands := make([]*string, 0)
+	if probe.ProbeHandler.Exec != nil {
+		for i := range probe.ProbeHandler.Exec.Command {
+			commands = append(commands, &probe.ProbeHandler.Exec.Command[i])
+		}
+		exec = &azaciv2.ContainerExec{
+			Command: commands,
 		}
 	}
-
-	var httpGET *azaci.ContainerHTTPGet
-	if probe.Handler.HTTPGet != nil {
+	var httpGET *azaciv2.ContainerHTTPGet
+	if probe.ProbeHandler.HTTPGet != nil {
 		var portValue int32
-		port := probe.Handler.HTTPGet.Port
+		port := probe.ProbeHandler.HTTPGet.Port
 		switch port.Type {
 		case intstr.Int:
 			portValue = int32(port.IntValue())
@@ -1214,14 +1303,15 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe,
 			}
 		}
 
-		httpGET = &azaci.ContainerHTTPGet{
+		scheme := azaciv2.Scheme(probe.ProbeHandler.HTTPGet.Scheme)
+		httpGET = &azaciv2.ContainerHTTPGet{
 			Port:   &portValue,
-			Path:   &probe.Handler.HTTPGet.Path,
-			Scheme: azaci.Scheme(probe.Handler.HTTPGet.Scheme),
+			Path:   &probe.ProbeHandler.HTTPGet.Path,
+			Scheme: &scheme,
 		}
 	}
 
-	return &azaci.ContainerProbe{
+	return &azaciv2.ContainerProbe{
 		Exec:                exec,
 		HTTPGet:             httpGET,
 		InitialDelaySeconds: &probe.InitialDelaySeconds,
@@ -1235,20 +1325,20 @@ func getProbe(probe *v1.Probe, ports []v1.ContainerPort) (*azaci.ContainerProbe,
 // Filters service account secret volume for Windows.
 // Service account secret volume gets automatically turned on if not specified otherwise.
 // ACI doesn't support secret volume for Windows, so we need to filter it.
-func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string, cgw *client2.ContainerGroupWrapper) {
+func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string, cgw *azaciv2.ContainerGroup) {
 	if strings.EqualFold(osType, "Windows") {
 		serviceAccountSecretVolumeName := make(map[string]bool)
 
-		for index, container := range *cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers {
-			volumeMounts := make([]azaci.VolumeMount, 0, len(*container.VolumeMounts))
-			for _, volumeMount := range *container.VolumeMounts {
+		for index, container := range cgw.Properties.Containers {
+			volumeMounts := make([]*azaciv2.VolumeMount, 0, len(container.Properties.VolumeMounts))
+			for _, volumeMount := range container.Properties.VolumeMounts {
 				if !strings.EqualFold(serviceAccountSecretMountPath, *volumeMount.MountPath) {
 					volumeMounts = append(volumeMounts, volumeMount)
 				} else {
 					serviceAccountSecretVolumeName[*volumeMount.Name] = true
 				}
 			}
-			(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Containers)[index].VolumeMounts = &volumeMounts
+			cgw.Properties.Containers[index].Properties.VolumeMounts = volumeMounts
 		}
 
 		if len(serviceAccountSecretVolumeName) == 0 {
@@ -1258,30 +1348,30 @@ func filterWindowsServiceAccountSecretVolume(ctx context.Context, osType string,
 		l := log.G(ctx).WithField("containerGroup", cgw.Name)
 		l.Infof("Ignoring service account secret volumes '%v' for Windows", reflect.ValueOf(serviceAccountSecretVolumeName).MapKeys())
 
-		volumes := make([]azaci.Volume, 0, len(*cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes))
-		for _, volume := range *cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes {
+		volumes := make([]*azaciv2.Volume, 0, len(cgw.Properties.Volumes))
+		for _, volume := range cgw.Properties.Volumes {
 			if _, ok := serviceAccountSecretVolumeName[*volume.Name]; !ok {
 				volumes = append(volumes, volume)
 			}
 		}
 
-		cgw.ContainerGroupPropertiesWrapper.ContainerGroupProperties.Volumes = &volumes
+		cgw.Properties.Volumes = volumes
 	}
 }
 
-func getACIEnvVar(e v1.EnvVar) azaci.EnvironmentVariable {
-	var envVar azaci.EnvironmentVariable
+func getACIEnvVar(e v1.EnvVar) *azaciv2.EnvironmentVariable {
+	var envVar azaciv2.EnvironmentVariable
 	// If the variable is a secret, use SecureValue
 	if e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
-		envVar = azaci.EnvironmentVariable{
+		envVar = azaciv2.EnvironmentVariable{
 			Name:        &e.Name,
 			SecureValue: &e.Value,
 		}
 	} else {
-		envVar = azaci.EnvironmentVariable{
+		envVar = azaciv2.EnvironmentVariable{
 			Name:  &e.Name,
 			Value: &e.Value,
 		}
 	}
-	return envVar
+	return &envVar
 }

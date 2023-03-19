@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -31,7 +32,7 @@ func TestAKSCred(t *testing.T) {
 		t.Error(err)
 	}
 
-	cred, err := newAKSCredential(file.Name())
+	cred, err := newAKSCredential(context.TODO(), file.Name())
 	if err != nil {
 		t.Error(err)
 	}
@@ -84,7 +85,7 @@ func TestAKSCredFileNotFound(t *testing.T) {
 
 	os.Remove(fileName)
 
-	if _, err := newAKSCredential(fileName); err == nil {
+	if _, err := newAKSCredential(context.TODO(), fileName); err == nil {
 		t.Fatal("expected to fail with bad json")
 	}
 }
@@ -110,7 +111,7 @@ func TestAKSCredBadJson(t *testing.T) {
 		t.Error(err)
 	}
 
-	if _, err := newAKSCredential(file.Name()); err == nil {
+	if _, err := newAKSCredential(context.TODO(), file.Name()); err == nil {
 		t.Fatal("expected to fail with bad json")
 	}
 }
@@ -149,7 +150,7 @@ func TestSetAuthConfigWithAuthFile(t *testing.T) {
 	}
 
 	azConfig := Config{}
-	err = azConfig.SetAuthConfig()
+	err = azConfig.SetAuthConfig(context.TODO())
 	if err != nil {
 		t.Error(err)
 	}
@@ -196,7 +197,7 @@ func TestSetAuthConfigWithAKSCredFile(t *testing.T) {
 	}
 
 	azConfig := Config{}
-	err = azConfig.SetAuthConfig()
+	err = azConfig.SetAuthConfig(context.TODO())
 	if err != nil {
 		t.Error(err)
 	}
@@ -240,7 +241,7 @@ func TestSetAuthConfigWithEnvVariablesOnly(t *testing.T) {
 	}
 
 	azConfig := Config{}
-	err = azConfig.SetAuthConfig()
+	err = azConfig.SetAuthConfig(context.TODO())
 	if err != nil {
 		t.Error(err)
 	}

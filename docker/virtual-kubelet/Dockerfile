@@ -1,8 +1,9 @@
-FROM --platform=$BUILDPLATFORM golang:1.18 as builder
+FROM --platform=$BUILDPLATFORM golang:1.19 as builder
 ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETVARIANT
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
+ARG VERSION_FLAGS
 SHELL ["/bin/bash", "-c"]
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -15,11 +16,13 @@ RUN \
     --mount=type=cache,target=${GOCACHE} \
     --mount=type=cache,target=/go/pkg/mod \
     go mod download
+
 COPY . .
 
 RUN --mount=type=cache,target=${GOCACHE} \
     --mount=type=cache,id=vk-azure-aci,sharing=locked,target=/go/pkg/mod \
-    GOARM="${TARGETVARIANT#v}" make build GOARM="$GOARM"
+     CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -ldflags '-extldflags "-static"' \
+     "${VERSION_FLAGS}" -o bin/virtual-kubelet cmd/virtual-kubelet/*
 
 FROM --platform=$BUILDPLATFORM gcr.io/distroless/static
 COPY --from=builder  /workspace/bin/virtual-kubelet /usr/bin/virtual-kubelet

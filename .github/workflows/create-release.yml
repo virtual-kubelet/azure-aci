@@ -15,8 +15,9 @@ permissions:
 env:
   REGISTRY: ghcr.io
   # Common versions
-  GO_VERSION: '1.18'
+  GO_VERSION: '1.19'
   IMAGE_NAME: 'virtual-kubelet'
+  INIT_IMAGE_NAME: 'init-validation'
 
 jobs:
   create-release:
@@ -24,7 +25,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION  }}
       - name: Checkout
@@ -63,6 +64,7 @@ jobs:
     - create-release
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
+      INIT_IMG_TAG : 0.2.0
     runs-on: ubuntu-20.04
     steps:
       - id: get-tag
@@ -86,6 +88,7 @@ jobs:
       - name: Build and push image
         run: |
           OUTPUT_TYPE=type=registry make docker-build-image
+          OUTPUT_TYPE=type=registry make docker-build-init-image
         env:
           VERSION: ${{ env.IMG_TAG }}
 
@@ -93,6 +96,20 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Scan ${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true

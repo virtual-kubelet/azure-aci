@@ -6,7 +6,7 @@ metadata:
 spec:
   nodeName: vk-aci-test-aks
   containers:
-  - image: k8s.gcr.io/hpa-example
+  - image: registry.k8s.io/hpa-example
     imagePullPolicy: Always
     name: hpa-example
     resources:
@@ -20,12 +20,12 @@ spec:
     - containerPort: 443
       name: https
       protocol: TCP
-  - image: busybox 
+  - image: busybox
     name: busybox
     imagePullPolicy: Always
     command: [
       "sh",
-      "-c", 
+      "-c",
       "sleep 10; while sleep 0.01; do wget -q -O- http://127.0.0.1; done",
     ]
     resources:

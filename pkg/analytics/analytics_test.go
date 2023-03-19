@@ -46,8 +46,10 @@ func TestLogAnalyticsFileParsingSuccess(t *testing.T) {
 	diagnostics, err := NewContainerGroupDiagnosticsFromFile(os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"))
 
 	assert.Equal(t, err, nil)
-	assert.Check(t, diagnostics != nil || diagnostics.LogAnalytics != nil, "Unexpected nil diagnostics. Log Analytics file not parsed correctly")
-	assert.Check(t, *diagnostics.LogAnalytics.WorkspaceID != "" || *diagnostics.LogAnalytics.WorkspaceKey != "", "Unexpected empty analytics authentication credentials. Log Analytics file not parsed correctly")
+	assert.Check(t, diagnostics != nil || diagnostics.LogAnalytics != nil,
+		"Unexpected nil diagnostics. Log Analytics file not parsed correctly")
+	assert.Check(t, diagnostics.LogAnalytics.WorkspaceID != nil || diagnostics.LogAnalytics.WorkspaceKey != nil,
+		"Unexpected empty analytics authentication credentials. Log Analytics file not parsed correctly")
 }
 
 func TestLogAnalyticsFileParsingFailure(t *testing.T) {

@@ -16,9 +16,14 @@ func TestIsEnabled(t *testing.T) {
 		shouldEnabled bool
 	}{
 		{
-			description:   fmt.Sprintf(" %s feature should not be enabled", InitContainerFeature),
+			description:   fmt.Sprintf(" %s feature should be enabled", InitContainerFeature),
 			feature:       InitContainerFeature,
-			shouldEnabled: false,
+			shouldEnabled: true,
+		},
+		{
+			description:   fmt.Sprintf(" %s feature should be enabled", ConfidentialComputeFeature),
+			feature:       ConfidentialComputeFeature,
+			shouldEnabled: true,
 		},
 	}
 	for i, tc := range cases {

@@ -11,11 +11,14 @@ import (
 )
 
 const (
-	InitContainerFeature = "init-container"
-	ManagedIdentityPullFeature = "managed-identity-pull"
+	InitContainerFeature       = "init-container"
+	ConfidentialComputeFeature = "confidential-compute"
 )
 
-var enabledFeatures = []string{}
+var enabledFeatures = []string{
+	InitContainerFeature,
+	ConfidentialComputeFeature,
+}
 
 type FlagIdentifier struct {
 	enabledFeatures []string

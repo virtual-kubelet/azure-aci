@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: confidential-container-sevsnp
+  namespace: vk-test
+  annotations:
+    virtual-kubelet.io/container-sku: "Confidential"
+spec:
+  restartPolicy: Always
+  containers:
+  - image: docker.io/kengordon/parmasimple:latest
+    imagePullPolicy: Always
+    name: e2etest-conf-container
+    resources:
+      requests:
+        memory: 1G
+        cpu: 1
+    ports:
+    - containerPort: 8000
+      name: http
+  nodeSelector:
+    kubernetes.io/role: agent
+    beta.kubernetes.io/os: linux
+    type: virtual-kubelet
+  tolerations:
+  - key: virtual-kubelet.io/provider
+    operator: Exists

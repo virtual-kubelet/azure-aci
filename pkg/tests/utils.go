@@ -7,8 +7,8 @@ package tests
 import (
 	"time"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	"github.com/Azure/go-autorest/autorest/date"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,29 +33,31 @@ var (
 	testCPU    = float64(0.99)
 	testMemory = float64(1.5)
 	port       = int32(80)
+	gpuSKUP100 = azaciv2.GpuSKUP100
+	scheme     = azaciv2.SchemeHTTP
 )
 
-func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers *[]azaci.Container, provisioningState string) *azaci.ContainerGroup {
-	fakeIPAddress := azaci.IPAddress{
+func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers []*azaciv2.Container, provisioningState string) *azaciv2.ContainerGroup {
+	fakeIPAddress := azaciv2.IPAddress{
 		IP: &FakeIP,
 	}
 	timeAsString := v1.NewTime(cgCreationTime).String()
 	nodeName := "vk"
 
-	return &azaci.ContainerGroup{
+	return &azaciv2.ContainerGroup{
 		Tags: map[string]*string{
 			"CreationTimestamp": &timeAsString,
 			"PodName":           &cgName,
 			"Namespace":         &cgNamespace,
-			"ClusterName":       &nodeName,
 			"NodeName":          &nodeName,
+			"ClusterName":       &nodeName,
 			"UID":               &cgName,
 		},
 		Name: &cgName,
 		ID:   &cgName,
-		ContainerGroupProperties: &azaci.ContainerGroupProperties{
+		Properties: &azaciv2.ContainerGroupPropertiesProperties{
 			Containers: containers,
-			InstanceView: &azaci.ContainerGroupPropertiesInstanceView{
+			InstanceView: &azaciv2.ContainerGroupPropertiesInstanceView{
 				State: &cgState,
 			},
 			ProvisioningState: &provisioningState,
@@ -64,40 +66,40 @@ func CreateContainerGroupObj(cgName, cgNamespace, cgState string, containers *[]
 	}
 }
 
-func CreateACIContainersListObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) *[]azaci.Container {
-	containerList := append([]azaci.Container{}, *CreateACIContainerObj(currentState, PrevState, startTime, finishTime, hasResources, hasLimits, hasGPU))
-	return &containerList
+func CreateACIContainersListObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) []*azaciv2.Container {
+	containerList := append([]*azaciv2.Container{}, CreateACIContainerObj(currentState, PrevState, startTime, finishTime, hasResources, hasLimits, hasGPU))
+	return containerList
 }
 
-func CreateACIContainerObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) *azaci.Container {
-	return &azaci.Container{
+func CreateACIContainerObj(currentState, PrevState string, startTime, finishTime time.Time, hasResources, hasLimits, hasGPU bool) *azaciv2.Container {
+	return &azaciv2.Container{
 		Name: &TestContainerName,
-		ContainerProperties: &azaci.ContainerProperties{
+		Properties: &azaciv2.ContainerProperties{
 			Image: &TestImageNginx,
-			Ports: &[]azaci.ContainerPort{
+			Ports: []*azaciv2.ContainerPort{
 				{
-					Protocol: azaci.ContainerNetworkProtocolTCP,
+					Protocol: &util.ContainerNetworkProtocolTCP,
 					Port:     &port,
 				},
 			},
 			Resources: CreateContainerResources(hasResources, hasLimits, hasGPU),
-			Command:   &[]string{"nginx", "-g", "daemon off;"},
-			InstanceView: &azaci.ContainerPropertiesInstanceView{
+			Command:   []*string{},
+			InstanceView: &azaciv2.ContainerPropertiesInstanceView{
 				CurrentState:  CreateContainerStateObj(currentState, startTime, finishTime, 0),
 				PreviousState: CreateContainerStateObj(PrevState, cgCreationTime, startTime, 0),
 				RestartCount:  &RestartCount,
-				Events:        &[]azaci.Event{},
+				Events:        []*azaciv2.Event{},
 			},
-			LivenessProbe:  &azaci.ContainerProbe{},
-			ReadinessProbe: &azaci.ContainerProbe{},
+			LivenessProbe:  &azaciv2.ContainerProbe{},
+			ReadinessProbe: &azaciv2.ContainerProbe{},
 		},
 	}
 }
 
-func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaci.ResourceRequirements {
+func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaciv2.ResourceRequirements {
 	if hasResources {
-		return &azaci.ResourceRequirements{
-			Requests: &azaci.ResourceRequests{
+		return &azaciv2.ResourceRequirements{
+			Requests: &azaciv2.ResourceRequests{
 				CPU:        &testCPU,
 				MemoryInGB: &testMemory,
 				Gpu:        CreateGPUResource(hasGPU),
@@ -108,9 +110,9 @@ func CreateContainerResources(hasResources, hasLimits, hasGPU bool) *azaci.Resou
 	return nil
 }
 
-func CreateResourceLimits(hasLimits, hasGPU bool) *azaci.ResourceLimits {
+func CreateResourceLimits(hasLimits, hasGPU bool) *azaciv2.ResourceLimits {
 	if hasLimits {
-		return &azaci.ResourceLimits{
+		return &azaciv2.ResourceLimits{
 			CPU:        &testCPU,
 			MemoryInGB: &testMemory,
 			Gpu:        CreateGPUResource(hasGPU),
@@ -119,27 +121,63 @@ func CreateResourceLimits(hasLimits, hasGPU bool) *azaci.ResourceLimits {
 	return nil
 }
 
-func CreateGPUResource(hasGPU bool) *azaci.GpuResource {
+func CreateGPUResource(hasGPU bool) *azaciv2.GpuResource {
 	if hasGPU {
-		return &azaci.GpuResource{
+		return &azaciv2.GpuResource{
 			Count: &testGPUCount,
-			Sku:   azaci.GpuSkuP100,
+			SKU:   &gpuSKUP100,
 		}
 	}
 	return nil
 }
 
-func CreateContainerStateObj(state string, startTime, finishTime time.Time, exitCode int32) *azaci.ContainerState {
-	return &azaci.ContainerState{
-		State: &state,
-		StartTime: &date.Time{
-			Time: startTime,
-		},
-		ExitCode: &exitCode,
-		FinishTime: &date.Time{
-			Time: finishTime,
-		},
+func CreateContainerStateObj(state string, startTime, finishTime time.Time, exitCode int32) *azaciv2.ContainerState {
+	return &azaciv2.ContainerState{
+		State:        &state,
+		StartTime:    &startTime,
+		ExitCode:     &exitCode,
+		FinishTime:   &finishTime,
 		DetailStatus: &emptyStr,
+	}
+}
+
+func CreateCGProbeObj(hasHTTPGet, hasExec bool) *azaciv2.ContainerProbe {
+	var bin, c, command, path string
+
+	bin = "/bin/sh"
+	c = "-c"
+	command = "/probes/"
+	path = "/"
+	port := int32(8080)
+	fakeNum := int32(0)
+
+	var exec *azaciv2.ContainerExec
+	var httpGet *azaciv2.ContainerHTTPGet
+
+	if hasExec {
+		exec = &azaciv2.ContainerExec{
+			Command: []*string{
+				&bin,
+				&c,
+				&command,
+			},
+		}
+	}
+	if hasHTTPGet {
+		httpGet = &azaciv2.ContainerHTTPGet{
+			Port:   &port,
+			Path:   &path,
+			Scheme: &scheme,
+		}
+	}
+	return &azaciv2.ContainerProbe{
+		Exec:                exec,
+		HTTPGet:             httpGet,
+		InitialDelaySeconds: &fakeNum,
+		FailureThreshold:    &fakeNum,
+		SuccessThreshold:    &fakeNum,
+		TimeoutSeconds:      &fakeNum,
+		PeriodSeconds:       &fakeNum,
 	}
 }
 
@@ -189,7 +227,7 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 					},
 
 					LivenessProbe: &v12.Probe{
-						Handler: v12.Handler{
+						ProbeHandler: v12.ProbeHandler{
 							HTTPGet: &v12.HTTPGetAction{
 								Port: intstr.FromString("http"),
 								Path: "/",
@@ -202,7 +240,7 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 						FailureThreshold:    5,
 					},
 					ReadinessProbe: &v12.Probe{
-						Handler: v12.Handler{
+						ProbeHandler: v12.ProbeHandler{
 							HTTPGet: &v12.HTTPGetAction{
 								Port: intstr.FromInt(8080),
 								Path: "/",
@@ -216,6 +254,44 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 					},
 				},
 			},
+		},
+	}
+}
+
+func CreatePodProbeObj(hasHTTPGet, hasExec bool) *v12.Probe {
+	var httpGet *v12.HTTPGetAction
+	var exec *v12.ExecAction
+
+	if hasHTTPGet {
+		httpGet = &v12.HTTPGetAction{
+			Port:   intstr.FromString("http"),
+			Path:   "/",
+			Scheme: "http",
+		}
+	}
+	if hasExec {
+		exec = &v12.ExecAction{
+			Command: []string{
+				"/bin/sh",
+				"-c",
+				"/probes/",
+			},
+		}
+	}
+
+	return &v12.Probe{
+		ProbeHandler: v12.ProbeHandler{
+			HTTPGet: httpGet,
+			Exec:    exec,
+		},
+	}
+}
+
+func CreateContainerPortObj(portName string, containerPort int32) []v12.ContainerPort {
+	return []v12.ContainerPort{
+		{
+			Name:          portName,
+			ContainerPort: containerPort,
 		},
 	}
 }

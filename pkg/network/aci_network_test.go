@@ -68,7 +68,7 @@ func TestGetDNSConfig(t *testing.T) {
 			aciDNSConfig := getDNSConfig(ctx, testPod, kubeDNSIP, clusterDomain)
 
 			if tc.kubeDNSIP {
-				assert.Contains(t, *aciDNSConfig.NameServers, kubeDNSIP, "test [%d]", i)
+				assert.Contains(t, aciDNSConfig.NameServers, &kubeDNSIP, "test [%d]", i)
 			}
 			if tc.shouldHaveClusterDomain {
 				assert.Contains(t, *aciDNSConfig.SearchDomains, clusterDomain, "test [%d]", i)
