@@ -1,3 +1,7 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package provider
 
 import (
@@ -7,8 +11,7 @@ import (
 	"os"
 	"regexp"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
-	client2 "github.com/virtual-kubelet/azure-aci/pkg/client"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice"
 	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
@@ -16,15 +19,15 @@ import (
 	v1 "k8s.io/api/core/v1"
 )
 
-func SetContainerGroupIdentity(ctx context.Context, identity *armmsi.Identity, identityType azaci.ResourceIdentityType, containerGroup *client2.ContainerGroupWrapper) {
-	if identity == nil || identityType != azaci.ResourceIdentityTypeUserAssigned {
+func SetContainerGroupIdentity(ctx context.Context, identity *armmsi.Identity, identityType azaciv2.ResourceIdentityType, containerGroup *azaciv2.ContainerGroup) {
+	if identity == nil || identityType != azaciv2.ResourceIdentityTypeUserAssigned {
 		return
 	}
 
-	cgIdentity := azaci.ContainerGroupIdentity{
-		Type: identityType,
-		UserAssignedIdentities: map[string]*azaci.ContainerGroupIdentityUserAssignedIdentitiesValue{
-			*identity.ID: &azaci.ContainerGroupIdentityUserAssignedIdentitiesValue{
+	cgIdentity := azaciv2.ContainerGroupIdentity{
+		Type: &identityType,
+		UserAssignedIdentities: map[string]*azaciv2.UserAssignedIdentities{
+			*identity.ID: &azaciv2.UserAssignedIdentities{
 				PrincipalID: identity.Properties.PrincipalID,
 				ClientID: identity.Properties.ClientID,
 			},
@@ -134,5 +137,5 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 			}
 		}
 	}
-	return nil, fmt.Errorf("could not find an agent pool identity for cluster %s under subscription %s\n", pod.ClusterName, p.providernetwork.VnetSubscriptionID)
+	return nil, fmt.Errorf("could not find an agent pool identity for cluster under subscription %s\n", p.providernetwork.VnetSubscriptionID)
 }

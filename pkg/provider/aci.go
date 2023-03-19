@@ -323,13 +323,13 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	}
 
 	// if no username credentials are provided use agentpool MI if for pulling images from ACR
-	if len(*creds) == 0 && p.enabledFeatures.IsEnabled(ctx, featureflag.ManagedIdentityPullFeature) {
+	if len(creds) == 0 && p.enabledFeatures.IsEnabled(ctx, featureflag.ManagedIdentityPullFeature) {
 		agentPoolKubeletIdentity, err := p.GetAgentPoolKubeletIdentity(ctx, pod)
 		if err != nil {
 			log.G(ctx).Infof("could not find Agent pool identity %v", err)
 		}
 
-		SetContainerGroupIdentity(ctx, agentPoolKubeletIdentity, azaci.ResourceIdentityTypeUserAssigned, cg)
+		SetContainerGroupIdentity(ctx, agentPoolKubeletIdentity, azaciv2.ResourceIdentityTypeUserAssigned, cg)
 		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
 	}
 
@@ -424,19 +424,19 @@ func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
 	return serverNames
 }
 
-func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, identity *armmsi.Identity, containerGroup *client2.ContainerGroupWrapper) (*[]azaci.ImageRegistryCredential){
+func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, identity *armmsi.Identity, containerGroup *azaciv2.ContainerGroup) ([]*azaciv2.ImageRegistryCredential){
 	serverNames := p.getImageServerNames(pod)
-	ips := make([]azaci.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
+	ips := make([]*azaciv2.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	if identity != nil{
-		for _, server := range serverNames {
-			cred := azaci.ImageRegistryCredential{
-				Server:  &server,
+		for i, _ := range serverNames {
+			cred := azaciv2.ImageRegistryCredential{
+				Server:  &serverNames[i],
 				Identity: identity.ID,
 			}
-			ips = append(ips, cred)
+			ips =  append(ips, &cred)
 		}
 	}
-	return &ips
+	return ips
 }
 
 // setACIExtensions

@@ -13,6 +13,7 @@ import (
 const (
 	InitContainerFeature       = "init-container"
 	ConfidentialComputeFeature = "confidential-compute"
+	ManagedIdentityPullFeature = "managed-identity-image-pull"
 )
 
 var enabledFeatures = []string{

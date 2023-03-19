@@ -5,12 +5,10 @@ import (
 	"testing"
 	"context"
 
-	azaci "github.com/Azure/azure-sdk-for-go/services/containerinstance/mgmt/2021-10-01/containerinstance"
+	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
-	"github.com/virtual-kubelet/azure-aci/pkg/client"
-	"github.com/virtual-kubelet/node-cli/manager"
 	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +21,15 @@ func TestGetImageServerNames(t *testing.T) {
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
+
+	mockSecretLister := NewMockSecretLister(mockCtrl)
+
+	aciMocks := createNewACIMock()
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		mockSecretLister, NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
 
 	cases := []struct {
 		description     string
@@ -79,24 +86,6 @@ func TestGetImageServerNames(t *testing.T) {
 				})
 			}
 
-			// create new provider
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-			    NewMockSecretLister(mockCtrl),
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare mocks for resourceManager", err)
-			}
-
-			aciMocks := createNewACIMock()
-			provider, err := createTestProvider(aciMocks, resourceManager)
-			if err != nil {
-				t.Fatal("Unable to create test provider", err)
-			}
-
 			serverNames := provider.getImageServerNames(pod)
 			assert.Equal(t, tc.expectedLength, len(serverNames))
 		})
@@ -121,39 +110,35 @@ func TestSetContainerGroupIdentity(t *testing.T) {
 	cases := []struct {
 		description     string
 		identity		*armmsi.Identity
-		identityType	azaci.ResourceIdentityType
+		identityType	azaciv2.ResourceIdentityType
 	}{
 		{
 			description: "identity is nil",
 			identity: nil,
-			identityType: azaci.ResourceIdentityTypeUserAssigned,
+			identityType: azaciv2.ResourceIdentityTypeUserAssigned,
 		},
 		{
 			description: "identity is not nil",
 			identity: armmsiIdentity,
-			identityType: azaci.ResourceIdentityTypeUserAssigned,
+			identityType: azaciv2.ResourceIdentityTypeUserAssigned,
 
 		},
 		{
 			description: "identity type is not user assignted",
 			identity: armmsiIdentity,
-			identityType: azaci.ResourceIdentityTypeSystemAssigned,
+			identityType: azaciv2.ResourceIdentityTypeSystemAssigned,
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 
-			testContainerGroup := &client.ContainerGroupWrapper{
-				ContainerGroupPropertiesWrapper: &client.ContainerGroupPropertiesWrapper{
-					ContainerGroupProperties: &azaci.ContainerGroupProperties{},
-				},
-			}
-
+			testContainerGroup := &azaciv2.ContainerGroup{}
 			SetContainerGroupIdentity(context.Background(), tc.identity, tc.identityType, testContainerGroup)
-			if tc.identityType == azaci.ResourceIdentityTypeUserAssigned && tc.identity != nil{
+
+			if tc.identityType == azaciv2.ResourceIdentityTypeUserAssigned && tc.identity != nil{
 				// identity uri, clientID, principalID should match
 				assert.Check(t, testContainerGroup.Identity != nil, "container group identity should be populated")
-				assert.Equal(t, testContainerGroup.Identity.Type, azaci.ResourceIdentityTypeUserAssigned, "identity type should match")
+				assert.Equal(t, *testContainerGroup.Identity.Type, azaciv2.ResourceIdentityTypeUserAssigned, "identity type should match")
 				assert.Check(t, testContainerGroup.Identity.UserAssignedIdentities[*tc.identity.ID] != nil , "identity uri should be present in UserAssignedIdenttities")
 				assert.Equal(t, testContainerGroup.Identity.UserAssignedIdentities[*tc.identity.ID].PrincipalID, tc.identity.Properties.PrincipalID, "principal id should matc")
 				assert.Equal(t, testContainerGroup.Identity.UserAssignedIdentities[*tc.identity.ID].ClientID, tc.identity.Properties.ClientID , "client id should matc")
@@ -201,6 +186,15 @@ func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
+	mockSecretLister := NewMockSecretLister(mockCtrl)
+
+	aciMocks := createNewACIMock()
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		mockSecretLister, NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
+
 	cases := []struct {
 		description     string
 		identity		*armmsi.Identity
@@ -217,46 +211,23 @@ func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			// create new provider
-			resourceManager, err := manager.NewResourceManager(
-				NewMockPodLister(mockCtrl),
-			    NewMockSecretLister(mockCtrl),
-				NewMockConfigMapLister(mockCtrl),
-				NewMockServiceLister(mockCtrl),
-				NewMockPersistentVolumeClaimLister(mockCtrl),
-				NewMockPersistentVolumeLister(mockCtrl))
-			if err != nil {
-				t.Fatal("Unable to prepare mocks for resourceManager", err)
-			}
-
-			aciMocks := createNewACIMock()
-			provider, err := createTestProvider(aciMocks, resourceManager)
-			if err != nil {
-				t.Fatal("Unable to create test provider", err)
-			}
-
-			testContainerGroup := &client.ContainerGroupWrapper{
-				ContainerGroupPropertiesWrapper: &client.ContainerGroupPropertiesWrapper{
-					ContainerGroupProperties: &azaci.ContainerGroupProperties{},
-				},
-			}
-
+			testContainerGroup := &azaciv2.ContainerGroup{}
 			creds := provider.getManagedIdentityImageRegistryCredentials(pod, tc.identity, testContainerGroup)
+
 			if tc.identity != nil{
 				// image registry credentials should have identity
 				assert.Check(t, creds != nil, "image registry creds should be populated")
-				assert.Equal(t, len(*creds), 2, "credentials for all distinct acr should be added")
-				assert.Equal(t, *(*creds)[0].Identity, *tc.identity.ID, "identity uri should be correct")
-				assert.Equal(t, *(*creds)[1].Identity, *tc.identity.ID, "identity uri should be correct")
+				assert.Equal(t, len(creds), 2, "credentials for all distinct acr should be added")
+				assert.Equal(t, *(creds)[0].Identity, *tc.identity.ID, "identity uri should be correct")
+				assert.Equal(t, *(creds)[1].Identity, *tc.identity.ID, "identity uri should be correct")
+				assert.Equal(t, *(creds)[0].Server, "fakeregistry.azurecr.io", "server should be correct")
+				assert.Equal(t, *(creds)[1].Server, "fakeregistry2.azurecr.io", "server should be correct")
 			} else {
 				// identity should not be added to image registry credentials
-				assert.Check(t, len(*creds) == 0, "image registry creds should not be populated")
+				assert.Check(t, len(creds) == 0, "image registry creds should not be populated")
 
 			}
 		})
 	}
 }
 
-// TODO:
-// func TestCreatePodWithACRImage
-// func TestGetAgentPoolMI
