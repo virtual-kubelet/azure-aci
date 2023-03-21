@@ -88,6 +88,8 @@ if [ "$E2E_TARGET" = "pr" ]; then
 
 fi
 
+az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
+export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
 export ACR_NAME=${ACR_NAME}
 
 TMPDIR="$(mktemp -d)"
