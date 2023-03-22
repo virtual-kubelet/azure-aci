@@ -92,7 +92,7 @@ clean:
 ## --------------------------------------
 
 .PHONY: unit-tests
-test: testauth
+unit-tests: testauth
 	@echo running tests
 	LOCATION=$(LOCATION) AKS_CREDENTIAL_LOCATION=$(TEST_AKS_CREDENTIALS_JSON) \
 	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
