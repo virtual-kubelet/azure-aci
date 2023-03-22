@@ -3,6 +3,7 @@ package e2e
 import (
 	"testing"
 	"time"
+	"context"
 
 	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 )
