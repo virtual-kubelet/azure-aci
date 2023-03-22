@@ -15,7 +15,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   # Common versions
-  GO_VERSION: '1.18'
+  GO_VERSION: '1.19'
   IMAGE_NAME: 'virtual-kubelet'
   INIT_IMAGE_NAME: 'init-validation'
 
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION  }}
       - name: Checkout

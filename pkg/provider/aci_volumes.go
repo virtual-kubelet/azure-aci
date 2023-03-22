@@ -13,6 +13,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
 	k8serr "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azaciv2.Volume, error) {
@@ -38,7 +39,7 @@ func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azac
 		return nil, fmt.Errorf("secret name for AzureFile CSI driver %s cannot be empty or nil", volume.Name)
 	}
 
-	secret, err := p.resourceManager.GetSecret(secretName, namespace)
+	secret, err := p.secretL.Secrets(namespace).Get(secretName)
 
 	if err != nil || secret == nil {
 		return nil, fmt.Errorf("the secret %s for AzureFile CSI driver %s is not found", secretName, volume.Name)
@@ -77,7 +78,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 
 		// Handle the case for the AzureFile volume.
 		if podVolumes[i].AzureFile != nil {
-			secret, err := p.resourceManager.GetSecret(podVolumes[i].AzureFile.SecretName, pod.Namespace)
+			secret, err := p.secretL.Secrets(pod.Namespace).Get(podVolumes[i].AzureFile.SecretName)
 			if err != nil {
 				return volumes, err
 			}
@@ -126,7 +127,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 		// Handle the case for Secret volume.
 		if podVolumes[i].Secret != nil {
 			paths := make(map[string]*string)
-			secret, err := p.resourceManager.GetSecret(podVolumes[i].Secret.SecretName, pod.Namespace)
+			secret, err := p.secretL.Secrets(pod.Namespace).Get(podVolumes[i].Secret.SecretName)
 			if podVolumes[i].Secret.Optional != nil && !*podVolumes[i].Secret.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("secret %s is required by Pod %s and does not exist", podVolumes[i].Secret.SecretName, pod.Name)
 			}
@@ -151,7 +152,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 		// Handle the case for ConfigMap volume.
 		if podVolumes[i].ConfigMap != nil {
 			paths := make(map[string]*string)
-			configMap, err := p.resourceManager.GetConfigMap(podVolumes[i].ConfigMap.Name, pod.Namespace)
+			configMap, err := p.configL.ConfigMaps(pod.Namespace).Get(podVolumes[i].ConfigMap.Name)
 			if podVolumes[i].ConfigMap.Optional != nil && !*podVolumes[i].ConfigMap.Optional && k8serr.IsNotFound(err) {
 				return nil, fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", podVolumes[i].ConfigMap.Name, pod.Name)
 			}
@@ -185,7 +186,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 				switch {
 				case source.ServiceAccountToken != nil:
 					// This is still stored in a secret, hence the dance to figure out what secret.
-					secrets, err := p.resourceManager.GetSecrets(pod.Namespace)
+					secrets, err := p.secretL.Secrets(pod.Namespace).List(labels.Everything())
 					if err != nil {
 						return nil, err
 					}
@@ -217,7 +218,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 					}
 
 				case source.Secret != nil:
-					secret, err := p.resourceManager.GetSecret(source.Secret.Name, pod.Namespace)
+					secret, err := p.secretL.Secrets(pod.Namespace).Get(source.Secret.Name)
 					if source.Secret.Optional != nil && !*source.Secret.Optional && k8serr.IsNotFound(err) {
 						return nil, fmt.Errorf("projected secret %s is required by pod %s and does not exist", source.Secret.Name, pod.Name)
 					}
@@ -246,7 +247,7 @@ func (p *ACIProvider) getVolumes(ctx context.Context, pod *v1.Pod) ([]*azaciv2.V
 					}
 
 				case source.ConfigMap != nil:
-					configMap, err := p.resourceManager.GetConfigMap(source.ConfigMap.Name, pod.Namespace)
+					configMap, err := p.configL.ConfigMaps(pod.Namespace).Get(source.ConfigMap.Name)
 					if source.ConfigMap.Optional != nil && !*source.ConfigMap.Optional && k8serr.IsNotFound(err) {
 						return nil, fmt.Errorf("projected configMap %s is required by pod %s and does not exist", source.ConfigMap.Name, pod.Name)
 					}

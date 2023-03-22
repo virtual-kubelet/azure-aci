@@ -10,6 +10,7 @@ import (
 	"time"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	"github.com/golang/mock/gomock"
 	testutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	"gotest.tools/assert"
 	v1 "k8s.io/api/core/v1"
@@ -24,8 +25,11 @@ var (
 func TestContainerGroupToPodStatus(t *testing.T) {
 	startTime := cgCreationTime.Add(time.Second * 3)
 	finishTime := startTime.Add(time.Second * 3)
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
 
-	provider, err := createTestProvider(createNewACIMock(), nil)
+	provider, err := createTestProvider(createNewACIMock(), NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
