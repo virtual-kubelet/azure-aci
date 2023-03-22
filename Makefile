@@ -18,9 +18,10 @@ GO111MODULE := on
 export GO111MODULE
 
 TEST_CREDENTIALS_DIR ?= $(abspath .azure)
+TEST_AKS_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/aks_credentials.json
 TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
-export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON
+export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON TEST_AKS_CREDENTIALS_JSON
 
 VERSION ?= v1.5.1
 REGISTRY ?= ghcr.io
@@ -90,10 +91,11 @@ clean:
 ## Tests
 ## --------------------------------------
 
-.PHONY: test
-test:
+.PHONY: unit-tests
+test: testauth
 	@echo running tests
-	LOCATION=$(LOCATION) AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
+	LOCATION=$(LOCATION) AKS_CREDENTIAL_LOCATION=$(TEST_AKS_CREDENTIALS_JSON) \
+	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
 	LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) \
 	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
 
@@ -141,12 +143,17 @@ fmt:  $(GOIMPORTS) ## Run go fmt against code.
 	$(GOIMPORTS) -w $$(go list -f {{.Dir}} ./...)
 
 .PHONY: testauth
-testauth: test-cred-json test-loganalytics-json
+testauth: test-cred-json test-aks-cred-json test-loganalytics-json
 
 test-cred-json:
 	@echo Building test credentials
 	chmod a+x hack/ci/create_credentials.sh
 	hack/ci/create_credentials.sh
+
+test-aks-cred-json:
+	@echo Building test AKS credentials
+	chmod a+x hack/ci/create_aks_credentials.sh
+	hack/ci/create_aks_credentials.sh
 
 test-loganalytics-json:
 	@echo Building log analytics credentials
