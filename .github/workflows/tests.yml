@@ -1,11 +1,11 @@
-name: azure-aci-test
+name: unit-tests
 
 concurrency:
   group:  ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - master
       - release-**
@@ -19,18 +19,8 @@ env:
   GO_VERSION: '1.19'
 
 jobs:
-  tests:
+  unit-tests:
     runs-on: ubuntu-20.04
-    env:
-      ACTIVEDIRECTORYENDPOINTURL: "https://login.microsoftonline.com"
-      RESOURCEMANAGERENDPOINTURL: "https://management.azure.com/"
-      ACTIVEDIRECTORYGRAPHRESOURCEID: "https://login.microsoftonline.com"
-      SQLMANAGEMENTENDPOINTURL: "https://management.core.windows.net:8443/"
-      GALLERYENDPOINTURL: "https://gallery.azure.com/"
-      MANAGEMENTENDPOINTURL: "https://manage.windowsazure.com/"
-      CLIENTSECRET: ${{ secrets.CLIENT_SECRET }}
-      WORKSPACEKEY: ${{ secrets.OMS_WORKSPACE_KEY }}
-
     environment: test
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
@@ -46,22 +36,8 @@ jobs:
 
       - name: Run unit tests & Generate coverage
         env:
-          clientId: ${{ secrets.CLIENTID  }}
-          subscriptionId: ${{ secrets.SUBSCRIPTIONID  }}
-          tenantId: ${{ secrets.TENANT_ID }}
-          activeDirectoryEndpointUrl: ${{ env.ACTIVEDIRECTORYENDPOINTURL  }}
-          resourceManagerEndpointUrl: ${{ env.RESOURCEMANAGERENDPOINTURL  }}
-          activeDirectoryGraphResourceId: ${{ env.ACTIVEDIRECTORYGRAPHRESOURCEID  }}
-          sqlManagementEndpointUrl: ${{ env.SQLMANAGEMENTENDPOINTURL  }}
-          galleryEndpointUrl: ${{ env.GALLERYENDPOINTURL  }}
-          managementEndpointUrl: ${{ env.MANAGEMENTENDPOINTURL  }}
-          clientSecret: ${{ secrets.CLIENT_SECRET }}
-          omsworkspaceID: ${{ secrets.OMSWORKSPACEID  }}
-          omsworkspaceKey: ${{ secrets.OMS_WORKSPACE_KEY }}
-          E2E_REGION: ${{ secrets.E2E_REGION}}
         run: |
-          make testauth test
-          
+          make unit-tests
 
       - name: Upload Codecov report
         uses: codecov/codecov-action@v3
