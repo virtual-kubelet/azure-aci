@@ -428,7 +428,7 @@ func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, id
 	serverNames := p.getImageServerNames(pod)
 	ips := make([]*azaciv2.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	if identity != nil{
-		for i, _ := range serverNames {
+		for i := range serverNames {
 			cred := azaciv2.ImageRegistryCredential{
 				Server:  &serverNames[i],
 				Identity: identity.ID,
