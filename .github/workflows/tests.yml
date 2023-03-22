@@ -35,7 +35,6 @@ jobs:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: Run unit tests & Generate coverage
-        env:
         run: |
           make unit-tests
 
