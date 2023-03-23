@@ -54,7 +54,7 @@ In the following cases, users may need to install Virtual Kubelet manually.
 Note: Mannually installed virtual nodes are **NOT** managed by AKS anymore, they will not be upgraded automatically.
 
 ### Non-AKS Kubernetes clusters
-We do not support them. If you have specific requests for those clusters, please file an issue to describe the needs.
+We do not support non-AKS Kubernetes. If you have specific requests for those clusters, please file an issue to describe the needs.
 
 
 ## Demo
