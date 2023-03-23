@@ -14,6 +14,7 @@ import (
 	"time"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	"github.com/cpuguy83/dockercfg"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
@@ -97,6 +98,64 @@ func TestMakeRegistryCredential(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			cred, err := makeRegistryCredential(server, tc.authConfig)
+
+			if tc.shouldFail {
+				assert.Check(t, err != nil, "conversion should fail")
+				assert.Check(t, strings.Contains(err.Error(), tc.failMessage), "failed message is not expected")
+				return
+			}
+
+			assert.Check(t, err, "conversion should not fail")
+			assert.Check(t, cred != nil, "credential should not be nil")
+			assert.Check(t, is.Equal(server, *cred.Server), "server doesn't match")
+			assert.Check(t, is.Equal(username, *cred.Username), "username doesn't match")
+			assert.Check(t, is.Equal(password, *cred.Password), "password doesn't match")
+		})
+	}
+}
+
+// Test make registry credential from docker config
+func TestMakeRegistryCredentialFromDockerConfig(t *testing.T) {
+	server := "server-" + uuid.New().String()
+	username := "user-" + uuid.New().String()
+	password := "pass-" + uuid.New().String()
+	authConfig := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
+
+	tt := []struct {
+		name        string
+		authConfig  dockercfg.AuthConfig
+		shouldFail  bool
+		failMessage string
+	}{
+		{
+			"Valid username and password",
+			dockercfg.AuthConfig{Username: username, Password: password},
+			false,
+			"",
+		},
+		{
+			"Username and password in auth",
+			dockercfg.AuthConfig{Username: username, Auth: authConfig},
+			false,
+			"",
+		},
+		{
+			"No Username",
+			dockercfg.AuthConfig{},
+			true,
+			"no username present in auth config for server",
+		},
+		{
+			"Invalid Auth",
+			dockercfg.AuthConfig{Username: username, Auth: base64.StdEncoding.EncodeToString([]byte("123"))},
+			true,
+			"error decoding docker auth",
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			cred, err := makeRegistryCredentialFromDockerConfig(server, tc.authConfig)
 
 			if tc.shouldFail {
 				assert.Check(t, err != nil, "conversion should fail")
