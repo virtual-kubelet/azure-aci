@@ -134,7 +134,7 @@ func TestMakeRegistryCredentialFromDockerConfig(t *testing.T) {
 			"",
 		},
 		{
-			"Username and password in auth",
+			"Username and password can be decoded from authConfig",
 			dockercfg.AuthConfig{Username: username, Auth: authConfig},
 			false,
 			"",
