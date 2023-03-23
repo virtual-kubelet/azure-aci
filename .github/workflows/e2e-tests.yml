@@ -26,7 +26,6 @@ env:
 
 jobs:
   export-registry:
-    if: contains(github.event.pull_request.title, 'helm')
     runs-on: ubuntu-20.04
     outputs:
       registry: ${{ steps.export.outputs.registry }}
