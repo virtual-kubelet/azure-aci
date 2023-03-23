@@ -18,7 +18,7 @@ export MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{prin
 If you are using an AKS cluster, run the following command:
 ```bash
 helm install "$RELEASE_NAME" "$CHART_URL" \
-        --set "nodeOsType=Windows" \
+        --set nodeOsType=Windows \
         --set providers.azure.targetAKS=true \
         --set providers.azure.masterUri=$MASTER_URI \
         --set nodeName="${NODE_NAME}-win"
