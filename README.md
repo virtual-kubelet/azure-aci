@@ -48,7 +48,7 @@ Please follow this offical [document ](https://learn.microsoft.com/en-us/azure/a
 ### Deploy Virtual Kubelet manually using Helm 
 
 In the following cases, users may need to install Virtual Kubelet manually.
-- The ACI provider releases are rolled out to all AKS clusters that are configured with virtual node addon progressively. If the AKS managed version has problem, you can follow the [downgrade](./docs/DOWNGRADE-README.md) document to use a previous version or the [upgrade](./docs/UPGRADE-README.md) document to use the latest released version. In either case, a new virtual node will be created in the cluster.
+- The ACI provider releases are rolled out to all AKS clusters that are configured with virtual node addon progressively. If the AKS managed version has an issue, or there is an immediate need to use a new release that has not been rolled out yet,  you can follow the [downgrade](./docs/DOWNGRADE-README.md) document to use a previous version or the [upgrade](./docs/UPGRADE-README.md) document to use the latest released version. In either case, a new virtual node will be created in the cluster.
 - Install a virtual node to support running windows ACI instances ([document](./docs/windows-virtual-node.md)).
 
 Note: Mannually installed virtual nodes are **NOT** managed by AKS anymore, they will not be upgraded automatically.
