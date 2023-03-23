@@ -80,11 +80,11 @@ func TestGetMetricsResource(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockedPodGetter := NewMockPodGetter(ctrl)
+			podLister := NewMockPodGetter(ctrl)
 			mockedPodStatsGetter := NewMockpodStatsGetter(ctrl)
-			podMetricsProvider := NewACIPodMetricsProvider("node-1", "rg", mockedPodGetter, nil)
+			podMetricsProvider := NewACIPodMetricsProvider("node-1", "rg", podLister, nil)
 			podMetricsProvider.podStatsGetter = mockedPodStatsGetter
-			mockedPodGetter.EXPECT().GetPods().Return(fakePod(getMapKeys(test))).AnyTimes()
+			podLister.EXPECT().List(gomock.Any()).Return(fakePod(getMapKeys(test)), nil)
 			for podName, cpu := range test {
 				mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
 			}
