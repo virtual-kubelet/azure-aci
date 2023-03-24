@@ -219,6 +219,75 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 	}
 }
 
+// Tests create pod with Windows as the OS
+func TestCreatePodWithWindowsOs(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	err := os.Setenv("PROVIDER_OPERATING_SYSTEM", "Windows")
+	if err != nil {
+		t.Error(err)
+	}
+	
+	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
+		containers := cg.Properties.Containers
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
+		assert.Check(t, containers[0].Properties.Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Nil((containers[0]).Properties.Resources.Limits), "Limits should be nil")
+
+		return nil
+	}
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "nginx",					
+					VolumeMounts: []v1.VolumeMount{
+						{
+							Name:      "fakeVolumeMount",
+							MountPath: "/mnt/azure",
+						},
+						{
+							Name:      "fakeVolumeMount2",
+							MountPath: "/var/run/secrets/kubernetes.io/serviceaccount",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	fakeVolumes := []v1.Volume{
+		{
+			Name: "fakeVolume",
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		}}
+	pod.Spec.Volumes = fakeVolumes
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("failed to create pod", err)
+	}
+}
+
 // Tests create pod with resource request only
 func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -687,10 +756,15 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 
 	cfg.Node = &v1.Node{}
 
+	operatingSystem := os.Getenv("PROVIDER_OPERATING_SYSTEM")
+	if operatingSystem == "" {
+		operatingSystem = "Linux"
+	}
+	
 	cfg.Node.Name = fakeNodeName
-	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
+	cfg.Node.Status.NodeInfo.OperatingSystem = operatingSystem
 
-	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}
