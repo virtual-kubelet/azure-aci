@@ -258,30 +258,11 @@ func TestCreatePodWithWindowsOs(t *testing.T) {
 		Spec: v1.PodSpec{
 			Containers: []v1.Container{
 				{
-					Name: "nginx",					
-					VolumeMounts: []v1.VolumeMount{
-						{
-							Name:      "fakeVolumeMount",
-							MountPath: "/mnt/azure",
-						},
-						{
-							Name:      "fakeVolumeMount2",
-							MountPath: "/var/run/secrets/kubernetes.io/serviceaccount",
-						},
-					},
+					Name: "nginx",
 				},
 			},
 		},
 	}
-
-	fakeVolumes := []v1.Volume{
-		{
-			Name: "fakeVolume",
-			VolumeSource: v1.VolumeSource{
-				EmptyDir: &v1.EmptyDirVolumeSource{},
-			},
-		}}
-	pod.Spec.Volumes = fakeVolumes
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("failed to create pod", err)
@@ -1178,4 +1159,54 @@ func TestGetPodWithContainerID(t *testing.T) {
 	assert.Check(t, is.Equal(testsutil.TestContainerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
 	assert.Check(t, is.Equal(testsutil.TestImageNginx, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
 	assert.Check(t, is.Equal(util.GetContainerID(&cgID, &testsutil.TestContainerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
+}
+
+func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
+	cgName := "pod-" + uuid.New().String()
+	cgNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+ 	defer mockCtrl.Finish()
+
+	volName:= "fakeVolume"
+	volMountName1:= "fakeVolumeMount1"
+	volMountPath1:= "/mnt/azure"
+	volMountName2:= "fakeVolumeMount2"
+	volMountPath2:= "/var/run/secrets/kubernetes.io/serviceaccount"
+
+	volumeMounts:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName1,
+			MountPath: &volMountPath1,
+		},
+		{
+			Name: &volMountName2,
+			MountPath: &volMountPath2,
+		}}
+
+	fakeVolumes := []*azaciv2.Volume{
+		{
+			Name: &volName,
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+			
+		}}
+
+	containers:= []*azaciv2.Container{
+		{
+			Name: &cgName,		
+			Properties: &azaciv2.ContainerProperties{
+				Image: &cgName,
+				VolumeMounts: volumeMounts,
+			},
+			
+		}}
+
+	cg := testsutil.CreateContainerGroupObj(cgName, cgNamespace, "Succeeded", containers, "Succeeded")
+	cg.Properties.Volumes = fakeVolumes
+
+	assert.Check(t, cg != nil, "Container group is not nil")
+	assert.Check(t, cg.Properties.Containers != nil, "Containers should not be nil")
+	assert.Check(t, is.Equal(1, len(cg.Properties.Containers)), "1 Container is expected")
+	assert.Check(t, is.Equal(1, len(cg.Properties.Volumes)), "1 volume is expected")
+
+	filterWindowsServiceAccountSecretVolume(context.Background(), "Windows", cg)
 }
