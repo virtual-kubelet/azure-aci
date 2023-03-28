@@ -492,7 +492,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	}
 }
 
-func TestGetSecretVolume(t *testing.T) {
+func TestGetVolumesForSecretVolume(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	secretVolumeName := "SecretVolume"
 	secretName := "api-key"
