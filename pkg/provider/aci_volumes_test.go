@@ -545,7 +545,7 @@ func TestGetSecretVolume(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			description:  "Secret is nil and returns error while Optional is set to true",
+			description:  "Secret is nil and returns error while Optional is set to false",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == secretVolumeName {
