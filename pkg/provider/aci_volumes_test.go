@@ -492,7 +492,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 	}
 }
 
-func TestGetVolumesForSecretVolume(t *testing.T) {
+func TestGetSecretVolume(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	secretVolumeName := "SecretVolume"
 	secretName := "api-key"
@@ -545,7 +545,7 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			description:  "Secret is nil and returns error while Optional is set to false",
+			description:  "Secret is nil and returns error while Optional is set to true",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == secretVolumeName {
