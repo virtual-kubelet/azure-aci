@@ -1171,42 +1171,95 @@ func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
 	volMountName1:= "fakeVolumeMount1"
 	volMountPath1:= "/mnt/azure"
 	volMountName2:= "fakeVolumeMount2"
-	volMountPath2:= "/var/run/secrets/kubernetes.io/serviceaccount"
-
-	volumeMounts:= []*azaciv2.VolumeMount{
-		{
-			Name: &volMountName1,
-			MountPath: &volMountPath1,
-		},
-		{
-			Name: &volMountName2,
-			MountPath: &volMountPath2,
-		}}
+	serviceAccountSecretMountPath:= "/var/run/secrets/kubernetes.io/serviceaccount"
 
 	fakeVolumes := []*azaciv2.Volume{
 		{
 			Name: &volName,
 			EmptyDir: &v1.EmptyDirVolumeSource{},
 			
-		}}
-
-	containers:= []*azaciv2.Container{
+		},
 		{
-			Name: &cgName,		
-			Properties: &azaciv2.ContainerProperties{
-				Image: &cgName,
-				VolumeMounts: volumeMounts,
-			},
+			Name: &volMountName2,
+			EmptyDir: &v1.EmptyDirVolumeSource{},
 			
 		}}
+	nonServiceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName1,
+			MountPath: &volMountPath1,
+		}}
+	serviceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName2,
+			MountPath: &serviceAccountSecretMountPath,
+		}}
 
-	cg := testsutil.CreateContainerGroupObj(cgName, cgNamespace, "Succeeded", containers, "Succeeded")
-	cg.Properties.Volumes = fakeVolumes
+	cases := []struct {
+		description		string
+		os				string
+		containers		[]*azaciv2.Container
+		shouldFilter	bool
+	}{
+		{
+			description: "Container without service account secret mount path",
+			os: "Windows",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName1,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: nonServiceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: false,
+		},
+		{
+			description: "Container with service account secret mount path",
+			os: "Windows",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName2,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: serviceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: true,
+		},
+		{
+			description: "Container with service account secret mount path but os is not windows",
+			os: "Linux",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName2,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: serviceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: false,
+		},
+	}
 
-	assert.Check(t, cg != nil, "Container group is not nil")
-	assert.Check(t, cg.Properties.Containers != nil, "Containers should not be nil")
-	assert.Check(t, is.Equal(1, len(cg.Properties.Containers)), "1 Container is expected")
-	assert.Check(t, is.Equal(1, len(cg.Properties.Volumes)), "1 volume is expected")
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			cg := testsutil.CreateContainerGroupObj(cgName, cgNamespace, "Succeeded", tc.containers, "Succeeded")
+			cg.Properties.Volumes = fakeVolumes
 
-	filterWindowsServiceAccountSecretVolume(context.Background(), "Windows", cg)
+			assert.Check(t, cg != nil, "Container group is not nil")
+			assert.Check(t, cg.Properties.Containers != nil, "Containers should not be nil")
+			assert.Check(t, is.Equal(1, len(cg.Properties.Containers)), "1 Container is expected")
+
+			filterWindowsServiceAccountSecretVolume(context.Background(), tc.os, cg)
+
+			if tc.shouldFilter {
+				assert.Check(t, is.Equal(0, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "0 volume mounts are expected")
+				assert.Check(t, is.Equal(1, len(cg.Properties.Volumes)), "should filter out volume with service account secret volume name")
+			} else {
+				assert.Check(t, is.Equal(1, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "volume mount should remain the same")
+				assert.Check(t, is.Equal(2, len(cg.Properties.Volumes)), "volume should remain the same")
+			}
+		})
+	}
 }
