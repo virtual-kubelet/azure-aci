@@ -219,6 +219,56 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 	}
 }
 
+// Tests create pod with Windows as the OS
+func TestCreatePodWithWindowsOS(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	err := os.Setenv("PROVIDER_OPERATING_SYSTEM", "Windows")
+	if err != nil {
+		t.Error(err)
+	}
+	
+	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
+		containers := cg.Properties.Containers
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
+		assert.Check(t, containers[0].Properties.Resources.Requests != nil, "Container resource requests should not be nil")
+		assert.Check(t, is.Nil((containers[0]).Properties.Resources.Limits), "Limits should be nil")
+
+		return nil
+	}
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "nginx",
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("failed to create pod", err)
+	}
+}
+
 // Tests create pod with resource request only
 func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
@@ -687,10 +737,16 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 
 	cfg.Node = &v1.Node{}
 
+	operatingSystem, osTypeSet := os.LookupEnv("PROVIDER_OPERATING_SYSTEM")
+	
+	if !osTypeSet {
+		operatingSystem = "Linux"
+	}
+	
 	cfg.Node.Name = fakeNodeName
-	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
+	cfg.Node.Status.NodeInfo.OperatingSystem = operatingSystem
 
-	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}
@@ -1104,4 +1160,107 @@ func TestGetPodWithContainerID(t *testing.T) {
 	assert.Check(t, is.Equal(testsutil.TestContainerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
 	assert.Check(t, is.Equal(testsutil.TestImageNginx, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
 	assert.Check(t, is.Equal(util.GetContainerID(&cgID, &testsutil.TestContainerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
+}
+
+func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
+	cgName := "pod-" + uuid.New().String()
+	cgNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+ 	defer mockCtrl.Finish()
+
+	volName:= "fakeVolume"
+	volMountName1:= "fakeVolumeMount1"
+	volMountPath1:= "/mnt/azure"
+	volMountName2:= "fakeVolumeMount2"
+	serviceAccountSecretMountPath:= "/var/run/secrets/kubernetes.io/serviceaccount"
+
+	fakeVolumes := []*azaciv2.Volume{
+		{
+			Name: &volName,
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+			
+		},
+		{
+			Name: &volMountName2,
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+			
+		}}
+	nonServiceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName1,
+			MountPath: &volMountPath1,
+		}}
+	serviceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName2,
+			MountPath: &serviceAccountSecretMountPath,
+		}}
+
+	cases := []struct {
+		description		string
+		os				string
+		containers		[]*azaciv2.Container
+		shouldFilter	bool
+	}{
+		{
+			description: "Container without service account secret mount path",
+			os: "Windows",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName1,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: nonServiceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: false,
+		},
+		{
+			description: "Container with service account secret mount path",
+			os: "Windows",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName2,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: serviceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: true,
+		},
+		{
+			description: "Container with service account secret mount path but os is not windows",
+			os: "Linux",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName2,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: serviceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			cg := testsutil.CreateContainerGroupObj(cgName, cgNamespace, "Succeeded", tc.containers, "Succeeded")
+			cg.Properties.Volumes = fakeVolumes
+
+			assert.Check(t, cg != nil, "Container group is not nil")
+			assert.Check(t, cg.Properties.Containers != nil, "Containers should not be nil")
+			assert.Check(t, is.Equal(1, len(cg.Properties.Containers)), "1 Container is expected")
+
+			filterWindowsServiceAccountSecretVolume(context.Background(), tc.os, cg)
+
+			if tc.shouldFilter {
+				assert.Check(t, is.Equal(0, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "should filter out volume mounts with service account secret volume name")
+				assert.Check(t, is.Equal(1, len(cg.Properties.Volumes)), "should filter out volume with service account secret volume name")
+			} else {
+				assert.Check(t, is.Equal(1, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "volume mount should remain the same")
+				assert.Check(t, is.Equal(2, len(cg.Properties.Volumes)), "volume should remain the same")
+			}
+		})
+	}
 }
