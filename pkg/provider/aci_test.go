@@ -1254,7 +1254,7 @@ func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
 			filterWindowsServiceAccountSecretVolume(context.Background(), tc.os, cg)
 
 			if tc.shouldFilter {
-				assert.Check(t, is.Equal(0, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "0 volume mounts are expected")
+				assert.Check(t, is.Equal(0, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "should filter out volume mounts with service account secret volume name")
 				assert.Check(t, is.Equal(1, len(cg.Properties.Volumes)), "should filter out volume with service account secret volume name")
 			} else {
 				assert.Check(t, is.Equal(1, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "volume mount should remain the same")
