@@ -220,7 +220,7 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 }
 
 // Tests create pod with Windows as the OS
-func TestCreatePodWithWindowsOs(t *testing.T) {
+func TestCreatePodWithWindowsOS(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -737,8 +737,9 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 
 	cfg.Node = &v1.Node{}
 
-	operatingSystem := os.Getenv("PROVIDER_OPERATING_SYSTEM")
-	if operatingSystem == "" {
+	operatingSystem, osTypeSet := os.LookupEnv("PROVIDER_OPERATING_SYSTEM")
+	
+	if !osTypeSet {
 		operatingSystem = "Linux"
 	}
 	
