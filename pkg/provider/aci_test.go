@@ -1270,31 +1270,37 @@ func TestDeleteContainerGroup (t *testing.T) {
 	podName1 := "pod-" + uuid.New().String()
 	podName2 := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
+
 	podNames:= []string{podName1, podName2}
+	fakePods:= testsutil.CreatePodsList(podNames, podNamespace)
 
 	cases := []struct {
 		description				string
 		podName					string
 		cgDeleteExpectedError	error
 		hasValidPodsTracker		bool
+		isPodStatusUpdated		bool
 	}{
 		{
 			description: "successfully deletes container group and updates pod status",
 			podName: podName1,
 			cgDeleteExpectedError: nil,
 			hasValidPodsTracker: true,
+			isPodStatusUpdated: true,
 		},
 		{
 			description: "successfully deletes container group but fails to update pod status",
 			podName: "fakePod",
 			cgDeleteExpectedError: nil,
 			hasValidPodsTracker: true,
+			isPodStatusUpdated: false,
 		},
 		{
 			description: "fails to delete container group",
 			podName: podName2,
 			cgDeleteExpectedError: errors.New("failed to delete container group"),
 			hasValidPodsTracker: false,
+			isPodStatusUpdated: false,
 		},
 	}
 
@@ -1319,20 +1325,45 @@ func TestDeleteContainerGroup (t *testing.T) {
 			if tc.hasValidPodsTracker {
 				podsTracker:= &PodsTracker{
 					pods: podLister,
-					updateCb: func(p *v1.Pod) {},
+					updateCb: func(updatedPod *v1.Pod) {
+						for index, pod := range fakePods {
+							if (updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace) {
+								fakePods[index] = updatedPod
+								break
+							}
+						}
+					},
 				}
-				podLister.EXPECT().List(gomock.Any()).Return(testsutil.CreatePodsList(podNames, podNamespace), nil)
+				podLister.EXPECT().List(gomock.Any()).Return(fakePods, nil)
 
 				provider.tracker = podsTracker
 			}			
 
 			err = provider.deleteContainerGroup(context.Background(), podNamespace, tc.podName)
 
-			if(tc.cgDeleteExpectedError == nil) {
+			if tc.cgDeleteExpectedError == nil {
 				assert.NilError(t, tc.cgDeleteExpectedError, err)
 			} else {
 				assert.Equal(t, tc.cgDeleteExpectedError.Error(), err.Error())
 			}
+			
+			for _, pod := range fakePods {
+				if pod.Name == tc.podName {					
+					for i := range pod.Status.ContainerStatuses {
+						if tc.isPodStatusUpdated {
+							assert.Check(t, pod.Status.ContainerStatuses[i].State.Terminated != nil, "Container should be terminated")
+							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Running)), "Container should not be running")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.Reason), statusReasonPodDeleted), "Status reason should be set to pod deleted")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.Message), statusMessagePodDeleted), "Status message code should be set to pod deleted")
+						} else {
+							assert.Check(t, pod.Status.ContainerStatuses[i].State.Running != nil, "Container should be running")
+							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Terminated)), "Container should not be terminated")
+						}					
+					}
+									
+				}
+			}			
 		})
 	}	
 }
