@@ -7,6 +7,7 @@ package provider
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -1263,4 +1264,75 @@ func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteContainerGroup (t *testing.T) {
+	podName1 := "pod-" + uuid.New().String()
+	podName2 := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	podNames:= []string{podName1, podName2}
+
+	cases := []struct {
+		description				string
+		podName					string
+		cgDeleteExpectedError	error
+		hasValidPodsTracker		bool
+	}{
+		{
+			description: "successfully deletes container group and updates pod status",
+			podName: podName1,
+			cgDeleteExpectedError: nil,
+			hasValidPodsTracker: true,
+		},
+		{
+			description: "successfully deletes container group but fails to update pod status",
+			podName: "fakePod",
+			cgDeleteExpectedError: nil,
+			hasValidPodsTracker: true,
+		},
+		{
+			description: "fails to delete container group",
+			podName: podName2,
+			cgDeleteExpectedError: errors.New("failed to delete container group"),
+			hasValidPodsTracker: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			aciMocks := createNewACIMock()
+			podLister := NewMockPodLister(mockCtrl)
+
+			aciMocks.MockDeleteContainerGroup = func(ctx context.Context, resourceGroup, cgName string) error {
+				return tc.cgDeleteExpectedError
+			}
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), podLister)
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			if tc.hasValidPodsTracker {
+				podsTracker:= &PodsTracker{
+					pods: podLister,
+					updateCb: func(p *v1.Pod) {},
+				}
+				podLister.EXPECT().List(gomock.Any()).Return(testsutil.CreatePodsList(podNames, podNamespace), nil)
+
+				provider.tracker = podsTracker
+			}			
+
+			err = provider.deleteContainerGroup(context.Background(), podNamespace, tc.podName)
+
+			if(tc.cgDeleteExpectedError == nil) {
+				assert.NilError(t, tc.cgDeleteExpectedError, err)
+			} else {
+				assert.Equal(t, tc.cgDeleteExpectedError.Error(), err.Error())
+			}
+		})
+	}	
 }
