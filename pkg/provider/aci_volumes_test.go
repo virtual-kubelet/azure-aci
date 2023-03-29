@@ -496,7 +496,7 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	secretVolumeName := "SecretVolume"
 	secretName := "AzureStorageAccountInfo"
-	azureFileStorageAccountInfoFilePath := "/azure/azurestorageaccountinfo.json"
+	azureFileStorageAccountInfoFilePath := "/.azure/azurestorageaccountinfo.json"
 
 	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -726,7 +726,7 @@ func TestGetVolumesForProjectedVolumeForSecretSource(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	projectedVolumeName := "ProjectedVolume"
 	secretName := "AzureStorageAccountInfo"
-	azureFileStorageAccountInfoFilePath := "/azure/azurestorageaccountinfo.json"
+	azureFileStorageAccountInfoFilePath := "/.azure/azurestorageaccountinfo.json"
 
 	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
