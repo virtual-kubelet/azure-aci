@@ -355,6 +355,15 @@ func CreatePodsList(podNames []string, podNameSpace string) []*v12.Pod {
 			},
 			Status: v12.PodStatus{
 				Phase: v12.PodRunning,
+				ContainerStatuses: []v12.ContainerStatus {
+					{
+						State: v12.ContainerState {
+							Running: &v12.ContainerStateRunning{
+								StartedAt: v1.NewTime(time.Now()),
+							},
+						},
+					},
+				},
 			},
 		}
 		result = append(result, pod)
