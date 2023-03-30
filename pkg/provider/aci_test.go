@@ -7,6 +7,7 @@ package provider
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	"github.com/cpuguy83/dockercfg"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
@@ -113,6 +115,64 @@ func TestMakeRegistryCredential(t *testing.T) {
 	}
 }
 
+// Test make registry credential from docker config
+func TestMakeRegistryCredentialFromDockerConfig(t *testing.T) {
+	server := "server-" + uuid.New().String()
+	username := "user-" + uuid.New().String()
+	password := "pass-" + uuid.New().String()
+	authConfig := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", username, password)))
+
+	tt := []struct {
+		name        string
+		authConfig  dockercfg.AuthConfig
+		shouldFail  bool
+		failMessage string
+	}{
+		{
+			"Valid username and password",
+			dockercfg.AuthConfig{Username: username, Password: password},
+			false,
+			"",
+		},
+		{
+			"Username and password can be decoded from authConfig",
+			dockercfg.AuthConfig{Username: username, Auth: authConfig},
+			false,
+			"",
+		},
+		{
+			"No Username",
+			dockercfg.AuthConfig{},
+			true,
+			"no username present in auth config for server",
+		},
+		{
+			"Invalid Auth",
+			dockercfg.AuthConfig{Username: username, Auth: base64.StdEncoding.EncodeToString([]byte("123"))},
+			true,
+			"error decoding docker auth",
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			cred, err := makeRegistryCredentialFromDockerConfig(server, tc.authConfig)
+
+			if tc.shouldFail {
+				assert.Check(t, err != nil, "conversion should fail")
+				assert.Check(t, strings.Contains(err.Error(), tc.failMessage), "failed message is not expected")
+				return
+			}
+
+			assert.Check(t, err, "conversion should not fail")
+			assert.Check(t, cred != nil, "credential should not be nil")
+			assert.Check(t, is.Equal(server, *cred.Server), "server doesn't match")
+			assert.Check(t, is.Equal(username, *cred.Username), "username doesn't match")
+			assert.Check(t, is.Equal(password, *cred.Password), "password doesn't match")
+		})
+	}
+}
+
 // Tests create pod without resource spec
 func TestCreatePodWithoutResourceSpec(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
@@ -131,6 +191,56 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 		assert.Check(t, containers[0].Properties.Resources.Requests != nil, "Container resource requests should not be nil")
 		assert.Check(t, is.Equal(1.0, *(containers[0]).Properties.Resources.Requests.CPU), "Request CPU is not expected")
 		assert.Check(t, is.Equal(1.5, *(containers[0]).Properties.Resources.Requests.MemoryInGB), "Request Memory is not expected")
+		assert.Check(t, is.Nil((containers[0]).Properties.Resources.Limits), "Limits should be nil")
+
+		return nil
+	}
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name: "nginx",
+				},
+			},
+		},
+	}
+
+	if err := provider.CreatePod(context.Background(), pod); err != nil {
+		t.Fatal("failed to create pod", err)
+	}
+}
+
+// Tests create pod with Windows as the OS
+func TestCreatePodWithWindowsOS(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	err := os.Setenv("PROVIDER_OPERATING_SYSTEM", "Windows")
+	if err != nil {
+		t.Error(err)
+	}
+	
+	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
+		containers := cg.Properties.Containers
+		assert.Check(t, cg != nil, "Container group is nil")
+		assert.Check(t, containers != nil, "Containers should not be nil")
+		assert.Check(t, is.Equal(1, len(containers)), "1 Container is expected")
+		assert.Check(t, is.Equal("nginx", *(containers[0]).Name), "Container nginx is expected")
+		assert.Check(t, containers[0].Properties.Resources.Requests != nil, "Container resource requests should not be nil")
 		assert.Check(t, is.Nil((containers[0]).Properties.Resources.Limits), "Limits should be nil")
 
 		return nil
@@ -628,10 +738,16 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 
 	cfg.Node = &v1.Node{}
 
+	operatingSystem, osTypeSet := os.LookupEnv("PROVIDER_OPERATING_SYSTEM")
+	
+	if !osTypeSet {
+		operatingSystem = "Linux"
+	}
+	
 	cfg.Node.Name = fakeNodeName
-	cfg.Node.Status.NodeInfo.OperatingSystem = "Linux"
+	cfg.Node.Status.NodeInfo.OperatingSystem = operatingSystem
 
-	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, "Linux", "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local")
 	if err != nil {
 		return nil, err
 	}
@@ -1045,4 +1161,205 @@ func TestGetPodWithContainerID(t *testing.T) {
 	assert.Check(t, is.Equal(testsutil.TestContainerName, pod.Status.ContainerStatuses[0].Name), "Container name in the container status doesn't match")
 	assert.Check(t, is.Equal(testsutil.TestImageNginx, pod.Status.ContainerStatuses[0].Image), "Container image in the container status doesn't match")
 	assert.Check(t, is.Equal(util.GetContainerID(&cgID, &testsutil.TestContainerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
+}
+
+func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
+	cgName := "pod-" + uuid.New().String()
+	cgNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+ 	defer mockCtrl.Finish()
+
+	volName:= "fakeVolume"
+	volMountName1:= "fakeVolumeMount1"
+	volMountPath1:= "/mnt/azure"
+	volMountName2:= "fakeVolumeMount2"
+	serviceAccountSecretMountPath:= "/var/run/secrets/kubernetes.io/serviceaccount"
+
+	fakeVolumes := []*azaciv2.Volume{
+		{
+			Name: &volName,
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+			
+		},
+		{
+			Name: &volMountName2,
+			EmptyDir: &v1.EmptyDirVolumeSource{},
+			
+		}}
+	nonServiceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName1,
+			MountPath: &volMountPath1,
+		}}
+	serviceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+		{
+			Name: &volMountName2,
+			MountPath: &serviceAccountSecretMountPath,
+		}}
+
+	cases := []struct {
+		description		string
+		os				string
+		containers		[]*azaciv2.Container
+		shouldFilter	bool
+	}{
+		{
+			description: "Container without service account secret mount path",
+			os: "Windows",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName1,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: nonServiceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: false,
+		},
+		{
+			description: "Container with service account secret mount path",
+			os: "Windows",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName2,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: serviceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: true,
+		},
+		{
+			description: "Container with service account secret mount path but os is not windows",
+			os: "Linux",
+			containers: []*azaciv2.Container{
+				{
+					Name: &volMountName2,		
+					Properties: &azaciv2.ContainerProperties{
+						VolumeMounts: serviceAccountSecretVolumeMount,
+					},			
+				},
+			},
+			shouldFilter: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			cg := testsutil.CreateContainerGroupObj(cgName, cgNamespace, "Succeeded", tc.containers, "Succeeded")
+			cg.Properties.Volumes = fakeVolumes
+
+			assert.Check(t, cg != nil, "Container group is not nil")
+			assert.Check(t, cg.Properties.Containers != nil, "Containers should not be nil")
+			assert.Check(t, is.Equal(1, len(cg.Properties.Containers)), "1 Container is expected")
+
+			filterWindowsServiceAccountSecretVolume(context.Background(), tc.os, cg)
+
+			if tc.shouldFilter {
+				assert.Check(t, is.Equal(0, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "should filter out volume mounts with service account secret volume name")
+				assert.Check(t, is.Equal(1, len(cg.Properties.Volumes)), "should filter out volume with service account secret volume name")
+			} else {
+				assert.Check(t, is.Equal(1, len(cg.Properties.Containers[0].Properties.VolumeMounts)), "volume mount should remain the same")
+				assert.Check(t, is.Equal(2, len(cg.Properties.Volumes)), "volume should remain the same")
+			}
+		})
+	}
+}
+
+func TestDeleteContainerGroup (t *testing.T) {
+	podName1 := "pod-" + uuid.New().String()
+	podName2 := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	podNames:= []string{podName1, podName2}
+	fakePods:= testsutil.CreatePodsList(podNames, podNamespace)
+
+	cases := []struct {
+		description				string
+		podName					string
+		cgDeleteExpectedError	error
+		hasValidPodsTracker		bool
+	}{
+		{
+			description: "successfully deletes container group and updates pod status",
+			podName: podName1,
+			cgDeleteExpectedError: nil,
+			hasValidPodsTracker: true,
+		},
+		{
+			description: "successfully deletes container group but fails to update pod status",
+			podName: "fakePod",
+			cgDeleteExpectedError: nil,
+			hasValidPodsTracker: false,
+		},
+		{
+			description: "fails to delete container group",
+			podName: podName2,
+			cgDeleteExpectedError: errors.New("failed to delete container group"),
+			hasValidPodsTracker: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			aciMocks := createNewACIMock()
+			podLister := NewMockPodLister(mockCtrl)
+
+			aciMocks.MockDeleteContainerGroup = func(ctx context.Context, resourceGroup, cgName string) error {
+				return tc.cgDeleteExpectedError
+			}
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), podLister)
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			if tc.hasValidPodsTracker {
+				podsTracker:= &PodsTracker{
+					pods: podLister,
+					updateCb: func(updatedPod *v1.Pod) {
+						for index, pod := range fakePods {
+							if (updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace) {
+								fakePods[index] = updatedPod
+								break
+							}
+						}
+					},
+				}
+				podLister.EXPECT().List(gomock.Any()).Return(fakePods, nil)
+
+				provider.tracker = podsTracker
+			}			
+
+			err = provider.deleteContainerGroup(context.Background(), podNamespace, tc.podName)
+
+			if tc.cgDeleteExpectedError == nil {
+				assert.NilError(t, tc.cgDeleteExpectedError, err)
+			} else {
+				assert.Equal(t, tc.cgDeleteExpectedError.Error(), err.Error())
+			}
+			
+			for _, pod := range fakePods {
+				if pod.Name == tc.podName {					
+					for i := range pod.Status.ContainerStatuses {
+						if (tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil) {
+							assert.Check(t, pod.Status.ContainerStatuses[i].State.Terminated != nil, "Container should be terminated")
+							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Running)), "Container should not be running")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.Reason), statusReasonPodDeleted), "Status reason should be set to pod deleted")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.Message), statusMessagePodDeleted), "Status message code should be set to pod deleted")
+						} else {
+							assert.Check(t, pod.Status.ContainerStatuses[i].State.Running != nil, "Container should be running")
+							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Terminated)), "Container should not be terminated")
+						}					
+					}
+									
+				}
+			}			
+		})
+	}	
 }

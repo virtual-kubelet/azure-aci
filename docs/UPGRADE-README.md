@@ -21,7 +21,7 @@ $ git checkout v$RELEASE_TAG
 
 ```shell
 # Fixed variables
-export CHART_NAME=virtual-kubelet-azure-aci-downgrade
+export CHART_NAME=virtual-kubelet-azure-aci-upgrade
 export VK_RELEASE=$CHART_NAME-$RELEASE_TAG
 export NODE_NAME=virtual-kubelet-aci-$RELEASE_TAG
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/gh-pages/charts/$VK_RELEASE.tgz

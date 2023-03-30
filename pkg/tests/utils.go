@@ -8,10 +8,12 @@ import (
 	"time"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	v12 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -339,4 +341,32 @@ func CreatePodVolumeObj(azureFileVolumeName string, fakeSecretName string, proje
 			},
 		},
 	}
+}
+
+func CreatePodsList(podNames []string, podNameSpace string) []*v12.Pod {
+	result := make([]*v12.Pod, 0, len(podNames))
+	for _, podName := range podNames {
+		pod := &v12.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Name:              podName,
+				Namespace:         podNameSpace,
+				CreationTimestamp: v1.NewTime(time.Now()),
+				UID:               types.UID(uuid.New().String()),
+			},
+			Status: v12.PodStatus{
+				Phase: v12.PodRunning,
+				ContainerStatuses: []v12.ContainerStatus {
+					{
+						State: v12.ContainerState {
+							Running: &v12.ContainerStateRunning{
+								StartedAt: v1.NewTime(time.Now()),
+							},
+						},
+					},
+				},
+			},
+		}
+		result = append(result, pod)
+	}
+	return result
 }
