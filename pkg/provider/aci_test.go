@@ -7,6 +7,7 @@ package provider
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -1263,4 +1264,102 @@ func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteContainerGroup (t *testing.T) {
+	podName1 := "pod-" + uuid.New().String()
+	podName2 := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	podNames:= []string{podName1, podName2}
+	fakePods:= testsutil.CreatePodsList(podNames, podNamespace)
+
+	cases := []struct {
+		description				string
+		podName					string
+		cgDeleteExpectedError	error
+		hasValidPodsTracker		bool
+	}{
+		{
+			description: "successfully deletes container group and updates pod status",
+			podName: podName1,
+			cgDeleteExpectedError: nil,
+			hasValidPodsTracker: true,
+		},
+		{
+			description: "successfully deletes container group but fails to update pod status",
+			podName: "fakePod",
+			cgDeleteExpectedError: nil,
+			hasValidPodsTracker: false,
+		},
+		{
+			description: "fails to delete container group",
+			podName: podName2,
+			cgDeleteExpectedError: errors.New("failed to delete container group"),
+			hasValidPodsTracker: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockCtrl := gomock.NewController(t)
+			defer mockCtrl.Finish()
+
+			aciMocks := createNewACIMock()
+			podLister := NewMockPodLister(mockCtrl)
+
+			aciMocks.MockDeleteContainerGroup = func(ctx context.Context, resourceGroup, cgName string) error {
+				return tc.cgDeleteExpectedError
+			}
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), podLister)
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			if tc.hasValidPodsTracker {
+				podsTracker:= &PodsTracker{
+					pods: podLister,
+					updateCb: func(updatedPod *v1.Pod) {
+						for index, pod := range fakePods {
+							if (updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace) {
+								fakePods[index] = updatedPod
+								break
+							}
+						}
+					},
+				}
+				podLister.EXPECT().List(gomock.Any()).Return(fakePods, nil)
+
+				provider.tracker = podsTracker
+			}			
+
+			err = provider.deleteContainerGroup(context.Background(), podNamespace, tc.podName)
+
+			if tc.cgDeleteExpectedError == nil {
+				assert.NilError(t, tc.cgDeleteExpectedError, err)
+			} else {
+				assert.Equal(t, tc.cgDeleteExpectedError.Error(), err.Error())
+			}
+			
+			for _, pod := range fakePods {
+				if pod.Name == tc.podName {					
+					for i := range pod.Status.ContainerStatuses {
+						if (tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil) {
+							assert.Check(t, pod.Status.ContainerStatuses[i].State.Terminated != nil, "Container should be terminated")
+							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Running)), "Container should not be running")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.Reason), statusReasonPodDeleted), "Status reason should be set to pod deleted")
+							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.Message), statusMessagePodDeleted), "Status message code should be set to pod deleted")
+						} else {
+							assert.Check(t, pod.Status.ContainerStatuses[i].State.Running != nil, "Container should be running")
+							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Terminated)), "Container should not be terminated")
+						}					
+					}
+									
+				}
+			}			
+		})
+	}	
 }
