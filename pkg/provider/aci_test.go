@@ -1279,28 +1279,24 @@ func TestDeleteContainerGroup (t *testing.T) {
 		podName					string
 		cgDeleteExpectedError	error
 		hasValidPodsTracker		bool
-		isPodStatusUpdated		bool
 	}{
 		{
 			description: "successfully deletes container group and updates pod status",
 			podName: podName1,
 			cgDeleteExpectedError: nil,
 			hasValidPodsTracker: true,
-			isPodStatusUpdated: true,
 		},
 		{
 			description: "successfully deletes container group but fails to update pod status",
 			podName: "fakePod",
 			cgDeleteExpectedError: nil,
-			hasValidPodsTracker: true,
-			isPodStatusUpdated: false,
+			hasValidPodsTracker: false,
 		},
 		{
 			description: "fails to delete container group",
 			podName: podName2,
 			cgDeleteExpectedError: errors.New("failed to delete container group"),
 			hasValidPodsTracker: false,
-			isPodStatusUpdated: false,
 		},
 	}
 
@@ -1350,7 +1346,7 @@ func TestDeleteContainerGroup (t *testing.T) {
 			for _, pod := range fakePods {
 				if pod.Name == tc.podName {					
 					for i := range pod.Status.ContainerStatuses {
-						if tc.isPodStatusUpdated {
+						if (tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil) {
 							assert.Check(t, pod.Status.ContainerStatuses[i].State.Terminated != nil, "Container should be terminated")
 							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Running)), "Container should not be running")
 							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
