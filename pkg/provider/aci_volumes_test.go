@@ -550,33 +550,33 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			description:  "Secret is nil and returns error while Optional is set to false",
+			description: "Secret is nil and returns error while Optional is set to false",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == secretVolumeName {
 						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))						
+						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))
 					}
 				}
 			},
 			expectedError: fmt.Errorf("secret %s is required by Pod %s and does not exist", secretName, podName),
 		},
 		{
-			description:  "Secret returns a valid value",
+			description: "Secret returns a valid value",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == secretVolumeName {
 						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(&fakeSecret, nil)						
+						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(&fakeSecret, nil)
 					}
 				}
 			},
 			expectedError: nil,
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			mockSecretLister := NewMockSecretLister(mockCtrl)
@@ -592,7 +592,7 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 				t.Fatal("Unable to create test provider", err)
 			}
 
-			volumes,err := provider.getVolumes(context.Background(), pod)
+			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
 				azureStorageAccountName := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountName"))
@@ -620,7 +620,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 		},
 		Data: map[string]string{
 			configMapName: "fake-ca-data",
-			"foo":    "bar",
+			"foo":         "bar",
 		},
 	}
 
@@ -659,38 +659,38 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 	aciMocks := createNewACIMock()
 
 	cases := []struct {
-		description     string
+		description        string
 		callConfigMapMocks func(configMapMock *MockConfigMapLister)
-		expectedError   error
+		expectedError      error
 	}{
 		{
-			description:  "ConfigMap is nil and returns error while Optional is set to false",
+			description: "ConfigMap is nil and returns error while Optional is set to false",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == configMapVolumeName {
 						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
-						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))						
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))
 					}
 				}
 			},
 			expectedError: fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", configMapName, podName),
 		},
 		{
-			description:  "ConfigMap returns a valid value",
+			description: "ConfigMap returns a valid value",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == configMapVolumeName {
 						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
-						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(&fakeConfigMap, nil)						
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(&fakeConfigMap, nil)
 					}
 				}
 			},
 			expectedError: nil,
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			mockConfigMapLister := NewMockConfigMapLister(mockCtrl)
@@ -706,7 +706,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 				t.Fatal("Unable to create test provider", err)
 			}
 
-			volumes,err := provider.getVolumes(context.Background(), pod)
+			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
 				assert.NilError(t, tc.expectedError, err)
@@ -788,33 +788,33 @@ func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			description:  "Secret is nil and returns error while Optional is set to false",
+			description: "Secret is nil and returns error while Optional is set to false",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == projectedVolumeName {
 						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-						mockSecretNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].Secret.Name).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))						
+						mockSecretNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].Secret.Name).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))
 					}
 				}
 			},
 			expectedError: fmt.Errorf("projected secret %s is required by pod %s and does not exist", secretName, podName),
 		},
 		{
-			description:  "Secret returns a valid value",
+			description: "Secret returns a valid value",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == projectedVolumeName {
 						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-						mockSecretNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].Secret.Name).Return(&fakeSecret, nil)						
+						mockSecretNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].Secret.Name).Return(&fakeSecret, nil)
 					}
 				}
 			},
 			expectedError: nil,
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			mockSecretLister := NewMockSecretLister(mockCtrl)
@@ -830,7 +830,7 @@ func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
 				t.Fatal("Unable to create test provider", err)
 			}
 
-			volumes,err := provider.getVolumes(context.Background(), pod)
+			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
 				azureStorageAccountName := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountName"))
@@ -860,7 +860,7 @@ func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
 		},
 		Data: map[string]string{
 			configMapName: "fake-ca-data",
-			"foo":    "bar",
+			"foo":         "bar",
 		},
 	}
 
@@ -906,31 +906,31 @@ func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
 	aciMocks := createNewACIMock()
 
 	cases := []struct {
-		description     string
+		description        string
 		callConfigMapMocks func(configMapMock *MockConfigMapLister)
-		expectedError   error
+		expectedError      error
 	}{
 		{
-			description:  "ConfigMap is nil and returns error while Optional is set to false",
+			description: "ConfigMap is nil and returns error while Optional is set to false",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == projectedVolumeName {
 						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
-						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))						
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))
 					}
 				}
 			},
 			expectedError: fmt.Errorf("projected configMap %s is required by pod %s and does not exist", configMapName, podName),
 		},
 		{
-			description:  "ConfigMap returns a valid value",
+			description: "ConfigMap returns a valid value",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == projectedVolumeName {
 						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
-						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(&fakeConfigMap, nil)				
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(&fakeConfigMap, nil)
 					}
 				}
 			},
@@ -953,7 +953,7 @@ func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
 				t.Fatal("Unable to create test provider", err)
 			}
 
-			volumes,err := provider.getVolumes(context.Background(), pod)
+			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
 				assert.NilError(t, tc.expectedError, err)
