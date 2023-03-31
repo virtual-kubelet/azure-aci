@@ -1363,3 +1363,85 @@ func TestDeleteContainerGroup (t *testing.T) {
 		})
 	}	
 }
+
+func TestGetPodStatus (t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+					testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+					true, true, true)
+
+	invalidContainersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+					testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+					true, true, true)
+	invalidContainersList[0].Properties = nil
+
+	validContainerGroup := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded")
+
+	cgEmptyContainerList := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", nil, "Succeeded")
+
+	cgInvalidContainerList := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", invalidContainersList, "Succeeded")
+
+	aciMocks := createNewACIMock()
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+	cases := []struct {
+		description		string
+		cgInfo			*azaciv2.ContainerGroup
+		expectedError	error
+	}{
+		{
+			description: "successfully gets pod status",
+			cgInfo: validContainerGroup,
+			expectedError: nil,
+		},
+		{
+			description: "fails to get container group info",
+			cgInfo: nil,
+			expectedError: errors.New("failed to retrieve container group"),
+		},
+		{
+			description: "fails to validate container group info",
+			cgInfo: cgEmptyContainerList,
+			expectedError: fmt.Errorf("containers list cannot be nil for container group %s", *cgEmptyContainerList.Name),
+		},
+		{
+			description: "fails to get pod status",
+			cgInfo: cgInvalidContainerList,
+			expectedError: fmt.Errorf("container %s properties cannot be nil", *invalidContainersList[0].Name),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			aciMocks.MockGetContainerGroupInfo = 
+				func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+					if tc.cgInfo == nil {
+						return nil, tc.expectedError
+					} 
+					return tc.cgInfo, nil
+				}
+
+			podStatus, err := provider.GetPodStatus(context.Background(), podNamespace, podName)
+
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError.Error(), err.Error(), "Error messages should match")
+				assert.Check(t, is.Nil((podStatus)), "podStatus should be nil")
+			} else {
+				assert.Check(t, podStatus != nil, "podStatus should not be nil")
+				assert.Check(t, podStatus.Conditions != nil, "podStatus conditions should be set")
+				assert.Check(t, podStatus.StartTime != nil, "podStatus start time should be set")
+				assert.Check(t, podStatus.ContainerStatuses != nil, "podStatus container statuses should be set")
+				assert.Check(t, is.Equal(podStatus.HostIP, provider.internalIP), "podStatus host IP should match")
+				assert.Check(t, is.Equal(len(podStatus.Conditions), 3), "3 pod conditions should be present")
+			}
+		})
+	}
+}
