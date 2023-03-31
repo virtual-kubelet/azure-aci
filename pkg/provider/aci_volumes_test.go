@@ -677,7 +677,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 			expectedError: fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", configMapName, podName),
 		},
 		{
-			description:  "Secret returns a valid value",
+			description:  "ConfigMap returns a valid value",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == configMapVolumeName {
@@ -722,7 +722,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 
 }
 
-func TestGetVolumesForProjectedVolumeForSecretSource(t *testing.T) {
+func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	projectedVolumeName := "ProjectedVolume"
 	secretName := "AzureStorageAccountInfo"
@@ -838,6 +838,128 @@ func TestGetVolumesForProjectedVolumeForSecretSource(t *testing.T) {
 				assert.NilError(t, tc.expectedError, err)
 				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountName], azureStorageAccountName)
 				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountKey], azureStorageAccountKey)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+
+		})
+	}
+
+}
+
+func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
+
+	configMapName := "fake-root-ca.crt"
+	configMapPath := "/.azure/fake-root-ca.crt"
+	projectedVolumeName := "ProjectedVolume"
+
+	fakeConfigMap := v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: podNamespace,
+		},
+		Data: map[string]string{
+			configMapName: "fake-ca-data",
+			"foo":    "bar",
+		},
+	}
+
+	setOptional := new(bool)
+	*setOptional = false
+
+	fakePodVolumes := []v1.Volume{
+		{
+			Name: emptyVolumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: projectedVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: configMapName,
+								},
+								Items: []v1.KeyToPath{
+									{
+										Key:  configMapName,
+										Path: configMapPath,
+									},
+								},
+
+								Optional: setOptional,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	cases := []struct {
+		description     string
+		callConfigMapMocks func(configMapMock *MockConfigMapLister)
+		expectedError   error
+	}{
+		{
+			description:  "ConfigMap is nil and returns error while Optional is set to false",
+			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))						
+					}
+				}
+			},
+			expectedError: fmt.Errorf("projected configMap %s is required by pod %s and does not exist", configMapName, podName),
+		},
+		{
+			description:  "ConfigMap returns a valid value",
+			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(&fakeConfigMap, nil)				
+					}
+				}
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockConfigMapLister := NewMockConfigMapLister(mockCtrl)
+
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			tc.callConfigMapMocks(mockConfigMapLister)
+
+			pod.Spec.Volumes = fakePodVolumes
+
+			provider, err := createTestProvider(aciMocks, mockConfigMapLister,
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			volumes,err := provider.getVolumes(context.Background(), pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+
+				fakeCaConfigData := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
+				assert.DeepEqual(t, *volumes[1].Secret[configMapName], fakeCaConfigData)
 			} else {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
