@@ -722,7 +722,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 
 }
 
-func TestGetVolumesForProjectedVolumeForSecretSource(t *testing.T) {
+func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	projectedVolumeName := "ProjectedVolume"
 	secretName := "AzureStorageAccountInfo"
@@ -847,7 +847,7 @@ func TestGetVolumesForProjectedVolumeForSecretSource(t *testing.T) {
 
 }
 
-func TestGetVolumesForProjectedVolumeForConfigMapSource(t *testing.T) {
+func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
 
 	configMapName := "fake-root-ca.crt"
 	configMapPath := "/.azure/fake-root-ca.crt"
