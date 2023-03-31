@@ -1443,3 +1443,142 @@ func TestGetPodStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+
+	invalidSecretNoDockerCfg := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockercfg,
+	}
+
+	inValidAuthConfig := `{
+		"repoData": {}
+	}`
+	inValidSecretWithDockerCfg := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockercfg,
+		Data: map[string][]byte{
+			v1.DockerConfigKey: []byte(inValidAuthConfig),
+		},
+	}
+
+	validAuthConfig := `{
+		"repoData": {
+			"username": "fakeUserName",
+			"password": "fakePassword"
+		}
+	}`
+	validSecretWithDockerCfg := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockercfg,
+		Data: map[string][]byte{
+			v1.DockerConfigKey: []byte(validAuthConfig),
+		},
+	}
+
+	cases := []struct {
+		description      string
+		imagePullSecrets []v1.LocalObjectReference
+		callSecretMocks  func(secretMock *MockSecretLister)
+		expectedError    error
+	}{
+		{
+			description: "Secret is of type SecretTypeDockerCfg",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&validSecretWithDockerCfg, nil)
+			},
+			expectedError: nil,
+		},
+		{
+			description: "SecretTypeDockerCfg contains invalid authConfig",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&inValidSecretWithDockerCfg, nil)
+			},
+			expectedError: fmt.Errorf("no username present in auth config for server: repoData"),
+		},
+		{
+			description: "pod contains imagePullSecrets that cannot be retrieved",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(nil, nil)
+			},
+			expectedError: errors.New("error getting image pull secret"),
+		},
+		{
+			description: "Secret type is SecretTypeDockerCfg but no docker config is present",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretNoDockerCfg, nil)
+			},
+			expectedError: errors.New("no dockercfg present in secret"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Spec.ImagePullSecrets = tc.imagePullSecrets
+
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+			tc.callSecretMocks(mockSecretLister)
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			ips, err := provider.getImagePullSecrets(pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+				assert.Check(t, ips != nil, "imagePullSecrets should not be nil")
+				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
