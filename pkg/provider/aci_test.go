@@ -233,7 +233,7 @@ func TestCreatePodWithWindowsOS(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	
+
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
 		containers := cg.Properties.Containers
 		assert.Check(t, cg != nil, "Container group is nil")
@@ -739,11 +739,11 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 	cfg.Node = &v1.Node{}
 
 	operatingSystem, osTypeSet := os.LookupEnv("PROVIDER_OPERATING_SYSTEM")
-	
+
 	if !osTypeSet {
 		operatingSystem = "Linux"
 	}
-	
+
 	cfg.Node.Name = fakeNodeName
 	cfg.Node.Status.NodeInfo.OperatingSystem = operatingSystem
 
@@ -1163,81 +1163,79 @@ func TestGetPodWithContainerID(t *testing.T) {
 	assert.Check(t, is.Equal(util.GetContainerID(&cgID, &testsutil.TestContainerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
 }
 
-func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
+func TestFilterWindowsServiceAccountSecretVolume(t *testing.T) {
 	cgName := "pod-" + uuid.New().String()
 	cgNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
- 	defer mockCtrl.Finish()
+	defer mockCtrl.Finish()
 
-	volName:= "fakeVolume"
-	volMountName1:= "fakeVolumeMount1"
-	volMountPath1:= "/mnt/azure"
-	volMountName2:= "fakeVolumeMount2"
-	serviceAccountSecretMountPath:= "/var/run/secrets/kubernetes.io/serviceaccount"
+	volName := "fakeVolume"
+	volMountName1 := "fakeVolumeMount1"
+	volMountPath1 := "/mnt/azure"
+	volMountName2 := "fakeVolumeMount2"
+	serviceAccountSecretMountPath := "/var/run/secrets/kubernetes.io/serviceaccount"
 
 	fakeVolumes := []*azaciv2.Volume{
 		{
-			Name: &volName,
+			Name:     &volName,
 			EmptyDir: &v1.EmptyDirVolumeSource{},
-			
 		},
 		{
-			Name: &volMountName2,
+			Name:     &volMountName2,
 			EmptyDir: &v1.EmptyDirVolumeSource{},
-			
 		}}
-	nonServiceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+	nonServiceAccountSecretVolumeMount := []*azaciv2.VolumeMount{
 		{
-			Name: &volMountName1,
+			Name:      &volMountName1,
 			MountPath: &volMountPath1,
 		}}
-	serviceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+	serviceAccountSecretVolumeMount := []*azaciv2.VolumeMount{
 		{
-			Name: &volMountName2,
+			Name:      &volMountName2,
 			MountPath: &serviceAccountSecretMountPath,
 		}}
 
 	cases := []struct {
-		description		string
-		os				string
-		containers		[]*azaciv2.Container
-		shouldFilter	bool
+		description  string
+		os           string
+		containers   []*azaciv2.Container
+		shouldFilter bool
 	}{
 		{
 			description: "Container without service account secret mount path",
-			os: "Windows",
+			os:          "Windows",
 			containers: []*azaciv2.Container{
 				{
-					Name: &volMountName1,		
+					Name: &volMountName1,
 					Properties: &azaciv2.ContainerProperties{
 						VolumeMounts: nonServiceAccountSecretVolumeMount,
-					},			
+					},
 				},
 			},
 			shouldFilter: false,
 		},
 		{
 			description: "Container with service account secret mount path",
-			os: "Windows",
+			os:          "Windows",
 			containers: []*azaciv2.Container{
 				{
-					Name: &volMountName2,		
+					Name: &volMountName2,
 					Properties: &azaciv2.ContainerProperties{
 						VolumeMounts: serviceAccountSecretVolumeMount,
-					},			
+					},
 				},
 			},
 			shouldFilter: true,
 		},
 		{
 			description: "Container with service account secret mount path but os is not windows",
-			os: "Linux",
+			os:          "Linux",
 			containers: []*azaciv2.Container{
 				{
-					Name: &volMountName2,		
+					Name: &volMountName2,
 					Properties: &azaciv2.ContainerProperties{
 						VolumeMounts: serviceAccountSecretVolumeMount,
-					},			
+					},
 				},
 			},
 			shouldFilter: false,
@@ -1266,37 +1264,37 @@ func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
 	}
 }
 
-func TestDeleteContainerGroup (t *testing.T) {
+func TestDeleteContainerGroup(t *testing.T) {
 	podName1 := "pod-" + uuid.New().String()
 	podName2 := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 
-	podNames:= []string{podName1, podName2}
-	fakePods:= testsutil.CreatePodsList(podNames, podNamespace)
+	podNames := []string{podName1, podName2}
+	fakePods := testsutil.CreatePodsList(podNames, podNamespace)
 
 	cases := []struct {
-		description				string
-		podName					string
-		cgDeleteExpectedError	error
-		hasValidPodsTracker		bool
+		description           string
+		podName               string
+		cgDeleteExpectedError error
+		hasValidPodsTracker   bool
 	}{
 		{
-			description: "successfully deletes container group and updates pod status",
-			podName: podName1,
+			description:           "successfully deletes container group and updates pod status",
+			podName:               podName1,
 			cgDeleteExpectedError: nil,
-			hasValidPodsTracker: true,
+			hasValidPodsTracker:   true,
 		},
 		{
-			description: "successfully deletes container group but fails to update pod status",
-			podName: "fakePod",
+			description:           "successfully deletes container group but fails to update pod status",
+			podName:               "fakePod",
 			cgDeleteExpectedError: nil,
-			hasValidPodsTracker: false,
+			hasValidPodsTracker:   false,
 		},
 		{
-			description: "fails to delete container group",
-			podName: podName2,
+			description:           "fails to delete container group",
+			podName:               podName2,
 			cgDeleteExpectedError: errors.New("failed to delete container group"),
-			hasValidPodsTracker: false,
+			hasValidPodsTracker:   false,
 		},
 	}
 
@@ -1319,11 +1317,11 @@ func TestDeleteContainerGroup (t *testing.T) {
 			}
 
 			if tc.hasValidPodsTracker {
-				podsTracker:= &PodsTracker{
+				podsTracker := &PodsTracker{
 					pods: podLister,
 					updateCb: func(updatedPod *v1.Pod) {
 						for index, pod := range fakePods {
-							if (updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace) {
+							if updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace {
 								fakePods[index] = updatedPod
 								break
 							}
@@ -1333,7 +1331,7 @@ func TestDeleteContainerGroup (t *testing.T) {
 				podLister.EXPECT().List(gomock.Any()).Return(fakePods, nil)
 
 				provider.tracker = podsTracker
-			}			
+			}
 
 			err = provider.deleteContainerGroup(context.Background(), podNamespace, tc.podName)
 
@@ -1342,11 +1340,11 @@ func TestDeleteContainerGroup (t *testing.T) {
 			} else {
 				assert.Equal(t, tc.cgDeleteExpectedError.Error(), err.Error())
 			}
-			
+
 			for _, pod := range fakePods {
-				if pod.Name == tc.podName {					
+				if pod.Name == tc.podName {
 					for i := range pod.Status.ContainerStatuses {
-						if (tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil) {
+						if tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil {
 							assert.Check(t, pod.Status.ContainerStatuses[i].State.Terminated != nil, "Container should be terminated")
 							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Running)), "Container should not be running")
 							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
@@ -1355,28 +1353,28 @@ func TestDeleteContainerGroup (t *testing.T) {
 						} else {
 							assert.Check(t, pod.Status.ContainerStatuses[i].State.Running != nil, "Container should be running")
 							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Terminated)), "Container should not be terminated")
-						}					
+						}
 					}
-									
+
 				}
-			}			
+			}
 		})
-	}	
+	}
 }
 
-func TestGetPodStatus (t *testing.T) {
+func TestGetPodStatus(t *testing.T) {
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
-					testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
-					true, true, true)
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
 
 	invalidContainersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
-					testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
-					true, true, true)
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
 	invalidContainersList[0].Properties = nil
 
 	validContainerGroup := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded")
@@ -1387,45 +1385,45 @@ func TestGetPodStatus (t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
-			if err != nil {
-				t.Fatal("failed to create the test provider", err)
-			}
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
 
 	cases := []struct {
-		description		string
-		cgInfo			*azaciv2.ContainerGroup
-		expectedError	error
+		description   string
+		cgInfo        *azaciv2.ContainerGroup
+		expectedError error
 	}{
 		{
-			description: "successfully gets pod status",
-			cgInfo: validContainerGroup,
+			description:   "successfully gets pod status",
+			cgInfo:        validContainerGroup,
 			expectedError: nil,
 		},
 		{
-			description: "fails to get container group info",
-			cgInfo: nil,
+			description:   "fails to get container group info",
+			cgInfo:        nil,
 			expectedError: errors.New("failed to retrieve container group"),
 		},
 		{
-			description: "fails to validate container group info",
-			cgInfo: cgEmptyContainerList,
+			description:   "fails to validate container group info",
+			cgInfo:        cgEmptyContainerList,
 			expectedError: fmt.Errorf("containers list cannot be nil for container group %s", *cgEmptyContainerList.Name),
 		},
 		{
-			description: "fails to get pod status",
-			cgInfo: cgInvalidContainerList,
+			description:   "fails to get pod status",
+			cgInfo:        cgInvalidContainerList,
 			expectedError: fmt.Errorf("container %s properties cannot be nil", *invalidContainersList[0].Name),
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			aciMocks.MockGetContainerGroupInfo = 
+			aciMocks.MockGetContainerGroupInfo =
 				func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 					if tc.cgInfo == nil {
 						return nil, tc.expectedError
-					} 
+					}
 					return tc.cgInfo, nil
 				}
 
@@ -1441,6 +1439,271 @@ func TestGetPodStatus (t *testing.T) {
 				assert.Check(t, podStatus.ContainerStatuses != nil, "podStatus container statuses should be set")
 				assert.Check(t, is.Equal(podStatus.HostIP, provider.internalIP), "podStatus host IP should match")
 				assert.Check(t, is.Equal(len(podStatus.Conditions), 3), "3 pod conditions should be present")
+			}
+		})
+	}
+}
+
+func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+
+	invalidSecretNoDockerCfg := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockercfg,
+	}
+
+	invalidAuthConfig := `{
+		"repoData": {}
+	}`
+	invalidSecretWithDockerCfg := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockercfg,
+		Data: map[string][]byte{
+			v1.DockerConfigKey: []byte(invalidAuthConfig),
+		},
+	}
+
+	validAuthConfig := `{
+		"repoData": {
+			"username": "fakeUserName",
+			"password": "fakePassword"
+		}
+	}`
+	validSecretWithDockerCfg := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockercfg,
+		Data: map[string][]byte{
+			v1.DockerConfigKey: []byte(validAuthConfig),
+		},
+	}
+
+	cases := []struct {
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
+	}{
+		{
+			description: "Secret is of type SecretTypeDockerCfg",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&validSecretWithDockerCfg, nil)
+			},
+			expectedError: nil,
+		},
+		{
+			description: "SecretTypeDockerCfg contains invalid authConfig",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretWithDockerCfg, nil)
+			},
+			expectedError: fmt.Errorf("no username present in auth config for server: repoData"),
+		},
+		{
+			description: "pod contains imagePullSecrets that cannot be retrieved",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(nil, nil)
+			},
+			expectedError: errors.New("error getting image pull secret"),
+		},
+		{
+			description: "Secret type is SecretTypeDockerCfg but no docker config is present",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretNoDockerCfg, nil)
+			},
+			expectedError: errors.New("no dockercfg present in secret"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			}
+
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+			tc.callSecretMocks(mockSecretLister)
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			ips, err := provider.getImagePullSecrets(pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+				assert.Check(t, ips != nil, "imagePullSecrets should not be nil")
+				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
+
+func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+
+	invalidSecretType := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: "fakeType",
+	}
+
+	invalidSecretNoDockerConfigJsonKey := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockerConfigJson,
+	}
+
+	invalidCfgJson := `{
+		"repoData": {
+			"auths": {}
+		}
+	}`
+	invalidSecretMalformedCfgJson := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			v1.DockerConfigJsonKey: []byte(invalidCfgJson),
+		},
+	}
+
+	validCfgJson := `{
+		"auths": {
+			"repoData": {
+				"username": "fakeUserName",
+				"password": "fakePassword"
+			}
+		}
+	}`
+	validSecretCfgJson := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			v1.DockerConfigJsonKey: []byte(validCfgJson),
+		},
+	}
+
+	cases := []struct {
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
+	}{
+		{
+			description: "Secret is of type SecretTypeDockerConfigJSON with a valid docker config",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&validSecretCfgJson, nil)
+			},
+			expectedError: nil,
+		},
+		{
+			description: "Secret data has malformed docker config",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretMalformedCfgJson, nil)
+			},
+			expectedError: errors.New("malformed dockerconfigjson in secret"),
+		},
+		{
+			description: "Secret type is SecretTypeDockerConfigJSON but no docker config JSON key is present",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretNoDockerConfigJsonKey, nil)
+			},
+			expectedError: errors.New("no dockerconfigjson present in secret"),
+		},
+		{
+			description: "Secret type is not valid",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretType, nil)
+			},
+			expectedError: errors.New("image pull secret type is not one of kubernetes.io/dockercfg or kubernetes.io/dockerconfigjson"),
+		},
+		{
+			description: "pod contains imagePullSecrets that cannot be found",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(nil, errors.New("secret not found"))
+			},
+			expectedError: errors.New("secret not found"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			}
+
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+			tc.callSecretMocks(mockSecretLister)
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			ips, err := provider.getImagePullSecrets(pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+				assert.Check(t, ips != nil, "imagePullSecrets should not be nil")
+				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
 		})
 	}
