@@ -1462,17 +1462,17 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 		Type: v1.SecretTypeDockercfg,
 	}
 
-	inValidAuthConfig := `{
+	invalidAuthConfig := `{
 		"repoData": {}
 	}`
-	inValidSecretWithDockerCfg := v1.Secret{
+	invalidSecretWithDockerCfg := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
 		Type: v1.SecretTypeDockercfg,
 		Data: map[string][]byte{
-			v1.DockerConfigKey: []byte(inValidAuthConfig),
+			v1.DockerConfigKey: []byte(invalidAuthConfig),
 		},
 	}
 
@@ -1523,7 +1523,7 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&inValidSecretWithDockerCfg, nil)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretWithDockerCfg, nil)
 			},
 			expectedError: fmt.Errorf("no username present in auth config for server: repoData"),
 		},
