@@ -1582,3 +1582,168 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 		})
 	}
 }
+
+func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+
+	invalidSecretType := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: "fakeType",
+	}
+
+	invalidSecretNoDockerConfigJsonKey := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockerConfigJson,
+	}
+
+	invalidCfgJson := `{
+		"repoData": {
+			"auths": {}
+		}
+	}`
+	invalidSecretMalformedCfgJson := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			v1.DockerConfigJsonKey: []byte(invalidCfgJson),
+		},
+	}
+
+	validCfgJson := `{
+		"auths": {
+			"repoData": {
+				"username": "fakeUserName",
+				"password": "fakePassword"
+			}
+		}
+	}`
+	validSecretCfgJson := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: v1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			v1.DockerConfigJsonKey: []byte(validCfgJson),
+		},
+	}
+
+	cases := []struct {
+		description      string
+		imagePullSecrets []v1.LocalObjectReference
+		callSecretMocks  func(secretMock *MockSecretLister)
+		expectedError    error
+	}{
+		{
+			description: "Secret is of type SecretTypeDockerConfigJSON with a valid docker config",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&validSecretCfgJson, nil)
+			},
+			expectedError: nil,
+		},
+		{
+			description: "Secret data has malformed docker config",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretMalformedCfgJson, nil)
+			},
+			expectedError: errors.New("malformed dockerconfigjson in secret"),
+		},
+		{
+			description: "Secret type is SecretTypeDockerConfigJSON but no docker config JSON key is present",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretNoDockerConfigJsonKey, nil)
+			},
+			expectedError: errors.New("no dockerconfigjson present in secret"),
+		},
+		{
+			description: "Secret type is not valid",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretType, nil)
+			},
+			expectedError: errors.New("image pull secret type is not one of kubernetes.io/dockercfg or kubernetes.io/dockerconfigjson"),
+		},
+		{
+			description: "pod contains imagePullSecrets that cannot be found",
+			imagePullSecrets: []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			},
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(nil, errors.New("secret not found"))
+			},
+			expectedError: errors.New("secret not found"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Spec.ImagePullSecrets = tc.imagePullSecrets
+
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+			tc.callSecretMocks(mockSecretLister)
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			ips, err := provider.getImagePullSecrets(pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+				assert.Check(t, ips != nil, "imagePullSecrets should not be nil")
+				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
