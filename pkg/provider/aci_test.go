@@ -1494,18 +1494,12 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 	}
 
 	cases := []struct {
-		description      string
-		imagePullSecrets []v1.LocalObjectReference
-		callSecretMocks  func(secretMock *MockSecretLister)
-		expectedError    error
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
 	}{
 		{
 			description: "Secret is of type SecretTypeDockerCfg",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1515,11 +1509,6 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 		},
 		{
 			description: "SecretTypeDockerCfg contains invalid authConfig",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1529,11 +1518,6 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 		},
 		{
 			description: "pod contains imagePullSecrets that cannot be retrieved",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1543,11 +1527,6 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 		},
 		{
 			description: "Secret type is SecretTypeDockerCfg but no docker config is present",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1559,7 +1538,11 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pod.Spec.ImagePullSecrets = tc.imagePullSecrets
+			pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			}
 
 			mockSecretLister := NewMockSecretLister(mockCtrl)
 			tc.callSecretMocks(mockSecretLister)
@@ -1645,18 +1628,12 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 	}
 
 	cases := []struct {
-		description      string
-		imagePullSecrets []v1.LocalObjectReference
-		callSecretMocks  func(secretMock *MockSecretLister)
-		expectedError    error
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
 	}{
 		{
 			description: "Secret is of type SecretTypeDockerConfigJSON with a valid docker config",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1666,11 +1643,6 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 		},
 		{
 			description: "Secret data has malformed docker config",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1680,11 +1652,6 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 		},
 		{
 			description: "Secret type is SecretTypeDockerConfigJSON but no docker config JSON key is present",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1694,11 +1661,6 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 		},
 		{
 			description: "Secret type is not valid",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1708,11 +1670,6 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 		},
 		{
 			description: "pod contains imagePullSecrets that cannot be found",
-			imagePullSecrets: []v1.LocalObjectReference{
-				{
-					Name: "fakeSecret",
-				},
-			},
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
@@ -1724,7 +1681,11 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pod.Spec.ImagePullSecrets = tc.imagePullSecrets
+			pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			}
 
 			mockSecretLister := NewMockSecretLister(mockCtrl)
 			tc.callSecretMocks(mockSecretLister)
