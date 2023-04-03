@@ -13,25 +13,25 @@ import (
 )
 
 func TestUpdatePodStatus(t *testing.T) {
-	podNames:= []string{"p1", "p2"}
+	podNames := []string{"p1", "p2"}
 	podNamespace := "ns-" + uuid.New().String()
 
 	cases := []struct {
-		description		string
-		podName			string
-		shouldFail		bool
-		failMessage		string
+		description string
+		podName     string
+		shouldFail  bool
+		failMessage string
 	}{
 		{
 			description: "pod is found in the list and successfully updated",
-			podName: "p2",
-			shouldFail: false,
+			podName:     "p2",
+			shouldFail:  false,
 			failMessage: "",
 		},
 		{
 			description: "pod is not found in list",
-			podName: "fakePod",
-			shouldFail: true,
+			podName:     "fakePod",
+			shouldFail:  true,
 			failMessage: "pod not found",
 		},
 	}
@@ -44,12 +44,12 @@ func TestUpdatePodStatus(t *testing.T) {
 			podLister := NewMockPodLister(mockCtrl)
 			podLister.EXPECT().List(gomock.Any()).Return(testsutil.CreatePodsList(podNames, podNamespace), nil)
 
-			podsTracker := &PodsTracker {
-				pods: podLister,
+			podsTracker := &PodsTracker{
+				pods:     podLister,
 				updateCb: func(p *v1.Pod) {},
 			}
 
-			err := podsTracker.UpdatePodStatus(context.Background(), podNamespace, tc.podName, func(podStatus *v1.PodStatus){}, true)
+			err := podsTracker.UpdatePodStatus(context.Background(), podNamespace, tc.podName, func(podStatus *v1.PodStatus) {}, true)
 			if !tc.shouldFail {
 				assert.Check(t, err == nil, "Not expected to return error")
 			} else {
