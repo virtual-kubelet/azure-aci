@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 var (
@@ -495,7 +496,8 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 func TestGetVolumesForSecretVolume(t *testing.T) {
 	fakeVolumeSecret := "fake-volume-secret"
 	secretVolumeName := "SecretVolume"
-	secretName := "api-key"
+	secretName := "AzureStorageAccountInfo"
+	azureFileStorageAccountInfoFilePath := "/.azure/azurestorageaccountinfo.json"
 
 	fakeSecret := v1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -524,8 +526,12 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 					SecretName: secretName,
 					Items: []v1.KeyToPath{
 						{
-							Key:  "azureFileStorageAccountName",
-							Path: "azureFileStorageAccountName",
+							Key:  azureFileStorageAccountName,
+							Path: azureFileStorageAccountInfoFilePath,
+						},
+						{
+							Key:  azureFileStorageAccountKey,
+							Path: azureFileStorageAccountInfoFilePath,
 						},
 					},
 					Optional: setOptional,
@@ -545,33 +551,33 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 		expectedError   error
 	}{
 		{
-			description:  "Secret is nil and returns error while Optional is set to false",
+			description: "Secret is nil and returns error while Optional is set to false",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == secretVolumeName {
 						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))						
+						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))
 					}
 				}
 			},
 			expectedError: fmt.Errorf("secret %s is required by Pod %s and does not exist", secretName, podName),
 		},
 		{
-			description:  "Secret returns a valid value",
+			description: "Secret returns a valid value",
 			callSecretMocks: func(secretMock *MockSecretLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == secretVolumeName {
 						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
 						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
-						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(&fakeSecret, nil)						
+						mockSecretNamespaceLister.EXPECT().Get(volume.Secret.SecretName).Return(&fakeSecret, nil)
 					}
 				}
 			},
 			expectedError: nil,
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			mockSecretLister := NewMockSecretLister(mockCtrl)
@@ -587,7 +593,7 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 				t.Fatal("Unable to create test provider", err)
 			}
 
-			volumes,err := provider.getVolumes(context.Background(), pod)
+			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
 				azureStorageAccountName := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountName"))
@@ -615,7 +621,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 		},
 		Data: map[string]string{
 			configMapName: "fake-ca-data",
-			"foo":    "bar",
+			"foo":         "bar",
 		},
 	}
 
@@ -654,38 +660,38 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 	aciMocks := createNewACIMock()
 
 	cases := []struct {
-		description     string
+		description        string
 		callConfigMapMocks func(configMapMock *MockConfigMapLister)
-		expectedError   error
+		expectedError      error
 	}{
 		{
-			description:  "ConfigMap is nil and returns error while Optional is set to false",
+			description: "ConfigMap is nil and returns error while Optional is set to false",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == configMapVolumeName {
 						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
-						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))						
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))
 					}
 				}
 			},
 			expectedError: fmt.Errorf("ConfigMap %s is required by Pod %s and does not exist", configMapName, podName),
 		},
 		{
-			description:  "Secret returns a valid value",
+			description: "ConfigMap returns a valid value",
 			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
 				for _, volume := range fakePodVolumes {
 					if volume.Name == configMapVolumeName {
 						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
 						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
-						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(&fakeConfigMap, nil)						
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.ConfigMap.Name).Return(&fakeConfigMap, nil)
 					}
 				}
 			},
 			expectedError: nil,
 		},
 	}
-	
+
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			mockConfigMapLister := NewMockConfigMapLister(mockCtrl)
@@ -701,7 +707,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 				t.Fatal("Unable to create test provider", err)
 			}
 
-			volumes,err := provider.getVolumes(context.Background(), pod)
+			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
 				assert.NilError(t, tc.expectedError, err)
@@ -712,6 +718,367 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
 
+		})
+	}
+
+}
+
+func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
+	fakeVolumeSecret := "fake-volume-secret"
+	projectedVolumeName := "ProjectedVolume"
+	secretName := "AzureStorageAccountInfo"
+	azureFileStorageAccountInfoFilePath := "/.azure/azurestorageaccountinfo.json"
+
+	fakeSecret := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fakeVolumeSecret,
+			Namespace: podNamespace,
+		},
+		Data: map[string][]byte{
+			azureFileStorageAccountName: []byte("azureFileStorageAccountName"),
+			azureFileStorageAccountKey:  []byte("azureFileStorageAccountKey")},
+	}
+
+	setOptional := new(bool)
+	*setOptional = false
+
+	fakePodVolumes := []v1.Volume{
+		{
+			Name: emptyVolumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: projectedVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							Secret: &v1.SecretProjection{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: secretName,
+								},
+								Items: []v1.KeyToPath{
+									{
+										Key:  azureFileStorageAccountName,
+										Path: azureFileStorageAccountInfoFilePath,
+									},
+									{
+										Key:  azureFileStorageAccountKey,
+										Path: azureFileStorageAccountInfoFilePath,
+									},
+								},
+								Optional: setOptional,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	cases := []struct {
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
+	}{
+		{
+			description: "Secret is nil and returns error while Optional is set to false",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+						mockSecretNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].Secret.Name).Return(nil, errors.NewNotFound(v1.Resource("secret"), secretName))
+					}
+				}
+			},
+			expectedError: fmt.Errorf("projected secret %s is required by pod %s and does not exist", secretName, podName),
+		},
+		{
+			description: "Secret returns a valid value",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+						mockSecretNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].Secret.Name).Return(&fakeSecret, nil)
+					}
+				}
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			tc.callSecretMocks(mockSecretLister)
+
+			pod.Spec.Volumes = fakePodVolumes
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			volumes, err := provider.getVolumes(context.Background(), pod)
+
+			if tc.expectedError == nil {
+				azureStorageAccountName := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountName"))
+				azureStorageAccountKey := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountKey"))
+				assert.NilError(t, tc.expectedError, err)
+				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountName], azureStorageAccountName)
+				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountKey], azureStorageAccountKey)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+
+		})
+	}
+
+}
+
+func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
+
+	configMapName := "fake-root-ca.crt"
+	configMapPath := "/.azure/fake-root-ca.crt"
+	projectedVolumeName := "ProjectedVolume"
+
+	fakeConfigMap := v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: podNamespace,
+		},
+		Data: map[string]string{
+			configMapName: "fake-ca-data",
+			"foo":         "bar",
+		},
+	}
+
+	setOptional := new(bool)
+	*setOptional = false
+
+	fakePodVolumes := []v1.Volume{
+		{
+			Name: emptyVolumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: projectedVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ConfigMap: &v1.ConfigMapProjection{
+								LocalObjectReference: v1.LocalObjectReference{
+									Name: configMapName,
+								},
+								Items: []v1.KeyToPath{
+									{
+										Key:  configMapName,
+										Path: configMapPath,
+									},
+								},
+
+								Optional: setOptional,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	cases := []struct {
+		description        string
+		callConfigMapMocks func(configMapMock *MockConfigMapLister)
+		expectedError      error
+	}{
+		{
+			description: "ConfigMap is nil and returns error while Optional is set to false",
+			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(nil, errors.NewNotFound(v1.Resource("ConfigMap"), configMapName))
+					}
+				}
+			},
+			expectedError: fmt.Errorf("projected configMap %s is required by pod %s and does not exist", configMapName, podName),
+		},
+		{
+			description: "ConfigMap returns a valid value",
+			callConfigMapMocks: func(configMapMock *MockConfigMapLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockConfigMapNamespaceLister := NewMockConfigMapNamespaceLister(mockCtrl)
+						configMapMock.EXPECT().ConfigMaps(podNamespace).Return(mockConfigMapNamespaceLister)
+						mockConfigMapNamespaceLister.EXPECT().Get(volume.Projected.Sources[0].ConfigMap.Name).Return(&fakeConfigMap, nil)
+					}
+				}
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockConfigMapLister := NewMockConfigMapLister(mockCtrl)
+
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			tc.callConfigMapMocks(mockConfigMapLister)
+
+			pod.Spec.Volumes = fakePodVolumes
+
+			provider, err := createTestProvider(aciMocks, mockConfigMapLister,
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			volumes, err := provider.getVolumes(context.Background(), pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+
+				fakeCaConfigData := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
+				assert.DeepEqual(t, *volumes[1].Secret[configMapName], fakeCaConfigData)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+
+		})
+	}
+
+}
+
+func TestGetVolumesProjectedVolSvcAcctTokenSource(t *testing.T) {
+	projectedVolumeName := "ProjectedVolume"
+	secretName := "ServiceAccountToken"
+	serviceAccountName := "fake-service-account"
+	fakeVolumeSecret := "fake-volume-secret"
+
+	fakeSecret2 := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: podNamespace,
+			Annotations: map[string]string{
+				"kubernetes.io/service-account.name": serviceAccountName,
+			},
+		},
+		Type: v1.SecretTypeServiceAccountToken,
+		Data: map[string][]byte{
+			secretName: []byte("fake-svc-acct-token-data"),
+		},
+	}
+
+	fakeSecret1 := v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fakeVolumeSecret,
+			Namespace: podNamespace,
+		},
+		Data: map[string][]byte{
+			azureFileStorageAccountName: []byte("azureFileStorageAccountName"),
+			azureFileStorageAccountKey:  []byte("azureFileStorageAccountKey")},
+	}
+
+	fakeSecrets := []*v1.Secret{&fakeSecret1, &fakeSecret2}
+
+	setOptional := new(bool)
+	*setOptional = false
+
+	fakePodVolumes := []v1.Volume{
+		{
+			Name: emptyVolumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: projectedVolumeName,
+			VolumeSource: v1.VolumeSource{
+				Projected: &v1.ProjectedVolumeSource{
+					Sources: []v1.VolumeProjection{
+						{
+							ServiceAccountToken: &v1.ServiceAccountTokenProjection{
+								Path: serviceAccountSecretMountPath,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	cases := []struct {
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
+	}{
+		{
+			description: "GetVolumes successfully retrives ServiceAccountToken from Projected ServiceAccountToken Volume Source",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				for _, volume := range fakePodVolumes {
+					if volume.Name == projectedVolumeName {
+						mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+						secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+						mockSecretNamespaceLister.EXPECT().List(labels.Everything()).Return(fakeSecrets, nil)
+					}
+				}
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			tc.callSecretMocks(mockSecretLister)
+
+			pod.Spec.Volumes = fakePodVolumes
+
+			pod.Spec.ServiceAccountName = serviceAccountName
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl))
+			if err != nil {
+				t.Fatal("Unable to create test provider", err)
+			}
+
+			volumes, err := provider.getVolumes(context.Background(), pod)
+
+			if tc.expectedError == nil {
+				fakeServiceAccountData := base64.StdEncoding.EncodeToString([]byte("fake-svc-acct-token-data"))
+				assert.NilError(t, tc.expectedError, err)
+				assert.DeepEqual(t, *volumes[1].Secret[secretName], fakeServiceAccountData)
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
 		})
 	}
 
