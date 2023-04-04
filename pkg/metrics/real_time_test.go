@@ -60,6 +60,23 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 			expectedUsage: newUInt64Pointer(0),
 		},
 		{
+			desc:          "New and Last Pod Status Timestamp difference value is very low",
+			containerName: nil,
+			lastPodStatus: &realtimeMetricsExtensionPodStats{
+				Timestamp: 1234,
+				CPU: cpuStats{
+					UsageCoreNanoSeconds: 1234567,
+				},
+			},
+			newPodStatus: &realtimeMetricsExtensionPodStats{
+				Timestamp: 2345,
+				CPU: cpuStats{
+					UsageCoreNanoSeconds: 2345678,
+				},
+			},
+			expectedUsage: newUInt64Pointer(0),
+		},
+		{
 			desc:          "Container Name is nil",
 			containerName: nil,
 			lastPodStatus: &realtimeMetricsExtensionPodStats{

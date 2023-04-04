@@ -220,9 +220,19 @@ func calculateUsageNanoCores(containerName *string, lastPodStatus *realtimeMetri
 		return newUInt64Pointer(0)
 	}
 	var timeWindowsSeconds uint64 = timeWindowsNanoSeconds / 1000000000
+
+	if timeWindowsSeconds <= 0 {
+		return newUInt64Pointer(0)
+	}
+
 	if containerName == nil {
 		// calculate for Pod
-		v := (newPodStatus.CPU.UsageCoreNanoSeconds - lastPodStatus.CPU.UsageCoreNanoSeconds) / timeWindowsSeconds
+		usageDiff := newPodStatus.CPU.UsageCoreNanoSeconds - lastPodStatus.CPU.UsageCoreNanoSeconds
+		if usageDiff <= 0 {
+			return newUInt64Pointer(0)
+		}
+
+		v := usageDiff / timeWindowsSeconds
 		return &v
 	} else {
 		// calcuate for specified container
@@ -244,7 +254,11 @@ func calculateUsageNanoCores(containerName *string, lastPodStatus *realtimeMetri
 		if newContainerUsageCoreNanoSeconds == nil {
 			return newUInt64Pointer(0)
 		}
-		v := (*newContainerUsageCoreNanoSeconds - *oldContainerUsageCoreNanoSeconds) / timeWindowsSeconds
+		usageDiff := *newContainerUsageCoreNanoSeconds - *oldContainerUsageCoreNanoSeconds
+		if usageDiff <= 0 {
+			return newUInt64Pointer(0)
+		}
+		v := usageDiff / timeWindowsSeconds
 		return &v
 	}
 }
