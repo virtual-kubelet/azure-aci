@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -160,19 +161,30 @@ func TestProcessPodUpdates(t *testing.T) {
 }
 
 func TestCleanupDanglingPods(t *testing.T) {
-	activePodName1 := "pod-" + uuid.New().String()
-	activePodName2 := "pod-" + uuid.New().String()
+	podName1 := "pod-" + uuid.New().String()
+	podName2 := "pod-" + uuid.New().String()
 	danglingPodName := "pod-" + uuid.New().String()
-	cgName := "cg-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 
-	activePododNames := []string{activePodName1, activePodName2}
-	activePods := testsutil.CreatePodsList(activePododNames, podNamespace)
+	podsNames := []string{podName1, podName2}
+	k8sPods := testsutil.CreatePodsList(podsNames, podNamespace)
 
-	allPods := testsutil.CreatePodsList([]string{danglingPodName}, podNamespace)
-	allPods = append(allPods, activePods[0], activePods[1])
+	activePods := testsutil.CreatePodsList([]string{danglingPodName}, podNamespace)
+	activePods = append(activePods, k8sPods[0], k8sPods[1])
 
-	cg := testsutil.CreateContainerGroupObj(cgName, podNamespace, "Succeeded",
+	cg1 := testsutil.CreateContainerGroupObj(podName1, podNamespace, "Succeeded",
+		testsutil.CreateACIContainersListObj(runningState, "Initializing",
+			testsutil.CgCreationTime.Add(time.Second*2),
+			testsutil.CgCreationTime.Add(time.Second*3),
+			false, false, false), "Succeeded")
+
+	cg2 := testsutil.CreateContainerGroupObj(podName2, podNamespace, "Succeeded",
+		testsutil.CreateACIContainersListObj(runningState, "Initializing",
+			testsutil.CgCreationTime.Add(time.Second*2),
+			testsutil.CgCreationTime.Add(time.Second*3),
+			false, false, false), "Succeeded")
+
+	cg3 := testsutil.CreateContainerGroupObj(danglingPodName, podNamespace, "Succeeded",
 		testsutil.CreateACIContainersListObj(runningState, "Initializing",
 			testsutil.CgCreationTime.Add(time.Second*2),
 			testsutil.CgCreationTime.Add(time.Second*3),
@@ -185,16 +197,39 @@ func TestCleanupDanglingPods(t *testing.T) {
 
 	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
 		var result []*azaciv2.ContainerGroup
-		result = append(result, cg)
+		result = append(result, cg1, cg2, cg3)
 		return result, nil
 	}
 
 	aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
-		return cg, nil
+		switch containerGroupName {
+		case podName1:
+			return cg1, nil
+		case podName2:
+			return cg2, nil
+		case danglingPodName:
+			return cg3, nil
+		default:
+			return nil, nil
+		}
+	}
+
+	aciMocks.MockDeleteContainerGroup = func(ctx context.Context, resourceGroup, cgName string) error {
+		updatedActivePods := make([]*v1.Pod, 0)
+
+		for _, pod := range activePods {
+			podCgName := fmt.Sprintf("%s-%s", pod.Namespace, pod.Name)
+			if podCgName != cgName {
+				updatedActivePods = append(updatedActivePods, pod)
+			}
+		}
+
+		activePods = updatedActivePods
+		return nil
 	}
 
 	activePodsLister := NewMockPodLister(mockCtrl)
-	allPodsLister := NewMockPodLister(mockCtrl)
+	k8sPodsLister := NewMockPodLister(mockCtrl)
 	mockPodsNamespaceLister := NewMockPodNamespaceLister(mockCtrl)
 
 	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
@@ -204,35 +239,22 @@ func TestCleanupDanglingPods(t *testing.T) {
 	}
 
 	podsTracker := &PodsTracker{
-		pods:    activePodsLister,
-		handler: aciProvider,
-	}
-
-	podsTracker2 := &PodsTracker{
-		pods: allPodsLister,
+		pods: k8sPodsLister,
 		updateCb: func(updatedPod *v1.Pod) {
-			for index, pod := range allPods {
-				if updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace {
-					allPods[index] = updatedPod
-					break
-				}
-			}
 		},
 		handler: aciProvider,
 	}
 
-	activePodsLister.EXPECT().List(gomock.Any()).Return(activePods, nil)
-	allPodsLister.EXPECT().List(gomock.Any()).Return(allPods, nil)
+	k8sPodsLister.EXPECT().List(gomock.Any()).Return(k8sPods, nil).AnyTimes()
 
-	activePodsLister.EXPECT().Pods(podNamespace).Return(mockPodsNamespaceLister)
-	mockPodsNamespaceLister.EXPECT().Get(cgName).Return(allPods[0], nil)
+	activePodsLister.EXPECT().Pods(podNamespace).Return(mockPodsNamespaceLister).AnyTimes()
+	mockPodsNamespaceLister.EXPECT().Get(danglingPodName).Return(activePods[0], nil)
+	mockPodsNamespaceLister.EXPECT().Get(podName1).Return(activePods[1], nil)
+	mockPodsNamespaceLister.EXPECT().Get(podName2).Return(activePods[2], nil)
 
-	aciProvider.tracker = podsTracker2
+	aciProvider.tracker = podsTracker
 	podsTracker.cleanupDanglingPods(context.Background())
 
-	assert.Check(t, allPods[0].Status.ContainerStatuses[0].State.Terminated != nil, "Container should be terminated because pod was deleted")
-	assert.Check(t, is.Nil((allPods[0].Status.ContainerStatuses[0].State.Running)), "Container should not be running because pod was deleted")
-	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
-	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.Reason), statusReasonPodDeleted), "Status reason should be set to pod deleted")
-	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.Message), statusMessagePodDeleted), "Status message code should be set to pod deleted")
+	assert.Equal(t, len(activePods), 2, "The dangling pod should be deleted from activePods")
+	assert.DeepEqual(t, activePods, k8sPods)
 }
