@@ -247,3 +247,34 @@ func TestSetAuthConfigWithEnvVariablesOnly(t *testing.T) {
 	}
 	assert.Check(t, azConfig.Authorizer != nil, "Authorizer should be nil")
 }
+
+func TestDecode(t *testing.T) {
+	testCases := []struct {
+		desc           string
+		input          []byte
+		expectedOutput string
+	}{
+		{
+			desc:           "Testing Decode for UTF16LittleIndian Encoding",
+			input:          []byte("\xFF\xFE\x68\x00\x65\x00\x6C\x00\x6C\x00\x6F\x00"),
+			expectedOutput: string([]byte("\x68\x65\x6C\x6C\x6F")),
+		},
+		{
+			desc:           "Testing Decode for UTF16BigIndian Encoding",
+			input:          []byte("\xFE\xFF\x00\x68\x00\x65\x00\x6C\x00\x6C\x00\x6F"),
+			expectedOutput: string([]byte("\x68\x65\x6C\x6C\x6F")),
+		},
+		{
+			desc:           "Testing Decode for Unknown Encoding",
+			input:          []byte("hello"),
+			expectedOutput: string([]byte("hello")),
+		},
+	}
+
+	authentication := Authentication{}
+
+	for _, tc := range testCases {
+		decodedValue, _ := authentication.decode(tc.input)
+		assert.Equal(t, tc.expectedOutput, string(decodedValue), tc.desc)
+	}
+}
