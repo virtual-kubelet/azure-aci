@@ -158,3 +158,81 @@ func TestProcessPodUpdates(t *testing.T) {
 		})
 	}
 }
+
+func TestCleanupDanglingPods(t *testing.T) {
+	activePodName1 := "pod-" + uuid.New().String()
+	activePodName2 := "pod-" + uuid.New().String()
+	danglingPodName := "pod-" + uuid.New().String()
+	cgName := "cg-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	activePododNames := []string{activePodName1, activePodName2}
+	activePods := testsutil.CreatePodsList(activePododNames, podNamespace)
+
+	allPods := testsutil.CreatePodsList([]string{danglingPodName}, podNamespace)
+	allPods = append(allPods, activePods[0], activePods[1])
+
+	cg := testsutil.CreateContainerGroupObj(cgName, podNamespace, "Succeeded",
+		testsutil.CreateACIContainersListObj(runningState, "Initializing",
+			testsutil.CgCreationTime.Add(time.Second*2),
+			testsutil.CgCreationTime.Add(time.Second*3),
+			false, false, false), "Succeeded")
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	aciMocks.MockGetContainerGroupList = func(ctx context.Context, resourceGroup string) ([]*azaciv2.ContainerGroup, error) {
+		var result []*azaciv2.ContainerGroup
+		result = append(result, cg)
+		return result, nil
+	}
+
+	aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
+		return cg, nil
+	}
+
+	activePodsLister := NewMockPodLister(mockCtrl)
+	allPodsLister := NewMockPodLister(mockCtrl)
+	mockPodsNamespaceLister := NewMockPodNamespaceLister(mockCtrl)
+
+	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), activePodsLister)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	podsTracker := &PodsTracker{
+		pods:    activePodsLister,
+		handler: aciProvider,
+	}
+
+	podsTracker2 := &PodsTracker{
+		pods: allPodsLister,
+		updateCb: func(updatedPod *v1.Pod) {
+			for index, pod := range allPods {
+				if updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace {
+					allPods[index] = updatedPod
+					break
+				}
+			}
+		},
+		handler: aciProvider,
+	}
+
+	activePodsLister.EXPECT().List(gomock.Any()).Return(activePods, nil)
+	allPodsLister.EXPECT().List(gomock.Any()).Return(allPods, nil)
+
+	activePodsLister.EXPECT().Pods(podNamespace).Return(mockPodsNamespaceLister)
+	mockPodsNamespaceLister.EXPECT().Get(cgName).Return(allPods[0], nil)
+
+	aciProvider.tracker = podsTracker2
+	podsTracker.cleanupDanglingPods(context.Background())
+
+	assert.Check(t, allPods[0].Status.ContainerStatuses[0].State.Terminated != nil, "Container should be terminated because pod was deleted")
+	assert.Check(t, is.Nil((allPods[0].Status.ContainerStatuses[0].State.Running)), "Container should not be running becuase pod was deleted")
+	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
+	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.Reason), statusReasonPodDeleted), "Status reason should be set to pod deleted")
+	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.Message), statusMessagePodDeleted), "Status message code should be set to pod deleted")
+}
