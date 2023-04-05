@@ -278,3 +278,50 @@ func TestDecode(t *testing.T) {
 		assert.Equal(t, tc.expectedOutput, string(decodedValue), tc.desc)
 	}
 }
+
+func TestGetMSICredential(t *testing.T) {
+
+	err := os.Setenv("AZURE_AUTH_LOCATION", "")
+	if err != nil {
+		t.Error(err)
+	}
+	err = os.Setenv("AKS_CREDENTIAL_LOCATION", "")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_CLIENT_ID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_CLIENT_SECRET", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("VIRTUALNODE_USER_IDENTITY_CLIENTID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_TENANT_ID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = os.Setenv("AZURE_SUBSCRIPTION_ID", "######-###-####-####-######")
+	if err != nil {
+		t.Error(err)
+	}
+
+	azConfig := Config{}
+	err = azConfig.SetAuthConfig(context.TODO())
+	if err != nil {
+		t.Error(err)
+	}
+
+	cred, err := azConfig.GetMSICredential(context.TODO())
+
+	assert.Check(t, (cred != nil && err == nil), "Credential should not be nil with no errors while fetching it")
+}
