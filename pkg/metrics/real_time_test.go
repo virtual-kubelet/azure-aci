@@ -21,7 +21,7 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 		{
 			Name: fake_container2,
 			CPU: cpuStats{
-				UsageCoreNanoSeconds: 2345678900,
+				UsageCoreNanoSeconds: 1234567800,
 			},
 		},
 	}
@@ -36,7 +36,7 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 		{
 			Name: fake_container2,
 			CPU: cpuStats{
-				UsageCoreNanoSeconds: 1234567800,
+				UsageCoreNanoSeconds: 2345678900,
 			},
 		},
 	}
@@ -77,7 +77,24 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 			expectedUsage: newUInt64Pointer(0),
 		},
 		{
-			desc:          "Container Name is nil",
+			desc:          "Container Name is nil and lastPodStatus.CPU.UsageCoreNanoSeconds is greater than newPodStatus.CPU.UsageCoreNanoSeconds",
+			containerName: nil,
+			lastPodStatus: &realtimeMetricsExtensionPodStats{
+				Timestamp: 1234500000,
+				CPU: cpuStats{
+					UsageCoreNanoSeconds: 2345678000,
+				},
+			},
+			newPodStatus: &realtimeMetricsExtensionPodStats{
+				Timestamp: 2345600000,
+				CPU: cpuStats{
+					UsageCoreNanoSeconds: 1234567000,
+				},
+			},
+			expectedUsage: newUInt64Pointer(0),
+		},
+		{
+			desc:          "Container Name is nil and newPodStatus.CPU.UsageCoreNanoSeconds is greater than lastPodStatus.CPU.UsageCoreNanoSeconds",
 			containerName: nil,
 			lastPodStatus: &realtimeMetricsExtensionPodStats{
 				Timestamp: 1234500000,
@@ -95,7 +112,7 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 			expectedUsage: newUInt64Pointer(1111111000 / (1111100000 / 1000000000)),
 		},
 		{
-			desc:          "Container Name is not nil",
+			desc:          "Container Name is not nil and newPodStatus.CPU.UsageCoreNanoSeconds is greater than lastPodStatus.CPU.UsageCoreNanoSeconds",
 			containerName: &fake_container1,
 			lastPodStatus: &realtimeMetricsExtensionPodStats{
 				Timestamp:  1234560000,
@@ -107,6 +124,19 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 			},
 			//tc.newPodStatus.containers[i=0].CPU.UsageCoreNanoSeconds-tc.lastPodStatus.containers[i=0].CPU.UsageCoreNanoSeconds/((tc.newPodStatus.TimeStamp-tc.lastPodStatus.TimeStamp)/1000000000)
 			expectedUsage: newUInt64Pointer(1111111100 / (1111110000 / 1000000000)),
+		},
+		{
+			desc:          "Container Name is not nil and lastPodStatus.CPU.UsageCoreNanoSeconds is greater than newPodStatus.CPU.UsageCoreNanoSeconds",
+			containerName: &fake_container2,
+			lastPodStatus: &realtimeMetricsExtensionPodStats{
+				Timestamp:  1234500000,
+				Containers: lastPodStatus_containers,
+			},
+			newPodStatus: &realtimeMetricsExtensionPodStats{
+				Timestamp:  2345600000,
+				Containers: lastPodStatus_containers,
+			},
+			expectedUsage: newUInt64Pointer(0),
 		},
 	}
 
