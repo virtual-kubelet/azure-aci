@@ -231,7 +231,7 @@ func TestCleanupDanglingPods(t *testing.T) {
 	podsTracker.cleanupDanglingPods(context.Background())
 
 	assert.Check(t, allPods[0].Status.ContainerStatuses[0].State.Terminated != nil, "Container should be terminated because pod was deleted")
-	assert.Check(t, is.Nil((allPods[0].Status.ContainerStatuses[0].State.Running)), "Container should not be running becuase pod was deleted")
+	assert.Check(t, is.Nil((allPods[0].Status.ContainerStatuses[0].State.Running)), "Container should not be running because pod was deleted")
 	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
 	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.Reason), statusReasonPodDeleted), "Status reason should be set to pod deleted")
 	assert.Check(t, is.Equal((allPods[0].Status.ContainerStatuses[0].State.Terminated.Message), statusMessagePodDeleted), "Status message code should be set to pod deleted")
