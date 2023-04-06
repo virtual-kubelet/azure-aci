@@ -15,6 +15,7 @@ import (
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 )
 
 func TestUpdatePodStatus(t *testing.T) {
@@ -217,10 +218,10 @@ func TestCleanupDanglingPods(t *testing.T) {
 	aciMocks.MockDeleteContainerGroup = func(ctx context.Context, resourceGroup, cgName string) error {
 		updatedActivePods := make([]*v1.Pod, 0)
 
-		for _, pod := range activePods {
-			podCgName := fmt.Sprintf("%s-%s", pod.Namespace, pod.Name)
+		for i := range activePods {
+			podCgName := fmt.Sprintf("%s-%s", activePods[i].Namespace, activePods[i].Name)
 			if podCgName != cgName {
-				updatedActivePods = append(updatedActivePods, pod)
+				updatedActivePods = append(updatedActivePods, activePods[i])
 			}
 		}
 
@@ -256,5 +257,9 @@ func TestCleanupDanglingPods(t *testing.T) {
 	podsTracker.cleanupDanglingPods(context.Background())
 
 	assert.Equal(t, len(activePods), 2, "The dangling pod should be deleted from activePods")
-	assert.DeepEqual(t, activePods, k8sPods)
+	for i := range activePods {
+		if !equality.Semantic.DeepEqual(activePods[i], k8sPods[i]) {
+			t.Errorf("activePods and k8sPods should be in sync. Expected %#v, got %#v", k8sPods[i], activePods[i])
+		}
+	}
 }
