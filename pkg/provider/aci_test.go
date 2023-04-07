@@ -5,10 +5,12 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -24,6 +26,7 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"gotest.tools/assert"
 
+	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1707,4 +1710,81 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetContainerLogs(t *testing.T) {
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	containerName := "fake_container_name"
+	fakeLogContent := "fake_log_content\n"
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+
+	cgInfo := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded")
+
+	aciMocks := createNewACIMock()
+
+	aciMocks.MockGetContainerGroupInfo =
+		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+
+			return cgInfo, nil
+		}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	cases := []struct {
+		description    string
+		logContent     *string
+		expectedOutput *string
+	}{
+		{
+			description:    "ListLogs api call returned valid log content",
+			logContent:     &fakeLogContent,
+			expectedOutput: &fakeLogContent,
+		},
+		{
+			description:    "ListLogs api call returned nil",
+			logContent:     nil,
+			expectedOutput: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			aciMocks.MockListLogs =
+				func(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error) {
+
+					return tc.logContent, nil
+				}
+
+			var opts api.ContainerLogOpts
+
+			containerLogsRC, _ := provider.GetContainerLogs(context.Background(), podNamespace, podName, containerName, opts)
+
+			if tc.expectedOutput == nil {
+				assert.Check(t, containerLogsRC == nil, "Container Logs Read Closer should be nil for nil Container Logs content")
+			} else {
+				defer containerLogsRC.Close()
+
+				reader := bufio.NewReader(containerLogsRC)
+				containerLogsContent, err := reader.ReadString('\n')
+				if err != nil && err != io.EOF {
+					t.Fatal("Failed to read string from Read Closer", err)
+				}
+				assert.Equal(t, *tc.expectedOutput, containerLogsContent, "ContainerLogs content should match the expected output")
+			}
+
+		})
+	}
+
 }
