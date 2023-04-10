@@ -1207,7 +1207,7 @@ func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {
 			}
 		}
 
-		return "", fmt.Errorf("the pod requires GPU SKU %s, but ACI only supports SKUs %v in region %s", desiredSKU, p.region, p.gpuSKUs)
+		return "", fmt.Errorf("the pod requires GPU SKU %s, but ACI only supports SKUs %v in region %s", desiredSKU, p.gpuSKUs, p.region)
 	}
 
 	return p.gpuSKUs[0], nil
