@@ -265,80 +265,99 @@ func TestCleanupDanglingPods(t *testing.T) {
 }
 
 func TestUpdatePodsLoop(t *testing.T) {
-	podName1 := "pod-" + uuid.New().String()
-	podName2 := "pod-" + uuid.New().String()
-	podName3 := "pod-" + uuid.New().String()
-	podName4 := "pod-" + uuid.New().String()
+	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
-
-	podsNames := []string{podName1, podName2, podName3, podName4}
-	k8sPods := testsutil.CreatePodsList(podsNames, podNamespace)
-
-	k8sPods[0].Status.Phase = v1.PodPending
-	k8sPods[1].Status.Phase = v1.PodRunning
-	k8sPods[2].Status.Phase = v1.PodFailed
-	k8sPods[3].Status.Phase = v1.PodSucceeded
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	aciMocks := createNewACIMock()
 
-	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
-		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
-		true, true, true)
-
-	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
-		if name == podName1 {
-			return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded"), nil
-		} else {
-			return nil, errdefs.NotFound("cg is not found")
-		}
-	}
-
-	k8sPodsLister := NewMockPodLister(mockCtrl)
-	k8sPodsLister.EXPECT().List(gomock.Any()).Return(k8sPods, nil)
-
 	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), k8sPodsLister)
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	podsTracker := &PodsTracker{
-		pods: k8sPodsLister,
-		updateCb: func(updatedPod *v1.Pod) {
-			for i := range k8sPods {
-				if k8sPods[i].Name == updatedPod.Name && k8sPods[i].Namespace == updatedPod.Namespace {
-					k8sPods[i] = updatedPod
-					break
-				}
-			}
+	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+
+	cases := []struct {
+		description        string
+		podPhase           v1.PodPhase
+		expectedAssertions func(podToCheck *v1.Pod) bool
+	}{
+		{
+			description: "Pod is updated after retrieving the pod status from the provider",
+			podPhase:    v1.PodPending,
+			expectedAssertions: func(podToCheck *v1.Pod) bool {
+				return (assert.Check(t, is.Equal(podToCheck.Status.Phase, v1.PodSucceeded), "Pod should be updated and phase should be set to succeeded") &&
+					assert.Check(t, podToCheck.Status.Conditions != nil, "Pod should be updated and podStatus conditions should be set") &&
+					assert.Check(t, podToCheck.Status.StartTime != nil, "Pod should be updated and podStatus start time should be set") &&
+					assert.Check(t, podToCheck.Status.ContainerStatuses != nil, "Pod should be updated and podStatus container statuses should be set") &&
+					assert.Check(t, is.Equal(len(podToCheck.Status.Conditions), 3), "Pod should be updated and 3 pod conditions should be present"))
+			},
 		},
-		handler: aciProvider,
+		{
+			description: "Pod is updated after provider cannot retrieve the pod status but the pod is in a running state",
+			podPhase:    v1.PodRunning,
+			expectedAssertions: func(podToCheck *v1.Pod) bool {
+				return (assert.Check(t, is.Equal(podToCheck.Status.Phase, v1.PodFailed), "Pod status was not found so the pod should be updated and pod phase should be set to failed") &&
+					assert.Check(t, is.Equal(podToCheck.Status.Reason, statusReasonNotFound), "Pod status was not found so the pod should be updated and pod reason should be set to not found") &&
+					assert.Check(t, is.Equal(podToCheck.Status.Message, statusMessageNotFound), "Pod status was not found so the pod should be updated and  pod message should be set to not found"))
+			},
+		},
+		{
+			description: "Pod status update is skipped because pod has reached a failed phase",
+			podPhase:    v1.PodFailed,
+			expectedAssertions: func(podToCheck *v1.Pod) bool {
+				return (assert.Check(t, is.Equal(podToCheck.Status.Phase, v1.PodFailed), "Pod was not updated, so the status should not change") &&
+					assert.Check(t, is.Nil(podToCheck.Status.Conditions), "Pod was not updated, so the podStatus conditions should not be set") &&
+					assert.Check(t, is.Nil(podToCheck.Status.StartTime), "Pod was not updated, so the podStatus start time should not be set"))
+			},
+		},
+		{
+			description: "Pod status update is skipped because pod is in a succeeded phase",
+			podPhase:    v1.PodSucceeded,
+			expectedAssertions: func(podToCheck *v1.Pod) bool {
+				return (assert.Check(t, is.Equal(podToCheck.Status.Phase, v1.PodSucceeded), "Pod was not updated, so the status should not change") &&
+					assert.Check(t, is.Nil(podToCheck.Status.Conditions), "Pod was not updated, so the podStatus conditions should not be set") &&
+					assert.Check(t, is.Nil(podToCheck.Status.StartTime), "Pod was not updated, so the podStatus start time should not be set"))
+			},
+		},
 	}
 
-	podsTracker.updatePodsLoop(context.Background())
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			pod.Status.Phase = tc.podPhase
+			k8sPods := []*v1.Pod{pod}
 
-	for i := range k8sPods {
-		if i == 0 {
-			assert.Equal(t, k8sPods[i].Status.Phase, v1.PodSucceeded, "Pod should be updatd and phase should be set to succeeded")
-			assert.Check(t, k8sPods[i].Status.Conditions != nil, "Pod should be updated and podStatus conditions should be set")
-			assert.Check(t, k8sPods[i].Status.StartTime != nil, "Pod should be updated and podStatus start time should be set")
-			assert.Check(t, k8sPods[i].Status.ContainerStatuses != nil, "Pod should be updated and podStatus container statuses should be set")
-			assert.Check(t, is.Equal(len(k8sPods[i].Status.Conditions), 3), "Pod should be updated and 3 pod conditions should be present")
-		} else if i == 1 {
-			assert.Equal(t, k8sPods[i].Status.Phase, v1.PodFailed, "Pod status was not found so the pod should be updated and pod phase should be set to failed")
-			assert.Equal(t, k8sPods[i].Status.Reason, statusReasonNotFound, "Pod status was not found so the pod should be updated and pod reason should be set to not found")
-			assert.Equal(t, k8sPods[i].Status.Message, statusMessageNotFound, "Pod status was not found so the pod should be updated and  pod message should be set to not found")
-		} else if i == 2 {
-			assert.Equal(t, k8sPods[i].Status.Phase, v1.PodFailed, "Pod was not updated, so the status should not change")
-			assert.Check(t, is.Nil(k8sPods[i].Status.Conditions), "Pod was not updated, so the podStatus conditions should not be set")
-			assert.Check(t, is.Nil(k8sPods[i].Status.StartTime), "Pod was not updated, so the podStatus start time should not be set")
-		} else {
-			assert.Equal(t, k8sPods[i].Status.Phase, v1.PodSucceeded, "Pod was not updated, so the status should not change")
-			assert.Check(t, is.Nil(k8sPods[i].Status.Conditions), "Pod was not updated, so the podStatus conditions should not be set")
-			assert.Check(t, is.Nil(k8sPods[i].Status.StartTime), "Pod was not updated, so the podStatus start time should not be set")
-		}
+			aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+				if tc.podPhase == v1.PodPending {
+					return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded"), nil
+				} else {
+					return nil, errdefs.NotFound("cg is not found")
+				}
+			}
+
+			k8sPodsLister := NewMockPodLister(mockCtrl)
+			k8sPodsLister.EXPECT().List(gomock.Any()).Return(k8sPods, nil)
+
+			podsTracker := &PodsTracker{
+				pods: k8sPodsLister,
+				updateCb: func(updatedPod *v1.Pod) {
+					pod = updatedPod
+				},
+				handler: aciProvider,
+			}
+
+			podsTracker.updatePodsLoop(context.Background())
+
+			if !tc.expectedAssertions(pod) {
+				t.Error("Expected assertions failed")
+			}
+		})
 	}
 }
