@@ -1729,11 +1729,10 @@ func TestGetContainerLogs(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 
-	aciMocks.MockGetContainerGroupInfo =
-		func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
 
-			return cgInfo, nil
-		}
+		return cgInfo, nil
+	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
 		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
