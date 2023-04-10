@@ -204,7 +204,7 @@ func TestFilterOutContainerNotInPod(t *testing.T) {
 		},
 	}
 
-	testDescription := "Sucessfully filters out containerStats for containers not in pod.spec.containers"
+	testDescription := "Successfully filters out containerStats for containers not in pod.spec.containers"
 	t.Run(testDescription, func(t *testing.T) {
 		filterOutContainerNotInPod(podStats, pod)
 		assert.EqualValues(t, len(podStats.Containers), 2)
