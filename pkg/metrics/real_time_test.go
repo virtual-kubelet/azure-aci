@@ -201,15 +201,22 @@ func TestFilterOutContainerNotInPod(t *testing.T) {
 					UsageCoreNanoSeconds: 9876543210,
 				},
 			},
+			{
+				Name: fake_container4,
+				CPU: cpuStats{
+					UsageCoreNanoSeconds: 1237894560,
+				},
+			},
 		},
 	}
 
 	testDescription := "Successfully filters out containerStats for containers not in pod.spec.containers"
 	t.Run(testDescription, func(t *testing.T) {
 		filterOutContainerNotInPod(podStats, pod)
-		assert.EqualValues(t, len(podStats.Containers), 2)
+		assert.EqualValues(t, len(podStats.Containers), 3)
 		assert.EqualValues(t, podStats.Containers[0].Name, fake_container1)
 		assert.EqualValues(t, podStats.Containers[1].Name, fake_container2)
+		assert.EqualValues(t, podStats.Containers[2].Name, fake_container4)
 	})
 
 }
