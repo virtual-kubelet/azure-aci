@@ -70,6 +70,7 @@ func main() {
 			return true
 		}, func() error {
 			var providerNetwork network.ProviderNetwork
+			providerNetwork.Client = network.ProviderNetworkImpl{ProviderNetwork: &providerNetwork}
 			if azConfig.AKSCredential != nil {
 				providerNetwork.VnetName = azConfig.AKSCredential.VNetName
 				if azConfig.AKSCredential.VNetResourceGroup != "" {

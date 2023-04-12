@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	v1 "k8s.io/api/core/v1"
 )
@@ -134,4 +137,31 @@ func TestFormDNSNameserversFitsLimits(t *testing.T) {
 		appliedNameservers := formDNSNameserversFitsLimits(ctx, tc.nameservers)
 		assert.EqualValues(t, tc.expectedNameserver, appliedNameservers, tc.desc)
 	}
+}
+
+func TestSetupNetwork(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciName := "name"
+	networkMocks := NewMockProviderNetworkInterface(mockCtrl)
+
+	azConfig := &auth.Config{}
+	err := azConfig.SetAuthConfig(context.TODO())
+	if err != nil {
+		t.Fatal(err)
+	}
+	subnetClient := &armnetwork.SubnetsClient{}
+	networkMocks.EXPECT().GetSubnetClient(gomock.Any(), azConfig).Return(subnetClient, nil)
+	networkMocks.EXPECT().GetACISubnet(gomock.Any(), subnetClient).Return(armnetwork.Subnet{
+		Name: &aciName,
+		Properties: &armnetwork.SubnetPropertiesFormat{
+			RouteTable: &armnetwork.RouteTable{},
+		},
+	}, nil)
+	networkMocks.EXPECT().CreateACISubnet(gomock.Any(), subnetClient).Return(nil)
+
+	providerNetwork := ProviderNetwork{Client: networkMocks}
+	providerNetwork.setupNetwork(context.Background(), azConfig)
+
 }

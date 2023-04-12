@@ -42,12 +42,17 @@ var (
 )
 
 type ProviderNetwork struct {
+	Client             ProviderNetworkInterface
 	VnetSubscriptionID string
 	VnetName           string
 	VnetResourceGroup  string
 	SubnetName         string
 	SubnetCIDR         string
 	KubeDNSIP          string
+}
+
+type ProviderNetworkImpl struct {
+	*ProviderNetwork
 }
 
 func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Config) error {
@@ -120,7 +125,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	ctx, span := trace.StartSpan(ctx, "network.setupNetwork")
 	defer span.End()
 
-	subnetsClient, err := pn.GetSubnetClient(ctx, azConfig)
+	subnetsClient, err := pn.Client.GetSubnetClient(ctx, azConfig)
 	if err != nil {
 		return err
 	}
@@ -129,7 +134,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
 	createSubnet := true
-	currentSubnet, err := pn.GetACISubnet(ctxWithResp, subnetsClient)
+	currentSubnet, err := pn.Client.GetACISubnet(ctxWithResp, subnetsClient)
 	if err != nil {
 		return err
 	}
@@ -144,7 +149,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	if createSubnet {
 		logger.Debugf("new subnet %s is creating", pn.SubnetName)
 
-		err2 := pn.CreateACISubnet(ctx, subnetsClient)
+		err2 := pn.Client.CreateACISubnet(ctx, subnetsClient)
 		if err2 != nil {
 			return err2
 		}

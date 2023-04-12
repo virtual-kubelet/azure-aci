@@ -198,6 +198,10 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	p.internalIP = internalIP
 	p.daemonEndpointPort = daemonEndpointPort
 
+	//init providerNetwork
+	p.providerNetwork = network.ProviderNetwork{}
+	p.providerNetwork.Client = network.ProviderNetworkImpl{ProviderNetwork: &p.providerNetwork}
+
 	if azConfig.AKSCredential != nil {
 		p.resourceGroup = azConfig.AKSCredential.ResourceGroup
 		p.region = azConfig.AKSCredential.Region
