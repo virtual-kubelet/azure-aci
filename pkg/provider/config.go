@@ -65,7 +65,7 @@ func (p *ACIProvider) loadConfig(r io.Reader) error {
 
 	// default subnet name
 	if config.SubnetName != "" {
-		p.providernetwork.SubnetName = config.SubnetName
+		p.providerNetwork.SubnetName = config.SubnetName
 	}
 	if config.SubnetCIDR != "" {
 		if config.SubnetName == "" {
