@@ -159,7 +159,6 @@ func TestCalculateUsageNanoCores(t *testing.T) {
 			assert.DeepEqual(t, tc.expectedUsage, nanoCoreUsage)
 		})
 	}
-
 }
 
 func TestFilterOutContainerNotInPod(t *testing.T) {
