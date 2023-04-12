@@ -153,7 +153,7 @@ func TestSetAuthConfigWithAuthFile(t *testing.T) {
 	}
 
 	azConfig := Config{}
-	err = azConfig.SetAuthConfig(context.TODO())
+	err = azConfig.SetAuthConfig(context.TODO(), &azConfig)
 	if err != nil {
 		t.Error(err)
 	}
@@ -200,7 +200,7 @@ func TestSetAuthConfigWithAKSCredFile(t *testing.T) {
 	}
 
 	azConfig := Config{}
-	err = azConfig.SetAuthConfig(context.TODO())
+	err = azConfig.SetAuthConfig(context.TODO(), &azConfig)
 	if err != nil {
 		t.Error(err)
 	}
@@ -244,7 +244,7 @@ func TestSetAuthConfigWithEnvVariablesOnly(t *testing.T) {
 	}
 
 	azConfig := Config{}
-	err = azConfig.SetAuthConfig(context.TODO())
+	err = azConfig.SetAuthConfig(context.TODO(), &azConfig)
 	if err != nil {
 		t.Error(err)
 	}

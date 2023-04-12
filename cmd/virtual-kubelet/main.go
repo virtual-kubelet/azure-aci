@@ -97,7 +97,7 @@ func main() {
 
 	var provider string
 	//Setup config
-	err := azConfig.SetAuthConfig(ctx)
+	err := azConfig.SetAuthConfig(ctx, &azConfig)
 	if err != nil {
 		log.G(ctx).Fatal(err)
 	}

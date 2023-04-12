@@ -109,7 +109,7 @@ func (c *Config) GetAuthorizer(ctx context.Context, resource string) (autorest.A
 }
 
 // SetAuthConfig sets the configuration needed for Authentication.
-func (c *Config) SetAuthConfig(ctx context.Context) error {
+func (c *Config) SetAuthConfig(ctx context.Context, configInterface ConfigInterface) error {
 	ctx, span := trace.StartSpan(ctx, "auth.SetAuthConfig")
 	defer span.End()
 
@@ -186,7 +186,7 @@ func (c *Config) SetAuthConfig(ctx context.Context) error {
 
 	resource := c.Cloud.Services[cloud.ResourceManager].Endpoint
 
-	c.Authorizer, err = c.GetAuthorizer(ctx, resource)
+	c.Authorizer, err = configInterface.GetAuthorizer(ctx, resource)
 	if err != nil {
 		return err
 	}

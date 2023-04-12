@@ -688,7 +688,7 @@ func TestPodToACIEnvVar(t *testing.T) {
 }
 
 func setAuthConfig() error {
-	err := azConfig.SetAuthConfig(context.TODO())
+	err := azConfig.SetAuthConfig(context.TODO(), &azConfig)
 	if err != nil {
 		return err
 	}
@@ -1133,7 +1133,7 @@ func TestGetPodWithContainerID(t *testing.T) {
 	mockPodsNamespaceLister.EXPECT().Get(podName).
 		Return(testsutil.CreatePodObj(podName, podNamespace), nil)
 
-	err := azConfig.SetAuthConfig(context.TODO())
+	err := azConfig.SetAuthConfig(context.TODO(), &azConfig)
 	if err != nil {
 		t.Fatal("failed to get auth configuration", err)
 	}

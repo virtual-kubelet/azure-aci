@@ -60,7 +60,7 @@ func main() {
 	azConfig := auth.Config{}
 
 	//Setup config
-	err = azConfig.SetAuthConfig(ctx)
+	err = azConfig.SetAuthConfig(ctx, &azConfig)
 	if err != nil {
 		log.G(ctx).Fatalf("cannot setup the auth configuration. Retrying, ", err)
 	}
