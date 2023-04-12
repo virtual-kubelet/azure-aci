@@ -42,4 +42,4 @@ jobs:
         uses: codecov/codecov-action@v3
         with:
           ## Comma-separated list of files to upload
-          files: ./coverage.out
+          files: ./coverage.txt
