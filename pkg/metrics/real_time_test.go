@@ -227,7 +227,6 @@ func TestFilterOutContainerNotInPod(t *testing.T) {
 		assert.DeepEqual(t, fake_container2, podStats.Containers[1].Name)
 		assert.DeepEqual(t, fake_container4, podStats.Containers[2].Name)
 	})
-
 }
 
 func TestGetRealTimeExtensionPodStats(t *testing.T) {
