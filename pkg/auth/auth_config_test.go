@@ -1,8 +1,11 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package auth
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -21,7 +24,7 @@ const cred = `
 }`
 
 func TestAKSCred(t *testing.T) {
-	file, err := ioutil.TempFile("", "aks_auth_test")
+	file, err := os.CreateTemp("", "aks_auth_test")
 	if err != nil {
 		t.Error(err)
 	}
@@ -72,7 +75,7 @@ func TestAKSCred(t *testing.T) {
 }
 
 func TestAKSCredFileNotFound(t *testing.T) {
-	file, err := ioutil.TempFile("", "AKS_test")
+	file, err := os.CreateTemp("", "AKS_test")
 	if err != nil {
 		t.Error(err)
 	}
@@ -100,7 +103,7 @@ const credBad = `
     "resourceGroup": "vk-test-rg",`
 
 func TestAKSCredBadJson(t *testing.T) {
-	file, err := ioutil.TempFile("", "aks_auth_test")
+	file, err := os.CreateTemp("", "aks_auth_test")
 	if err != nil {
 		t.Error(err)
 	}
@@ -125,7 +128,7 @@ func TestSetAuthConfigWithAuthFile(t *testing.T) {
    "tenantId": "######-###-####-####-######"
 
 }`
-	file, err := ioutil.TempFile("", "aks_auth_test")
+	file, err := os.CreateTemp("", "aks_auth_test")
 	if err != nil {
 		t.Error(err)
 	}
@@ -172,7 +175,7 @@ func TestSetAuthConfigWithAKSCredFile(t *testing.T) {
     "vnetResourceGroup": "vk-aci-test-12917",
     "userAssignedIdentityID": "######-tuhn-41af-re3e0-######"
 }`
-	file, err := ioutil.TempFile("", "aks_auth_test")
+	file, err := os.CreateTemp("", "aks_auth_test")
 	if err != nil {
 		t.Error(err)
 	}
