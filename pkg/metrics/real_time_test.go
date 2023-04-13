@@ -537,27 +537,97 @@ func TestExtensionPodStatsToKubeletsPodStats(t *testing.T) {
 		},
 	}
 
-	testDescription := "Successfully converts Extension Pod Stats to Kubelet Pod Stats"
-	t.Run(testDescription, func(t *testing.T) {
-		kubeletPodStats := extensionPodStatsToKubeletPodStats(pod, podStats)
-		assert.DeepEqual(t, expectedKubeletPodStats.PodRef.Name, kubeletPodStats.PodRef.Name)
-		assert.DeepEqual(t, expectedKubeletPodStats.StartTime, kubeletPodStats.StartTime)
-		assert.DeepEqual(t, expectedKubeletPodStats.CPU.Time, kubeletPodStats.CPU.Time)
-		assert.DeepEqual(t, expectedKubeletPodStats.CPU.UsageCoreNanoSeconds, kubeletPodStats.CPU.UsageCoreNanoSeconds)
-		assert.DeepEqual(t, expectedKubeletPodStats.CPU.UsageNanoCores, kubeletPodStats.CPU.UsageNanoCores)
-		assert.DeepEqual(t, expectedKubeletPodStats.Memory.UsageBytes, kubeletPodStats.Memory.UsageBytes)
-		assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.Name, kubeletPodStats.Network.InterfaceStats.Name)
-		assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.TxBytes, kubeletPodStats.Network.InterfaceStats.TxBytes)
-		assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].Name, kubeletPodStats.Network.Interfaces[0].Name)
-		assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].TxBytes, kubeletPodStats.Network.Interfaces[0].TxBytes)
-		assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].Name, kubeletPodStats.Network.Interfaces[1].Name)
-		assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].TxBytes, kubeletPodStats.Network.Interfaces[1].TxBytes)
-		assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].CPU.UsageCoreNanoSeconds, kubeletPodStats.Containers[0].CPU.UsageCoreNanoSeconds)
-		assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].CPU.UsageNanoCores, kubeletPodStats.Containers[0].CPU.UsageNanoCores)
-		assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].Memory.UsageBytes, kubeletPodStats.Containers[0].Memory.UsageBytes)
-		assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].CPU.UsageCoreNanoSeconds, kubeletPodStats.Containers[1].CPU.UsageCoreNanoSeconds)
-		assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].CPU.UsageNanoCores, kubeletPodStats.Containers[1].CPU.UsageNanoCores)
-		assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].Memory.UsageBytes, kubeletPodStats.Containers[1].Memory.UsageBytes)
+	cases := []struct {
+		description string
+		assertions  func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats)
+	}{
+		{
+			description: "Acutal and Expected Pod Reference Metadata should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.PodRef.Name, kubeletPodStats.PodRef.Name)
+				assert.DeepEqual(t, expectedKubeletPodStats.PodRef.Namespace, kubeletPodStats.PodRef.Namespace)
+				assert.DeepEqual(t, expectedKubeletPodStats.PodRef.UID, kubeletPodStats.PodRef.UID)
+			},
+		},
+		{
+			description: "Acutal and Expected Start Time should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.StartTime, kubeletPodStats.StartTime)
+			},
+		},
+		{
+			description: "Acutal and Expected CPU Stats should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.CPU.Time, kubeletPodStats.CPU.Time)
+				assert.DeepEqual(t, expectedKubeletPodStats.CPU.UsageCoreNanoSeconds, kubeletPodStats.CPU.UsageCoreNanoSeconds)
+				assert.DeepEqual(t, expectedKubeletPodStats.CPU.UsageNanoCores, kubeletPodStats.CPU.UsageNanoCores)
+			},
+		},
+		{
+			description: "Acutal and Expected Memory Stats should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.Memory.Time, kubeletPodStats.Memory.Time)
+				assert.DeepEqual(t, expectedKubeletPodStats.Memory.UsageBytes, kubeletPodStats.Memory.UsageBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Memory.WorkingSetBytes, kubeletPodStats.Memory.WorkingSetBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Memory.RSSBytes, kubeletPodStats.Memory.RSSBytes)
+			},
+		},
+		{
+			description: "Acutal and Expected Network Interface Stats should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.Name, kubeletPodStats.Network.InterfaceStats.Name)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.RxBytes, kubeletPodStats.Network.InterfaceStats.RxBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.RxErrors, kubeletPodStats.Network.InterfaceStats.RxErrors)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.TxBytes, kubeletPodStats.Network.InterfaceStats.TxBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.InterfaceStats.TxErrors, kubeletPodStats.Network.InterfaceStats.TxErrors)
+			},
+		},
+		{
+			description: "Acutal and Expected Network Interfaces array Stats should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].Name, kubeletPodStats.Network.Interfaces[0].Name)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].RxBytes, kubeletPodStats.Network.Interfaces[0].RxBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].RxErrors, kubeletPodStats.Network.Interfaces[0].RxErrors)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].TxBytes, kubeletPodStats.Network.Interfaces[0].TxBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[0].TxErrors, kubeletPodStats.Network.Interfaces[0].TxErrors)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].Name, kubeletPodStats.Network.Interfaces[1].Name)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].RxBytes, kubeletPodStats.Network.Interfaces[1].RxBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].RxErrors, kubeletPodStats.Network.Interfaces[1].RxErrors)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].TxBytes, kubeletPodStats.Network.Interfaces[1].TxBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Network.Interfaces[1].TxErrors, kubeletPodStats.Network.Interfaces[1].TxErrors)
+			},
+		},
+		{
+			description: "Acutal and Expected Containers array CPU Stats should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].CPU.Time, kubeletPodStats.Containers[0].CPU.Time)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].CPU.UsageCoreNanoSeconds, kubeletPodStats.Containers[0].CPU.UsageCoreNanoSeconds)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].CPU.UsageNanoCores, kubeletPodStats.Containers[0].CPU.UsageNanoCores)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].CPU.Time, kubeletPodStats.Containers[1].CPU.Time)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].CPU.UsageCoreNanoSeconds, kubeletPodStats.Containers[1].CPU.UsageCoreNanoSeconds)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].CPU.UsageNanoCores, kubeletPodStats.Containers[1].CPU.UsageNanoCores)
+			},
+		},
+		{
+			description: "Acutal and Expected Containers array Memory Stats should match",
+			assertions: func(expectedKubeletPodStats *stats.PodStats, kubeletPodStats *stats.PodStats) {
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].Memory.Time, kubeletPodStats.Containers[0].Memory.Time)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].Memory.UsageBytes, kubeletPodStats.Containers[0].Memory.UsageBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].Memory.WorkingSetBytes, kubeletPodStats.Containers[0].Memory.WorkingSetBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[0].Memory.RSSBytes, kubeletPodStats.Containers[0].Memory.RSSBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].Memory.Time, kubeletPodStats.Containers[1].Memory.Time)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].Memory.UsageBytes, kubeletPodStats.Containers[1].Memory.UsageBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].Memory.WorkingSetBytes, kubeletPodStats.Containers[1].Memory.WorkingSetBytes)
+				assert.DeepEqual(t, expectedKubeletPodStats.Containers[1].Memory.RSSBytes, kubeletPodStats.Containers[1].Memory.RSSBytes)
+			},
+		},
+	}
 
-	})
+	kubeletPodStats := extensionPodStatsToKubeletPodStats(pod, podStats)
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			tc.assertions(&expectedKubeletPodStats, kubeletPodStats)
+		})
+	}
 }
