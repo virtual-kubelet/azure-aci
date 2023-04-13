@@ -168,7 +168,8 @@ func extensionPodStatsToKubeletPodStats(pod *v1.Pod, realtimePodStats *realtimeM
 		},
 	}
 	result.Containers = make([]stats.ContainerStats, 0)
-	for _, extensionContainer := range realtimePodStats.Containers {
+	for i := range realtimePodStats.Containers {
+		extensionContainer := realtimePodStats.Containers[i]
 		result.Containers = append(result.Containers, stats.ContainerStats{
 			Name:      extensionContainer.Name,
 			StartTime: pod.CreationTimestamp,
@@ -187,8 +188,8 @@ func extensionPodStatsToKubeletPodStats(pod *v1.Pod, realtimePodStats *realtimeM
 	}
 
 	result.Network.Interfaces = make([]stats.InterfaceStats, 0)
-	for _, extensionNetworkInterface := range realtimePodStats.Network.Interfaces {
-		extensionNetworkInterface := extensionNetworkInterface
+	for i := range realtimePodStats.Network.Interfaces {
+		extensionNetworkInterface := realtimePodStats.Network.Interfaces[i]
 		result.Network.Interfaces = append(result.Network.Interfaces, stats.InterfaceStats{
 			Name:     extensionNetworkInterface.Name,
 			RxBytes:  &extensionNetworkInterface.RxBytes,
