@@ -330,7 +330,6 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 
 // Tests create pod with default GPU SKU.
 func TestCreatePodWithGPU(t *testing.T) {
-	t.Skip("Skipping GPU tests until Location API is fixed")
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -380,6 +379,8 @@ func TestCreatePodWithGPU(t *testing.T) {
 		t.Fatal("failed to create the test provider", err)
 	}
 
+	provider.gpuSKUs = []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -387,8 +388,6 @@ func TestCreatePodWithGPU(t *testing.T) {
 
 // Tests create pod with GPU SKU in annotation.
 func TestCreatePodWithGPUSKU(t *testing.T) {
-	t.Skip("Skipping GPU tests until Location API is fixed")
-
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -406,7 +405,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		assert.Check(t, is.Equal(3.4, *(containers[0]).Properties.Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, (containers[0]).Properties.Resources.Requests.Gpu != nil, "Requests GPU is not expected")
 		assert.Check(t, is.Equal(int32(1), *(containers[0]).Properties.Resources.Requests.Gpu.Count), "Requests GPU Count is not expected")
-		assert.Check(t, is.Equal(gpuSKU, (containers[0]).Properties.Resources.Requests.Gpu.SKU), "Requests GPU SKU is not expected")
+		assert.Check(t, is.Equal(gpuSKU, *(containers[0]).Properties.Resources.Requests.Gpu.SKU), "Requests GPU SKU is not expected")
 		assert.Check(t, (containers[0]).Properties.Resources.Limits.Gpu != nil, "Limits GPU is not expected")
 
 		return nil
@@ -417,6 +416,8 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
+
+	provider.gpuSKUs = []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

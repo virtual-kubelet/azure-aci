@@ -13,7 +13,7 @@ cat <<EOF > "${TEST_AKS_CREDENTIALS_JSON}"
    "aadClientId": "msi",
    "aadClientSecret": "msi",
    "resourceGroup": "######-###-####-####-######",
-   "location": "centralus",
+   "location": "eastus",
    "vnetName": "#####",
    "vnetResourceGroup": "######-###-####-####-######",
    "userAssignedIdentityID": "######-###-####-####-######"
