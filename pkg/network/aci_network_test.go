@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	aznetworkv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
@@ -134,4 +135,122 @@ func TestFormDNSNameserversFitsLimits(t *testing.T) {
 		appliedNameservers := formDNSNameserversFitsLimits(ctx, tc.nameservers)
 		assert.EqualValues(t, tc.expectedNameserver, appliedNameservers, tc.desc)
 	}
+}
+
+func TestShouldCreateSubnet(t *testing.T) {
+	subnetName := "fakeSubnet"
+	fakeAddPrefix := "10.00.0/16"
+	providerSubnetCIDR := "10.00.0/17"
+	subnetDelegationService := "Microsoft.ContainerInstance/containerGroups"
+	fakeResourceType := "fakeResourceType"
+
+	fakeServiceAssotiationLinks := []*aznetworkv2.ServiceAssociationLink{
+		{
+			Properties: &aznetworkv2.ServiceAssociationLinkPropertiesFormat{
+				LinkedResourceType: &fakeResourceType,
+			},
+		}}
+
+	currentSubnet := aznetworkv2.Subnet{
+		Name: &subnetName,
+	}
+
+	pn := ProviderNetwork{
+		SubnetName: subnetName,
+	}
+
+	cases := []struct {
+		description        string
+		providerSubnetCIDR string
+		subnetProperties   aznetworkv2.SubnetPropertiesFormat
+		expectedError      error
+		expectedAssertions func(result bool) bool
+	}{
+		{
+			description:        "can create a subnet because all the checks pass",
+			providerSubnetCIDR: "",
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix: &fakeAddPrefix,
+			},
+			expectedAssertions: func(result bool) bool {
+				return assert.Equal(t, result, true, "subnet should be created")
+			},
+		},
+		{
+			description:        "doesn't create a subnet because subnet is already linked to Microsoft.ContainerInstance/containerGroups",
+			providerSubnetCIDR: "",
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix: &fakeAddPrefix,
+				ServiceAssociationLinks: []*aznetworkv2.ServiceAssociationLink{
+					{
+						Properties: &aznetworkv2.ServiceAssociationLinkPropertiesFormat{
+							LinkedResourceType: &subnetDelegationService,
+						},
+					}},
+			},
+			expectedAssertions: func(result bool) bool {
+				return assert.Equal(t, result, false, "subnet should not be created because subnet already linked to Microsoft.ContainerInstance/containerGroups")
+			},
+		},
+		{
+			description:        "doesn't create a subnet because subnet is being delegated to Microsoft.ContainerInstance/containerGroups",
+			providerSubnetCIDR: "",
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix: &fakeAddPrefix,
+				Delegations: []*aznetworkv2.Delegation{
+					{
+						Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
+							ServiceName: &subnetDelegationService,
+						},
+					}},
+			},
+			expectedAssertions: func(result bool) bool {
+				return assert.Equal(t, result, false, "subnet should not be created because subnet is being delegated to Microsoft.ContainerInstance/containerGroups")
+			},
+		},
+		{
+			description:        "cannot create a subnet because Microsoft.ContainerInstance/containerGroups can't be delegated to the subnet",
+			providerSubnetCIDR: "",
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix:           &fakeAddPrefix,
+				ServiceAssociationLinks: fakeServiceAssotiationLinks,
+			},
+			expectedError: fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, fakeServiceAssotiationLinks[0]),
+		},
+		{
+			description:        "cannot create subnet because current subnet references a route table",
+			providerSubnetCIDR: "",
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix: &fakeAddPrefix,
+				RouteTable: &aznetworkv2.RouteTable{
+					ID: &subnetName,
+				},
+			},
+			expectedError: fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, subnetName),
+		}, {
+			description:        "cannot create subnet because provider subnet CIDR does not match with desired subnet",
+			providerSubnetCIDR: providerSubnetCIDR,
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix: &fakeAddPrefix,
+			},
+			expectedError: fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, fakeAddPrefix, providerSubnetCIDR),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pn.SubnetCIDR = tc.providerSubnetCIDR
+			currentSubnet.Properties = &tc.subnetProperties
+
+			result, err := pn.shouldCreateSubnet(currentSubnet, true)
+
+			if tc.expectedError != nil {
+				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")
+				assert.Equal(t, result, false, "subnet should not be created")
+			} else {
+				assert.Equal(t, err, nil, "no error should be returned")
+				assert.Equal(t, tc.expectedAssertions(result), true, "Expected assertions should pass")
+			}
+		})
+	}
+
 }
