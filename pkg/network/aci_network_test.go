@@ -288,6 +288,8 @@ func TestValidateNetworkConfig(t *testing.T) {
 		{
 			description: "ACI subnet CIDR env variable is set but subnet name is missing",
 			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
 				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
 				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
 			},
@@ -296,6 +298,10 @@ func TestValidateNetworkConfig(t *testing.T) {
 		{
 			description: "ACI subnet CIDR env variable is set but it is malformed",
 			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
 				os.Setenv("ACI_SUBNET_NAME", "fakeSubnet")
 			},
 			expectedError: errors.New("error parsing provided subnet CIDR: invalid CIDR address: 10.00.0/16"),
@@ -303,6 +309,11 @@ func TestValidateNetworkConfig(t *testing.T) {
 		{
 			description: "all environmental variables are set as expected",
 			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
+				os.Setenv("ACI_SUBNET_NAME", "fakeSubnet")
 				os.Setenv("ACI_SUBNET_CIDR", "127.0.0.1/24")
 			},
 			expectedError: nil,
