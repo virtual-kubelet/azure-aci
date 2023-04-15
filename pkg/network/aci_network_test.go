@@ -2,12 +2,15 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	aznetworkv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	v1 "k8s.io/api/core/v1"
 )
@@ -253,4 +256,73 @@ func TestShouldCreateSubnet(t *testing.T) {
 		})
 	}
 
+}
+
+func TestValidateNetworkConfig(t *testing.T) {
+	azConfig := auth.Config{}
+	err := azConfig.SetAuthConfig(context.TODO())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pn := &ProviderNetwork{}
+
+	cases := []struct {
+		description   string
+		setEnvVar     func()
+		expectedError error
+	}{
+		{
+			description:   "ACI vnet name env variable is not set",
+			setEnvVar:     func() {},
+			expectedError: errors.New("vnet name can not be empty please set ACI_VNET_NAME"),
+		},
+		{
+			description: "ACI vnet resource group env variable is not set",
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+			},
+			expectedError: errors.New("vnet resourceGroup can not be empty please set ACI_VNET_RESOURCE_GROUP"),
+		},
+		{
+			description: "ACI subnet CIDR env variable is set but subnet name is missing",
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
+			},
+			expectedError: errors.New("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR"),
+		},
+		{
+			description: "ACI subnet CIDR env variable is set but it is malformed",
+			setEnvVar: func() {
+				os.Setenv("ACI_SUBNET_NAME", "fakeSubnet")
+			},
+			expectedError: errors.New("error parsing provided subnet CIDR: invalid CIDR address: 10.00.0/16"),
+		},
+		{
+			description: "all environmental variables are set as expected",
+			setEnvVar: func() {
+				os.Setenv("ACI_SUBNET_CIDR", "127.0.0.1/24")
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			tc.setEnvVar()
+			err := pn.validateNetworkConfig(context.Background(), &azConfig)
+
+			if tc.expectedError != nil {
+				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")
+			} else {
+				assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID"))
+				assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME"))
+				assert.Equal(t, pn.VnetResourceGroup, os.Getenv("ACI_VNET_RESOURCE_GROUP"))
+				assert.Equal(t, pn.SubnetName, os.Getenv("ACI_SUBNET_NAME"))
+				assert.Equal(t, pn.SubnetCIDR, os.Getenv("ACI_SUBNET_CIDR"))
+			}
+		})
+	}
 }
