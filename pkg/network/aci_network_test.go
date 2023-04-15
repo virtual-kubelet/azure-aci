@@ -265,8 +265,6 @@ func TestValidateNetworkConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pn := &ProviderNetwork{}
-
 	cases := []struct {
 		description   string
 		setEnvVar     func()
@@ -323,6 +321,8 @@ func TestValidateNetworkConfig(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 			tc.setEnvVar()
+
+			pn := &ProviderNetwork{}
 			err := pn.validateNetworkConfig(context.Background(), &azConfig)
 
 			if tc.expectedError != nil {
