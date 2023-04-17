@@ -2,12 +2,15 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"testing"
 
 	aznetworkv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	testsutil "github.com/virtual-kubelet/azure-aci/pkg/tests"
 	v1 "k8s.io/api/core/v1"
 )
@@ -253,4 +256,168 @@ func TestShouldCreateSubnet(t *testing.T) {
 		})
 	}
 
+}
+
+func TestValidateNetworkConfig(t *testing.T) {
+	azConfig := auth.Config{}
+
+	err := azConfig.SetAuthConfig(context.TODO())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		description        string
+		providerNetwork    *ProviderNetwork
+		setEnvVar          func()
+		expectedAssertions func(pn *ProviderNetwork) bool
+		expectedError      error
+	}{
+		{
+			description:     "Neither provider Vnet name nor env variable is set",
+			providerNetwork: &ProviderNetwork{},
+			setEnvVar:       func() {},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, azConfig.AuthConfig.SubscriptionID, "ACI Vnet subscription ID env variable was not set so it should default to what is present in authconfig") &&
+					assert.Equal(t, pn.VnetName, "")
+			},
+			expectedError: errors.New("vnet name can not be empty please set ACI_VNET_NAME"),
+		},
+		{
+			description: "Provider Vnet name, RG, and subnetName is set but env variable is not set",
+			providerNetwork: &ProviderNetwork{
+				VnetName:          "fakeVnet2",
+				VnetResourceGroup: "fakeRG2",
+				SubnetName:        "fakeSubnet2",
+			},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, "fakeVnet2") && assert.Equal(t, pn.VnetResourceGroup, "fakeRG2") &&
+					assert.Equal(t, pn.SubnetName, "fakeSubnet2")
+			},
+			expectedError: nil,
+		},
+		{
+			description:     "Provider Vnet name is not set but env variable is set and neither is set for vnet resource group",
+			providerNetwork: &ProviderNetwork{},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME"))
+			},
+			expectedError: errors.New("vnet resourceGroup can not be empty please set ACI_VNET_RESOURCE_GROUP"),
+		},
+		{
+			description:     "Provider Vnet RG is not set, but the env variable is set",
+			providerNetwork: &ProviderNetwork{},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME")) &&
+					assert.Equal(t, pn.VnetResourceGroup, os.Getenv(("ACI_VNET_RESOURCE_GROUP")))
+			},
+			expectedError: nil,
+		},
+		{
+			description:     "Neither provider, nor env variable is set for subnet name but subnet cidr env variable is set",
+			providerNetwork: &ProviderNetwork{},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME")) &&
+					assert.Equal(t, pn.VnetResourceGroup, os.Getenv("ACI_VNET_RESOURCE_GROUP")) &&
+					assert.Equal(t, pn.SubnetName, "")
+			},
+			expectedError: errors.New("subnet CIDR defined but no subnet name, subnet name is required to set a subnet CIDR"),
+		},
+		{
+			description: "Both provider and env variable is set for Vnet name, Vnet RG, and subnet name",
+			providerNetwork: &ProviderNetwork{
+				VnetName:          "fakeVnet2",
+				VnetResourceGroup: "fakeRG2",
+				SubnetName:        "fakeSubnet2",
+			},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_NAME", "fakeSubnet")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME")) &&
+					assert.Equal(t, pn.VnetResourceGroup, os.Getenv("ACI_VNET_RESOURCE_GROUP")) &&
+					assert.Equal(t, pn.SubnetName, os.Getenv("ACI_SUBNET_NAME"))
+			},
+			expectedError: nil,
+		},
+		{
+			description:     "Provider subnet name is not set, but the env variable is set and it is malformed",
+			providerNetwork: &ProviderNetwork{},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
+				os.Setenv("ACI_SUBNET_NAME", "fakeSubnet")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME")) &&
+					assert.Equal(t, pn.VnetResourceGroup, os.Getenv("ACI_VNET_RESOURCE_GROUP")) &&
+					assert.Equal(t, pn.SubnetName, os.Getenv("ACI_SUBNET_NAME"))
+			},
+			expectedError: errors.New("error parsing provided subnet CIDR: invalid CIDR address: 10.00.0/16"),
+		},
+		{
+			description:     "Provider subnet name is not set, but the env variable is set and it is valid",
+			providerNetwork: &ProviderNetwork{},
+			setEnvVar: func() {
+				os.Setenv("ACI_VNET_SUBSCRIPTION_ID", "111111-222-3333-4444-555555")
+				os.Setenv("ACI_VNET_NAME", "fakeVnet")
+				os.Setenv("ACI_VNET_RESOURCE_GROUP", "fakeRG")
+				os.Setenv("ACI_SUBNET_CIDR", "10.00.0/16")
+				os.Setenv("ACI_SUBNET_NAME", "fakeSubnet")
+				os.Setenv("ACI_SUBNET_CIDR", "127.0.0.1/24")
+			},
+			expectedAssertions: func(pn *ProviderNetwork) bool {
+				return assert.Equal(t, pn.VnetSubscriptionID, os.Getenv("ACI_VNET_SUBSCRIPTION_ID")) &&
+					assert.Equal(t, pn.VnetName, os.Getenv("ACI_VNET_NAME")) &&
+					assert.Equal(t, pn.VnetResourceGroup, os.Getenv("ACI_VNET_RESOURCE_GROUP")) &&
+					assert.Equal(t, pn.SubnetName, os.Getenv("ACI_SUBNET_NAME")) &&
+					assert.Equal(t, pn.SubnetCIDR, os.Getenv("ACI_SUBNET_CIDR"))
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			tc.setEnvVar()
+
+			pn := tc.providerNetwork
+			err := pn.validateNetworkConfig(context.Background(), &azConfig)
+
+			assert.Equal(t, tc.expectedAssertions(pn), true, "Expected assertions should pass")
+
+			if tc.expectedError != nil {
+				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")
+			}
+		})
+	}
 }
