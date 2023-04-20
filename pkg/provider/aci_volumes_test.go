@@ -193,7 +193,7 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 			err = provider.CreatePod(context.Background(), pod)
 
 			if tc.expectedError == nil {
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 			} else {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
@@ -484,7 +484,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			err = provider.CreatePod(context.Background(), pod)
 
 			if tc.expectedError == nil {
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 			} else {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
 			}
@@ -598,7 +598,7 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 			if tc.expectedError == nil {
 				azureStorageAccountName := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountName"))
 				azureStorageAccountKey := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountKey"))
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountName], azureStorageAccountName)
 				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountKey], azureStorageAccountKey)
 			} else {
@@ -710,7 +710,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 
 				fakeCaConfigData := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 				assert.DeepEqual(t, *volumes[1].Secret[configMapName], fakeCaConfigData)
@@ -836,7 +836,7 @@ func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
 			if tc.expectedError == nil {
 				azureStorageAccountName := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountName"))
 				azureStorageAccountKey := base64.StdEncoding.EncodeToString([]byte("azureFileStorageAccountKey"))
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountName], azureStorageAccountName)
 				assert.DeepEqual(t, *volumes[1].Secret[azureFileStorageAccountKey], azureStorageAccountKey)
 			} else {
@@ -957,7 +957,7 @@ func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
 			volumes, err := provider.getVolumes(context.Background(), pod)
 
 			if tc.expectedError == nil {
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 
 				fakeCaConfigData := base64.StdEncoding.EncodeToString([]byte("fake-ca-data"))
 				assert.DeepEqual(t, *volumes[1].Secret[configMapName], fakeCaConfigData)
@@ -1074,7 +1074,7 @@ func TestGetVolumesProjectedVolSvcAcctTokenSource(t *testing.T) {
 
 			if tc.expectedError == nil {
 				fakeServiceAccountData := base64.StdEncoding.EncodeToString([]byte("fake-svc-acct-token-data"))
-				assert.NilError(t, tc.expectedError, err)
+				assert.NilError(t, err)
 				assert.DeepEqual(t, *volumes[1].Secret[secretName], fakeServiceAccountData)
 			} else {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())

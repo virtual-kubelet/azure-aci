@@ -10,7 +10,7 @@ import (
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/google/uuid"
 	"github.com/virtual-kubelet/azure-aci/pkg/util"
-	v12 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -183,54 +183,54 @@ func CreateCGProbeObj(hasHTTPGet, hasExec bool) *azaciv2.ContainerProbe {
 	}
 }
 
-func GetPodConditions(creationTime, readyConditionTime v1.Time, readyConditionStatus v12.ConditionStatus) []v12.PodCondition {
-	return []v12.PodCondition{
+func GetPodConditions(creationTime, readyConditionTime v1.Time, readyConditionStatus corev1.ConditionStatus) []corev1.PodCondition {
+	return []corev1.PodCondition{
 		{
-			Type:               v12.PodReady,
+			Type:               corev1.PodReady,
 			Status:             readyConditionStatus,
 			LastTransitionTime: readyConditionTime,
 		}, {
-			Type:               v12.PodInitialized,
-			Status:             v12.ConditionTrue,
+			Type:               corev1.PodInitialized,
+			Status:             corev1.ConditionTrue,
 			LastTransitionTime: creationTime,
 		}, {
-			Type:               v12.PodScheduled,
-			Status:             v12.ConditionTrue,
+			Type:               corev1.PodScheduled,
+			Status:             corev1.ConditionTrue,
 			LastTransitionTime: creationTime,
 		},
 	}
 }
 
-func CreatePodObj(podName, podNamespace string) *v12.Pod {
-	return &v12.Pod{
+func CreatePodObj(podName, podNamespace string) *corev1.Pod {
+	return &corev1.Pod{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v12.PodSpec{
-			Containers: []v12.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Ports: []v12.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							Name:          "http",
 							ContainerPort: 8080,
 						},
 					},
-					Resources: v12.ResourceRequirements{
-						Requests: v12.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("0.99"),
 							"memory": resource.MustParse("1.5G"),
 						},
-						Limits: v12.ResourceList{
+						Limits: corev1.ResourceList{
 							"cpu":    resource.MustParse("3999m"),
 							"memory": resource.MustParse("8010M"),
 						},
 					},
 
-					LivenessProbe: &v12.Probe{
-						ProbeHandler: v12.ProbeHandler{
-							HTTPGet: &v12.HTTPGetAction{
+					LivenessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							HTTPGet: &corev1.HTTPGetAction{
 								Port: intstr.FromString("http"),
 								Path: "/",
 							},
@@ -241,9 +241,9 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 						SuccessThreshold:    3,
 						FailureThreshold:    5,
 					},
-					ReadinessProbe: &v12.Probe{
-						ProbeHandler: v12.ProbeHandler{
-							HTTPGet: &v12.HTTPGetAction{
+					ReadinessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							HTTPGet: &corev1.HTTPGetAction{
 								Port: intstr.FromInt(8080),
 								Path: "/",
 							},
@@ -260,19 +260,19 @@ func CreatePodObj(podName, podNamespace string) *v12.Pod {
 	}
 }
 
-func CreatePodProbeObj(hasHTTPGet, hasExec bool) *v12.Probe {
-	var httpGet *v12.HTTPGetAction
-	var exec *v12.ExecAction
+func CreatePodProbeObj(hasHTTPGet, hasExec bool) *corev1.Probe {
+	var httpGet *corev1.HTTPGetAction
+	var exec *corev1.ExecAction
 
 	if hasHTTPGet {
-		httpGet = &v12.HTTPGetAction{
+		httpGet = &corev1.HTTPGetAction{
 			Port:   intstr.FromString("http"),
 			Path:   "/",
 			Scheme: "http",
 		}
 	}
 	if hasExec {
-		exec = &v12.ExecAction{
+		exec = &corev1.ExecAction{
 			Command: []string{
 				"/bin/sh",
 				"-c",
@@ -281,16 +281,16 @@ func CreatePodProbeObj(hasHTTPGet, hasExec bool) *v12.Probe {
 		}
 	}
 
-	return &v12.Probe{
-		ProbeHandler: v12.ProbeHandler{
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: httpGet,
 			Exec:    exec,
 		},
 	}
 }
 
-func CreateContainerPortObj(portName string, containerPort int32) []v12.ContainerPort {
-	return []v12.ContainerPort{
+func CreateContainerPortObj(portName string, containerPort int32) []corev1.ContainerPort {
+	return []corev1.ContainerPort{
 		{
 			Name:          portName,
 			ContainerPort: containerPort,
@@ -298,21 +298,21 @@ func CreateContainerPortObj(portName string, containerPort int32) []v12.Containe
 	}
 }
 
-func CreatePodVolumeObj(azureFileVolumeName string, fakeSecretName string, projectedVolumeName string) []v12.Volume {
+func CreatePodVolumeObj(azureFileVolumeName string, fakeSecretName string, projectedVolumeName string) []corev1.Volume {
 	emptyVolumeName := "emptyVolumeName"
 	fakeShareName1 := "aksshare1"
 
-	return []v12.Volume{
+	return []corev1.Volume{
 		{
 			Name: emptyVolumeName,
-			VolumeSource: v12.VolumeSource{
-				EmptyDir: &v12.EmptyDirVolumeSource{},
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
 		{
 			Name: azureFileVolumeName,
-			VolumeSource: v12.VolumeSource{
-				AzureFile: &v12.AzureFileVolumeSource{
+			VolumeSource: corev1.VolumeSource{
+				AzureFile: &corev1.AzureFileVolumeSource{
 					ShareName:  fakeShareName1,
 					SecretName: fakeSecretName,
 					ReadOnly:   true,
@@ -320,15 +320,15 @@ func CreatePodVolumeObj(azureFileVolumeName string, fakeSecretName string, proje
 			},
 		}, {
 			Name: projectedVolumeName,
-			VolumeSource: v12.VolumeSource{
-				Projected: &v12.ProjectedVolumeSource{
-					Sources: []v12.VolumeProjection{
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
 						{
-							ConfigMap: &v12.ConfigMapProjection{
-								LocalObjectReference: v12.LocalObjectReference{
+							ConfigMap: &corev1.ConfigMapProjection{
+								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "kube-root-ca.crt",
 								},
-								Items: []v12.KeyToPath{
+								Items: []corev1.KeyToPath{
 									{
 										Key:  "ca.crt",
 										Path: "ca.crt",
@@ -343,22 +343,22 @@ func CreatePodVolumeObj(azureFileVolumeName string, fakeSecretName string, proje
 	}
 }
 
-func CreatePodsList(podNames []string, podNameSpace string) []*v12.Pod {
-	result := make([]*v12.Pod, 0, len(podNames))
+func CreatePodsList(podNames []string, podNameSpace string) []*corev1.Pod {
+	result := make([]*corev1.Pod, 0, len(podNames))
 	for _, podName := range podNames {
-		pod := &v12.Pod{
+		pod := &corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
 				Name:              podName,
 				Namespace:         podNameSpace,
 				CreationTimestamp: v1.NewTime(time.Now()),
 				UID:               types.UID(uuid.New().String()),
 			},
-			Status: v12.PodStatus{
-				Phase: v12.PodRunning,
-				ContainerStatuses: []v12.ContainerStatus {
+			Status: corev1.PodStatus{
+				Phase: corev1.PodRunning,
+				ContainerStatuses: []corev1.ContainerStatus{
 					{
-						State: v12.ContainerState {
-							Running: &v12.ContainerStateRunning{
+						State: corev1.ContainerState{
+							Running: &corev1.ContainerStateRunning{
 								StartedAt: v1.NewTime(time.Now()),
 							},
 						},

@@ -97,7 +97,8 @@ unit-tests: testauth
 	LOCATION=$(LOCATION) AKS_CREDENTIAL_LOCATION=$(TEST_AKS_CREDENTIALS_JSON) \
 	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
 	LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) \
-	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.txt -covermode=atomic fmt
+	go tool cover -func=coverage.txt
 
 .PHONY: e2e-test
 e2e-test:

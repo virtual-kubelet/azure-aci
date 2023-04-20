@@ -5,10 +5,12 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -24,8 +26,9 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"gotest.tools/assert"
 
+	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	is "gotest.tools/assert/cmp"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -201,13 +204,13 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
 				},
@@ -251,13 +254,13 @@ func TestCreatePodWithWindowsOS(t *testing.T) {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
 				},
@@ -294,17 +297,17 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	podNamespace := "ns-" + uuid.New().String()
 	ctx := context.Background()
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("1.981"),
 							"memory": resource.MustParse("3.49G"),
 						},
@@ -327,7 +330,6 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 
 // Tests create pod with default GPU SKU.
 func TestCreatePodWithGPU(t *testing.T) {
-	t.Skip("Skipping GPU tests until Location API is fixed")
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -348,21 +350,21 @@ func TestCreatePodWithGPU(t *testing.T) {
 		return nil
 	}
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("1.981"),
 							"memory": resource.MustParse("3.49G"),
 						},
-						Limits: v1.ResourceList{
+						Limits: corev1.ResourceList{
 							gpuResourceName: resource.MustParse("10"),
 						},
 					},
@@ -377,6 +379,8 @@ func TestCreatePodWithGPU(t *testing.T) {
 		t.Fatal("failed to create the test provider", err)
 	}
 
+	provider.gpuSKUs = []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}
+
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
@@ -384,8 +388,6 @@ func TestCreatePodWithGPU(t *testing.T) {
 
 // Tests create pod with GPU SKU in annotation.
 func TestCreatePodWithGPUSKU(t *testing.T) {
-	t.Skip("Skipping GPU tests until Location API is fixed")
-
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -403,7 +405,7 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		assert.Check(t, is.Equal(3.4, *(containers[0]).Properties.Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, (containers[0]).Properties.Resources.Requests.Gpu != nil, "Requests GPU is not expected")
 		assert.Check(t, is.Equal(int32(1), *(containers[0]).Properties.Resources.Requests.Gpu.Count), "Requests GPU Count is not expected")
-		assert.Check(t, is.Equal(gpuSKU, (containers[0]).Properties.Resources.Requests.Gpu.SKU), "Requests GPU SKU is not expected")
+		assert.Check(t, is.Equal(gpuSKU, *(containers[0]).Properties.Resources.Requests.Gpu.SKU), "Requests GPU SKU is not expected")
 		assert.Check(t, (containers[0]).Properties.Resources.Limits.Gpu != nil, "Limits GPU is not expected")
 
 		return nil
@@ -415,7 +417,9 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	pod := &v1.Pod{
+	provider.gpuSKUs = []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}
+
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
@@ -423,16 +427,16 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 				gpuTypeAnnotation: string(gpuSKU),
 			},
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("1.981"),
 							"memory": resource.MustParse("3.49G"),
 						},
-						Limits: v1.ResourceList{
+						Limits: corev1.ResourceList{
 							gpuResourceName: resource.MustParse("1"),
 						},
 					},
@@ -637,11 +641,11 @@ func TestPodToACISecretEnvVar(t *testing.T) {
 	testKey := "testVar"
 	testVal := "testVal"
 
-	e := v1.EnvVar{
+	e := corev1.EnvVar{
 		Name:  testKey,
 		Value: testVal,
-		ValueFrom: &v1.EnvVarSource{
-			SecretKeyRef: &v1.SecretKeySelector{},
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{},
 		},
 	}
 	aciEnvVar := getACIEnvVar(e)
@@ -664,10 +668,10 @@ func TestPodToACIEnvVar(t *testing.T) {
 	testKey := "testVar"
 	testVal := "testVal"
 
-	e := v1.EnvVar{
+	e := corev1.EnvVar{
 		Name:      testKey,
 		Value:     testVal,
-		ValueFrom: &v1.EnvVarSource{},
+		ValueFrom: &corev1.EnvVarSource{},
 	}
 	aciEnvVar := getACIEnvVar(e)
 
@@ -736,7 +740,7 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 		Pods:       podMocker,
 	}
 
-	cfg.Node = &v1.Node{}
+	cfg.Node = &corev1.Node{}
 
 	operatingSystem, osTypeSet := os.LookupEnv("PROVIDER_OPERATING_SYSTEM")
 
@@ -763,7 +767,7 @@ func TestConfigureNode(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
-	node := &v1.Node{
+	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "virtual-kubelet",
 			Labels: map[string]string{
@@ -772,9 +776,9 @@ func TestConfigureNode(t *testing.T) {
 				"kubernetes.io/hostname": "virtual-kubelet",
 			},
 		},
-		Spec: v1.NodeSpec{},
-		Status: v1.NodeStatus{
-			NodeInfo: v1.NodeSystemInfo{
+		Spec: corev1.NodeSpec{},
+		Status: corev1.NodeStatus{
+			NodeInfo: corev1.NodeSystemInfo{
 				Architecture:   "amd64",
 				KubeletVersion: "1.26.0",
 			},
@@ -868,8 +872,8 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 func TestGetProbe(t *testing.T) {
 	cases := []struct {
 		description     string
-		podProbe        *v1.Probe
-		podPorts        []v1.ContainerPort
+		podProbe        *corev1.Probe
+		podPorts        []corev1.ContainerPort
 		expectedCGProbe *azaciv2.ContainerProbe
 		expectedError   error
 	}{
@@ -990,14 +994,14 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 
 	cases := []struct {
 		description   string
-		containerList []v1.Container
+		containerList []corev1.Container
 	}{
 		{
 			description: "Container with port and other without port",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: port5050,
 						},
@@ -1010,10 +1014,10 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 		},
 		{
 			description: "Two containers with multiple same ports",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,
 						},
@@ -1024,7 +1028,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				{
 					Name: "container2",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: port4040,
 						},
@@ -1034,10 +1038,10 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 		},
 		{
 			description: "Two containers with different ports",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 5050,
 						},
@@ -1045,7 +1049,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				{
 					Name: "container2",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: port4040,
 						},
@@ -1055,10 +1059,10 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 		},
 		{
 			description: "Two containers with the same port",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 5050,
 						},
@@ -1066,7 +1070,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				{
 					Name: "container2",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 5050,
 						},
@@ -1077,12 +1081,12 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pod := &v1.Pod{
+			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      podName,
 					Namespace: podNamespace,
 				},
-				Spec: v1.PodSpec{},
+				Spec: corev1.PodSpec{},
 			}
 			pod.Spec.Containers = tc.containerList
 
@@ -1178,11 +1182,11 @@ func TestFilterWindowsServiceAccountSecretVolume(t *testing.T) {
 	fakeVolumes := []*azaciv2.Volume{
 		{
 			Name:     &volName,
-			EmptyDir: &v1.EmptyDirVolumeSource{},
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 		{
 			Name:     &volMountName2,
-			EmptyDir: &v1.EmptyDirVolumeSource{},
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		}}
 	nonServiceAccountSecretVolumeMount := []*azaciv2.VolumeMount{
 		{
@@ -1319,7 +1323,7 @@ func TestDeleteContainerGroup(t *testing.T) {
 			if tc.hasValidPodsTracker {
 				podsTracker := &PodsTracker{
 					pods: podLister,
-					updateCb: func(updatedPod *v1.Pod) {
+					updateCb: func(updatedPod *corev1.Pod) {
 						for index, pod := range fakePods {
 							if updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace {
 								fakePods[index] = updatedPod
@@ -1454,25 +1458,25 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
-	invalidSecretNoDockerCfg := v1.Secret{
+	invalidSecretNoDockerCfg := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
-		Type: v1.SecretTypeDockercfg,
+		Type: corev1.SecretTypeDockercfg,
 	}
 
 	invalidAuthConfig := `{
 		"repoData": {}
 	}`
-	invalidSecretWithDockerCfg := v1.Secret{
+	invalidSecretWithDockerCfg := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
-		Type: v1.SecretTypeDockercfg,
+		Type: corev1.SecretTypeDockercfg,
 		Data: map[string][]byte{
-			v1.DockerConfigKey: []byte(invalidAuthConfig),
+			corev1.DockerConfigKey: []byte(invalidAuthConfig),
 		},
 	}
 
@@ -1482,14 +1486,14 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 			"password": "fakePassword"
 		}
 	}`
-	validSecretWithDockerCfg := v1.Secret{
+	validSecretWithDockerCfg := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
-		Type: v1.SecretTypeDockercfg,
+		Type: corev1.SecretTypeDockercfg,
 		Data: map[string][]byte{
-			v1.DockerConfigKey: []byte(validAuthConfig),
+			corev1.DockerConfigKey: []byte(validAuthConfig),
 		},
 	}
 
@@ -1538,7 +1542,7 @@ func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+			pod.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
 				{
 					Name: "fakeSecret",
 				},
@@ -1576,7 +1580,7 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
-	invalidSecretType := v1.Secret{
+	invalidSecretType := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
@@ -1584,12 +1588,12 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 		Type: "fakeType",
 	}
 
-	invalidSecretNoDockerConfigJsonKey := v1.Secret{
+	invalidSecretNoDockerConfigJsonKey := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
-		Type: v1.SecretTypeDockerConfigJson,
+		Type: corev1.SecretTypeDockerConfigJson,
 	}
 
 	invalidCfgJson := `{
@@ -1597,14 +1601,14 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 			"auths": {}
 		}
 	}`
-	invalidSecretMalformedCfgJson := v1.Secret{
+	invalidSecretMalformedCfgJson := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
-		Type: v1.SecretTypeDockerConfigJson,
+		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{
-			v1.DockerConfigJsonKey: []byte(invalidCfgJson),
+			corev1.DockerConfigJsonKey: []byte(invalidCfgJson),
 		},
 	}
 
@@ -1616,14 +1620,14 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 			}
 		}
 	}`
-	validSecretCfgJson := v1.Secret{
+	validSecretCfgJson := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "fakeSecret",
 			Namespace: podNamespace,
 		},
-		Type: v1.SecretTypeDockerConfigJson,
+		Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{
-			v1.DockerConfigJsonKey: []byte(validCfgJson),
+			corev1.DockerConfigJsonKey: []byte(validCfgJson),
 		},
 	}
 
@@ -1681,7 +1685,7 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pod.Spec.ImagePullSecrets = []v1.LocalObjectReference{
+			pod.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
 				{
 					Name: "fakeSecret",
 				},
@@ -1704,6 +1708,155 @@ func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
 				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
 			} else {
 				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
+
+func TestGetContainerLogs(t *testing.T) {
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	containerName := "fake_container_name"
+	fakeLogContent := "fake_log_content\n"
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+
+	cgInfo := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded")
+
+	aciMocks := createNewACIMock()
+
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+
+		return cgInfo, nil
+	}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	cases := []struct {
+		description    string
+		logContent     *string
+		expectedOutput *string
+	}{
+		{
+			description:    "ListLogs api call returned valid log content",
+			logContent:     &fakeLogContent,
+			expectedOutput: &fakeLogContent,
+		},
+		{
+			description:    "ListLogs api call returned nil",
+			logContent:     nil,
+			expectedOutput: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			aciMocks.MockListLogs =
+				func(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error) {
+
+					return tc.logContent, nil
+				}
+
+			var opts api.ContainerLogOpts
+
+			containerLogsRC, _ := provider.GetContainerLogs(context.Background(), podNamespace, podName, containerName, opts)
+
+			if tc.expectedOutput == nil {
+				assert.Check(t, containerLogsRC == nil, "Container Logs Read Closer should be nil for nil Container Logs content")
+			} else {
+				defer containerLogsRC.Close()
+
+				reader := bufio.NewReader(containerLogsRC)
+				containerLogsContent, err := reader.ReadString('\n')
+				if err != nil && err != io.EOF {
+					t.Fatal("Failed to read string from Read Closer", err)
+				}
+				assert.Equal(t, *tc.expectedOutput, containerLogsContent, "ContainerLogs content should match the expected output")
+			}
+
+		})
+	}
+}
+
+func TestGetGPUSKU(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	cases := []struct {
+		description   string
+		gpuSkus       []azaciv2.GpuSKU
+		desiredSku    string
+		expectedError error
+	}{
+		{
+			description:   "gpuTypeAnnotation is not set but ACI provides gpusku",
+			gpuSkus:       []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100},
+			desiredSku:    "",
+			expectedError: nil,
+		},
+		{
+			description:   "gpuTypeAnnotation is set and the desired sku is supported by ACI",
+			gpuSkus:       []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100},
+			desiredSku:    "P100",
+			expectedError: nil,
+		},
+		{
+			description:   "gpuTypeAnnotation is set but the desired sku is not supported by ACI",
+			gpuSkus:       []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100},
+			desiredSku:    "P120",
+			expectedError: fmt.Errorf("the pod requires GPU SKU P120, but ACI only supports SKUs %v in region %s", []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}, provider.region),
+		},
+		{
+			description:   "ACI doesn't provide any gpusku",
+			gpuSkus:       []azaciv2.GpuSKU{},
+			desiredSku:    "",
+			expectedError: fmt.Errorf("the pod requires GPU resource, but ACI doesn't provide GPU enabled container group in region %s", provider.region),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			provider.gpuSKUs = tc.gpuSkus
+
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			if len(tc.desiredSku) > 0 {
+				pod.Annotations = map[string]string{}
+				pod.Annotations[gpuTypeAnnotation] = tc.desiredSku
+			}
+
+			gpuSKU, err := provider.getGPUSKU(pod)
+
+			if tc.expectedError != nil {
+				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")
+				assert.Equal(t, string(gpuSKU), "", "No GPU SKU should be returned")
+			} else {
+				assert.NilError(t, err, "no error should be returned")
+				if len(tc.desiredSku) == 0 {
+					assert.Equal(t, gpuSKU, tc.gpuSkus[0], "Since no desired SKU was set, the first gpuSKU in the list should be returned")
+				} else {
+					assert.Equal(t, string(gpuSKU), tc.desiredSku, "Desired SKU should be returned")
+				}
 			}
 		})
 	}
