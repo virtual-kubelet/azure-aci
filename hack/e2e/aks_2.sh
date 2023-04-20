@@ -13,34 +13,26 @@ if ! type go > /dev/null; then
   exit 1
 fi
 
-: "${RANDOM_NUM:=${PR_RAND}}"
-
-if [ "$PR_RAND" = "" ]; then
-    RANDOM_NUM=$RANDOM
-fi
-
+: "${RANDOM_NUM:=$RANDOM}"
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=northcentralus}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
-: "${WIN_CHART_NAME:=vk-aci-test-win-aks}"
 : "${TEST_NODE_NAME:=vk-aci-test-aks}"
-: "${TEST_WINDOWS_NODE_NAME:=vk-aci-test-win-aks}"
-: "${INIT_IMG_REPO:=oss/virtual-kubelet/init-validation}"
-: "${IMG_REPO:=oss/virtual-kubelet/virtual-kubelet}"
-: "${IMG_URL:=mcr.microsoft.com}"
-: "${INIT_IMG_TAG:=0.1.0}"
+: "${IMG_REPO:=fnuarnav/virtual-kubelet-test}"
+: "${IMG_URL:=docker.io}"
+
 : "${VNET_RANGE=10.0.0.0/8}"
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
 : "${VNET_NAME=myAKSVNet}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
-: "${ACR_NAME=vkacr$RANDOM_NUM}"
+
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
-: "${K8S_VERSION:=1.24.10}"
+: "${ACR_NAME=vktestregistry$RANDOM_NUM}"
 
 error() {
     echo "$@" >&2
@@ -51,17 +43,16 @@ if [ ! -v IMG_TAG ] || [ -z "$IMG_TAG" ]; then
     IMG_TAG="$(git describe --abbrev=0 --tags)"
     IMG_TAG="${IMG_TAG#v}"
 fi
-
+IMG_TAG=1.4.2
 TMPDIR=""
 
-cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
-  if [ -n "$TMPDIR" ]; then
-      rm -rf "$TMPDIR"
-  fi
-}
-trap 'cleanup' EXIT
-
+#cleanup() {
+#  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+#  if [ -n "$TMPDIR" ]; then
+#      rm -rf "$TMPDIR"
+#  fi
+#}
+#trap 'cleanup' EXIT
 
 check_aci_registered() {
     az provider list --query "[?contains(namespace,'Microsoft.ContainerInstance')]" -o json | jq -r '.[0].registrationState'
@@ -77,16 +68,6 @@ fi
 
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
-if [ "$E2E_TARGET" = "pr" ]; then
-  az acr create --resource-group "$RESOURCE_GROUP" \
-    --name "$ACR_NAME" --sku Basic
-
-  az acr login --name "$ACR_NAME"
-  IMG_URL=$ACR_NAME.azurecr.io
-  OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$IMG_URL/$IMG_REPO make docker-build-image
-  OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$IMG_URL/$INIT_IMG_REPO make docker-build-init-image
-
-fi
 
 KUBE_DNS_IP=10.0.0.10
 
@@ -115,12 +96,13 @@ node_identity="$(az identity create --name "${RESOURCE_GROUP}-node-identity" --r
 node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 
-node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query clientId -o tsv)"
+az acr create --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --sku Standard
+az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
+export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
+export ACR_NAME=${ACR_NAME}
 
-if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
-    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -130,25 +112,8 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
-    --generate-ssh-keys \
-    --attach-acr "$ACR_NAME"
-
-else
-
-az aks create \
-    -g "$RESOURCE_GROUP" \
-    --kubernetes-version "$K8S_VERSION" \
-    -l "$LOCATION" \
-    -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
-    -n "$CLUSTER_NAME" \
-    --network-plugin azure \
-    --vnet-subnet-id "$aks_subnet_id" \
-    --dns-service-ip "$KUBE_DNS_IP" \
-    --assign-kubelet-identity "$node_identity_id" \
-    --assign-identity "$cluster_identity_id" \
+	--attach-acr $ACR_ID \
     --generate-ssh-keys
-fi
 
 az role assignment create \
     --role "Network Contributor" \
@@ -175,20 +140,22 @@ az role assignment create \
     --assignee-principal-type "ServicePrincipal" \
     --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
 
+az role assignment create \
+    --role "Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}"
+
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "${TMPDIR}/kubeconfig"
 export KUBECONFIG="${TMPDIR}/kubeconfig"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 
-## Linux VK
 helm install \
     --kubeconfig="${KUBECONFIG}" \
     --set "image.repository=${IMG_URL}"  \
     --set "image.name=${IMG_REPO}" \
     --set "image.tag=${IMG_TAG}" \
-    --set "initImage.repository=${IMG_URL}"  \
-    --set "initImage.name=${INIT_IMG_REPO}" \
-    --set "initImage.tag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_NODE_NAME}" \
     --set providers.azure.vnet.enabled=true \
     --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
@@ -196,10 +163,12 @@ helm install \
     --set "providers.azure.vnet.clusterCidr=$CLUSTER_SUBNET_RANGE" \
     --set "providers.azure.vnet.kubeDnsIp=$KUBE_DNS_IP" \
     --set "providers.azure.masterUri=$MASTER_URI" \
+    --set "providers.azure.aciResourceGroup=$RESOURCE_GROUP" \
+    --set "providers.azure.aciRegion="$LOCATION" \
     "$CHART_NAME" \
     ./charts/virtual-kubelet
 
-kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=300s
+kubectl wait --for=condition=available deploy "${TEST_NODE_NAME}-virtual-kubelet-azure-aci" --timeout=300s
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break
@@ -210,41 +179,16 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
 
-## Windows VK
-helm install \
-    --kubeconfig="${KUBECONFIG}" \
-    --set nodeOsType=Windows \
-    --set "image.repository=${IMG_URL}"  \
-    --set "image.name=${IMG_REPO}" \
-    --set "image.tag=${IMG_TAG}" \
-    --set "initImage.repository=${IMG_URL}"  \
-    --set "initImage.name=${INIT_IMG_REPO}" \
-    --set "initImage.tag=${INIT_IMG_TAG}" \
-    --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
-    --set "providers.azure.masterUri=$MASTER_URI" \
-    "$WIN_CHART_NAME" \
-    --set "namespace=$WIN_CHART_NAME" \
-    ./charts/virtual-kubelet
-
-kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n "$WIN_CHART_NAME" --timeout=300s
-
-while true; do
-    kubectl get node "$TEST_WINDOWS_NODE_NAME" &> /dev/null && break
-    sleep 3
-done
-
-kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
-
-export TEST_WINDOWS_NODE_NAME
-
 ## CSI Driver test
 az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -o tsv)
 
-az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
+az storage share create -n $CSI_DRIVER_SHARE_NAME --connection-string $AZURE_STORAGE_CONNECTION_STRING
 CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $RESOURCE_GROUP --account-name $CSI_DRIVER_STORAGE_ACCOUNT_NAME --query "[0].value" -o tsv)
 
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
 export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
+
+envsubst < e2e/fixtures/mi-pull-image.yaml > e2e/fixtures/mi-pull-image-exec.yaml
 
 $@

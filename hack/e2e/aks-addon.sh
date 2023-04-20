@@ -40,7 +40,7 @@ fi
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=aksaddonvk$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
-: "${K8S_VERSION:=1.23.12}"
+: "${K8S_VERSION:=1.24.10}"
 
 error() {
     echo "$@" >&2

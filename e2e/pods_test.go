@@ -51,6 +51,22 @@ func TestPodLifecycle(t *testing.T) {
 		time.Sleep(10 * time.Second)
 	}
 
+	// query metrics using kubectl top
+	deadline = time.Now().Add(5 * time.Minute)
+	for {
+		t.Log("kubectl top....")
+		cmd = kubectl("top", "pods", "--namespace=vk-test")
+		out, err := cmd.CombinedOutput()
+		if time.Now().After(deadline) {
+			t.Fatal("failed to query pod's stats")
+		}
+		if err == nil {
+			t.Logf("success query metrics using kubectl top\n%s", string(out))
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+
 	// check pod status
 	t.Log("get pod status ....")
 	cmd = kubectl("get", "pod", "--field-selector=status.phase=Running", "--namespace=vk-test", "--output=jsonpath={.items..metadata.name}")
