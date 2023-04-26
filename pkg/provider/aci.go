@@ -649,6 +649,12 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	return ctx.Err()
 }
 
+// AttachToContainer Implementation placeholder
+// TODO: complete the implementation for Attach functionality
+func (p *ACIProvider) AttachToContainer(ctx context.Context, namespace string, podName string, containerName string, attach api.AttachIO) error {
+	return nil
+}
+
 // GetPodStatus returns the status of a pod by name that is running inside ACI
 // returns nil if a pod by that name is not found.
 func (p *ACIProvider) GetPodStatus(ctx context.Context, namespace, name string) (*v1.PodStatus, error) {
