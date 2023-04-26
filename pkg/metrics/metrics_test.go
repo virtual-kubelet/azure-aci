@@ -77,6 +77,12 @@ func TestGetMetricsResource(t *testing.T) {
 			"pod1": uint64(1000),
 			"pod2": uint64(2000),
 		},
+		"podStatsError": {
+			"error": uint64(0),
+		},
+		"nilStatsError": {
+			"error": uint64(0),
+		},
 	}
 
 	for testName, test := range testCases {
@@ -90,31 +96,42 @@ func TestGetMetricsResource(t *testing.T) {
 			podMetricsProvider.podStatsGetter = mockedPodStatsGetter
 			podLister.EXPECT().List(gomock.Any()).Return(fakePod(getMapKeys(test)), nil)
 			for podName, cpu := range test {
-				mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
+				if testName  == "podStatsError" {
+					mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakeEmptyPodStatus(), fmt.Errorf("GetStatsSummaryError"))
+				} else if testName  == "nilStatsError" {
+					mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakeEmptyPodStatus(), nil)
+				} else {
+					mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
+				}
 			}
 			ctx := context.Background()
 			actuallyMetricsResource, err := podMetricsProvider.GetMetricsResource(ctx)
-			assert.NilError(t, err)
-			for _, metricFamily := range actuallyMetricsResource {
-				if *metricFamily.Name == "pod_cpu_usage_seconds_total" {
-					assert.Equal(t, uint64(*metricFamily.Metric[0].Counter.Value), test[*metricFamily.Metric[0].Label[1].Value])
-					assert.Equal(t, uint64(*metricFamily.Metric[1].Counter.Value), test[*metricFamily.Metric[1].Label[1].Value])
-				}
-				if *metricFamily.Name == "pod_memory_working_set_types" {
-					assert.Equal(t, uint64(*metricFamily.Metric[0].Gauge.Value), test[*metricFamily.Metric[0].Label[1].Value])
-					assert.Equal(t, uint64(*metricFamily.Metric[1].Gauge.Value), test[*metricFamily.Metric[1].Label[1].Value])
-				}
-				if *metricFamily.Name == "container_cpu_usage_seconds_total" {
-					assert.Equal(t, uint64(*metricFamily.Metric[0].Counter.Value), test[*metricFamily.Metric[0].Label[2].Value])
-					assert.Equal(t, uint64(*metricFamily.Metric[1].Counter.Value), test[*metricFamily.Metric[1].Label[2].Value])
-				}
-				if *metricFamily.Name == "container_memory_working_set_types" {
-					assert.Equal(t, uint64(*metricFamily.Metric[0].Gauge.Value), test[*metricFamily.Metric[0].Label[2].Value])
-					assert.Equal(t, uint64(*metricFamily.Metric[1].Gauge.Value), test[*metricFamily.Metric[1].Label[2].Value])
-				}
-				if *metricFamily.Name == "container_start_time_seconds" {
-					assert.Check(t, metricFamily.Metric[0].Gauge.Value != nil)
-					assert.Check(t, metricFamily.Metric[1].Gauge.Value != nil)
+			if testName == "podStatsError" || testName == "nilStatsError" {
+				assert.Check(t, err != nil, "throw error when GetStatsSummary thorws error")
+				assert.Check(t, actuallyMetricsResource == nil, "return nil metrics when error is thrown")
+			} else {
+				assert.NilError(t, err)
+				for _, metricFamily := range actuallyMetricsResource {
+					if *metricFamily.Name == "pod_cpu_usage_seconds_total" {
+						assert.Equal(t, uint64(*metricFamily.Metric[0].Counter.Value), test[*metricFamily.Metric[0].Label[1].Value])
+						assert.Equal(t, uint64(*metricFamily.Metric[1].Counter.Value), test[*metricFamily.Metric[1].Label[1].Value])
+					}
+					if *metricFamily.Name == "pod_memory_working_set_types" {
+						assert.Equal(t, uint64(*metricFamily.Metric[0].Gauge.Value), test[*metricFamily.Metric[0].Label[1].Value])
+						assert.Equal(t, uint64(*metricFamily.Metric[1].Gauge.Value), test[*metricFamily.Metric[1].Label[1].Value])
+					}
+					if *metricFamily.Name == "container_cpu_usage_seconds_total" {
+						assert.Equal(t, uint64(*metricFamily.Metric[0].Counter.Value), test[*metricFamily.Metric[0].Label[2].Value])
+						assert.Equal(t, uint64(*metricFamily.Metric[1].Counter.Value), test[*metricFamily.Metric[1].Label[2].Value])
+					}
+					if *metricFamily.Name == "container_memory_working_set_types" {
+						assert.Equal(t, uint64(*metricFamily.Metric[0].Gauge.Value), test[*metricFamily.Metric[0].Label[2].Value])
+						assert.Equal(t, uint64(*metricFamily.Metric[1].Gauge.Value), test[*metricFamily.Metric[1].Label[2].Value])
+					}
+					if *metricFamily.Name == "container_start_time_seconds" {
+						assert.Check(t, metricFamily.Metric[0].Gauge.Value != nil)
+						assert.Check(t, metricFamily.Metric[1].Gauge.Value != nil)
+					}
 				}
 			}
 		})
@@ -160,6 +177,10 @@ func fakePod(podNames []string) []*v1.Pod {
 		result = append(result, pod)
 	}
 	return result
+}
+
+func fakeEmptyPodStatus() *stats.PodStats{
+	return nil
 }
 
 func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
