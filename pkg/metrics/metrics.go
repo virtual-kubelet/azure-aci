@@ -149,11 +149,6 @@ func (p *ACIPodMetricsProvider) GetMetricsResource(ctx context.Context) ([]*dto.
 		span.SetStatus(err)
 		return nil, errors.Wrapf(err, "error fetching MetricsResource")
 	}
-	if statsSummary == nil {
-		err := fmt.Errorf("no stats were returned !")
-		span.SetStatus(err)
-		return nil, err
-	}
 
 	registry := compbasemetrics.NewKubeRegistry()
 	registry.CustomMustRegister(collectors.NewKubeletResourceMetricsCollector(statsSummary))
