@@ -304,7 +304,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	cg.Properties.OSType = &os
 
 	// get containers
-	containers, err := p.getContainers(pod)
+	containers, err := p.getContainers(ctx, pod)
 	if err != nil {
 		return err
 	}
@@ -1001,8 +1001,18 @@ func (p *ACIProvider) getEnvironmentVariables(container v1.Container) []*azaciv2
 	return environmentVariable
 }
 
+func isConfidentialSku(pod *v1.Pod) bool {
+	ccePolicy := pod.Annotations[confidentialComputeCcePolicyLabel]
+	containerGroupSku := pod.Annotations[confidentialComputeSkuLabel]
+	if ccePolicy != "" || strings.ToLower(containerGroupSku) == "confidential" {
+		return true
+	}
+	return false
+}
+
 // get InitContainers defined in Pod as []aci.InitContainerDefinition
 func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv2.InitContainerDefinition, error) {
+
 	initContainers := make([]*azaciv2.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for i, initContainer := range pod.Spec.InitContainers {
 		err := p.verifyContainer(&initContainer)
@@ -1042,12 +1052,21 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 			},
 		}
 
+		if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature){
+			if isConfidentialSku(pod) {
+				securityContext := p.getSecurityContext(ctx, pod.Spec.SecurityContext, pod.Spec.InitContainers[i].SecurityContext)
+				newInitContainer.Properties.SecurityContext = securityContext
+			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || pod.Spec.InitContainers[i].SecurityContext != nil){
+				return nil, errdefs.InvalidInput("securityContext is only supproted for confidential sku. skipping security context")
+			}
+		}
+
 		initContainers = append(initContainers, &newInitContainer)
 	}
 	return initContainers, nil
 }
 
-func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
+func (p *ACIProvider) getContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv2.Container, error) {
 	containers := make([]*azaciv2.Container, 0, len(pod.Spec.Containers))
 
 	podContainers := pod.Spec.Containers
@@ -1173,6 +1192,15 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 			aciContainer.Properties.ReadinessProbe = probe
 		}
 
+		if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature) {
+			if isConfidentialSku(pod) {
+				securityContext := p.getSecurityContext(ctx, pod.Spec.SecurityContext, podContainers[c].SecurityContext)
+				aciContainer.Properties.SecurityContext = securityContext
+			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || podContainers[c].SecurityContext != nil) {
+				return nil, errdefs.InvalidInput("securityContext is only supproted for confidential sku. skipping security context")
+			}
+		}
+
 		containers = append(containers, &aciContainer)
 	}
 	return containers, nil
@@ -1196,9 +1224,67 @@ func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod 
 	} else if strings.ToLower(containerGroupSku) == "confidential" {
 		cg.Properties.SKU = &confidentialSku
 		l.Infof("setting confidential container group SKU")
+	} else {
+		l.Infof("no annotations for confidential SKU")
 	}
 
-	l.Infof("no annotations for confidential SKU")
+}
+
+
+func getCapabilityStringPtr(capability v1.Capability) *string {
+	capString := string(capability)
+	return &capString
+}
+
+// sets the security context for each container from the pod spec
+func (p *ACIProvider) getSecurityContext(ctx context.Context, podSecurityContext *v1.PodSecurityContext, containerSecurityContext *v1.SecurityContext) *azaciv2.SecurityContextDefinition {
+
+	aciSecurityContext := azaciv2.SecurityContextDefinition{}
+	if podSecurityContext != nil {
+		if podSecurityContext.RunAsUser != nil {
+			user := int32(*podSecurityContext.RunAsUser)
+			aciSecurityContext.RunAsUser = &user
+		}
+		if podSecurityContext.RunAsGroup != nil {
+			group :=  int32(*podSecurityContext.RunAsGroup)
+			aciSecurityContext.RunAsGroup = &group
+		}
+		aciSecurityContext.SeccompProfile = nil
+		if podSecurityContext.SeccompProfile != nil {
+			log.G(ctx).Warnf("SeccompProfile is currently not supported. Skipping seccomp profile")
+		}
+	}
+
+	if containerSecurityContext != nil {
+		if containerSecurityContext.RunAsUser != nil {
+			user := int32(*containerSecurityContext.RunAsUser)
+			aciSecurityContext.RunAsUser = &user
+		}
+		if containerSecurityContext.RunAsGroup != nil {
+			group := int32(*containerSecurityContext.RunAsGroup)
+			aciSecurityContext.RunAsGroup = &group
+		}
+		aciSecurityContext.Privileged = containerSecurityContext.Privileged
+		aciSecurityContext.AllowPrivilegeEscalation = containerSecurityContext.AllowPrivilegeEscalation
+		if containerSecurityContext.Capabilities != nil {
+			aciSecurityContext.Capabilities = &azaciv2.SecurityContextCapabilitiesDefinition{}
+			add := make([]*string, 0)
+			drop := make([]*string, 0)
+			for i := range containerSecurityContext.Capabilities.Add {
+				add = append(add, getCapabilityStringPtr(containerSecurityContext.Capabilities.Add[i]))
+			}
+			for i := range containerSecurityContext.Capabilities.Drop {
+				drop = append(drop, getCapabilityStringPtr(containerSecurityContext.Capabilities.Drop[i]))
+			}
+			aciSecurityContext.Capabilities.Add = add
+			aciSecurityContext.Capabilities.Drop = drop
+		}
+		if containerSecurityContext.SeccompProfile != nil {
+			log.G(ctx).Warnf("SeccompProfile is currently not supported. Skipping seccomp profile")
+		}
+	}
+
+	return &aciSecurityContext
 }
 
 func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {

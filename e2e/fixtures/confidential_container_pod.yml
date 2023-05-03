@@ -18,6 +18,8 @@ spec:
     ports:
     - containerPort: 8000
       name: http
+    securityContext:
+        privileged: true
   nodeSelector:
     kubernetes.io/role: agent
     beta.kubernetes.io/os: linux
