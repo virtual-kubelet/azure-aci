@@ -23,6 +23,8 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 	ccePolicyString := "eyJhbGxvd19hbGwiOiB0cnVlLCAiY29udGFpbmVycyI6IHsibGVuZ3RoIjogMCwgImVsZW1lbnRzIjogbnVsbH19"
 	UID1 := int64(100)
 	UID2 := int64(200)
+	GID1 := int64(100)
+	GID2 := int64(200)
 	privilege := true
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
@@ -34,14 +36,16 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 		assert.Check(t, cg != nil, "Container group is nil")
 		assert.Check(t, containers != nil, "Containers should not be nil")
 		assert.Check(t, initContainers != nil, "Container group is nil")
-		assert.Check(t, *containers[0].Properties.SecurityContext.Privileged == privilege, "Privileged flag should be true")
-		assert.Check(t, *containers[0].Properties.SecurityContext.AllowPrivilegeEscalation == privilege, "AllowPrivilegeEscalation flag should be true")
-		assert.Check(t, *containers[0].Properties.SecurityContext.RunAsUser == int32(UID1), "AllowPrivilegeEscalation flag should be true")
+		assert.Check(t, *containers[0].Properties.SecurityContext.Privileged == privilege, "Privileged flag should be correct")
+		assert.Check(t, *containers[0].Properties.SecurityContext.AllowPrivilegeEscalation == privilege, "AllowPrivilegeEscalation flag should be correct")
+		assert.Check(t, *containers[0].Properties.SecurityContext.RunAsUser == int32(UID1), "RunAsUser UserId should be correct")
+		assert.Check(t, *containers[0].Properties.SecurityContext.RunAsGroup == int32(GID1), "RunAsGroup GroupId should be correct")
 		assert.Check(t, *containers[0].Properties.SecurityContext.Capabilities.Add[0] == "ADD", "Add capabilities should be populated correctly")
 		assert.Check(t, *containers[0].Properties.SecurityContext.Capabilities.Drop[0] == "DROP", "Drop capabilities should be populated correctly")
 		assert.Check(t, containers[1].Properties.SecurityContext.Privileged == nil, "Privileged flag should be true")
 		assert.Check(t, containers[1].Properties.SecurityContext.AllowPrivilegeEscalation == nil, "AllowPrivilegeEscalation flag should be true")
-		assert.Check(t, *containers[1].Properties.SecurityContext.RunAsUser == int32(UID2), "AllowPrivilegeEscalation flag should be true")
+		assert.Check(t, *containers[1].Properties.SecurityContext.RunAsUser == int32(UID2), "RunAsUser UserId should be correct")
+		assert.Check(t, *containers[1].Properties.SecurityContext.RunAsGroup == int32(GID2), "RunAsGroup GroupId should be correct")
 		assert.Check(t, containers[1].Properties.SecurityContext.SeccompProfile == nil, "SeccompProfile is not supported")
 		if len(initContainers) > 0 {
 			assert.Check(t, is.Equal(len(containers), 2), "2 Containers are expected")
@@ -51,8 +55,8 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 			assert.Check(t, initContainers[0].Properties.Command != nil, "Command mount should be present")
 			assert.Check(t, initContainers[0].Properties.Image != nil, "Image should be present")
 			assert.Check(t, *initContainers[0].Name == initContainerName1, "Name should be correct")
-			assert.Check(t, *initContainers[0].Properties.SecurityContext.Privileged == privilege, "Privilege should be true")
-			assert.Check(t, *initContainers[0].Properties.SecurityContext.AllowPrivilegeEscalation == privilege, "Privilege should be true")
+			assert.Check(t, *initContainers[0].Properties.SecurityContext.Privileged == privilege, "Privilege flag should be correct")
+			assert.Check(t, *initContainers[0].Properties.SecurityContext.AllowPrivilegeEscalation == privilege, "AllowPrivilegedEscalation flag should be correct")
 			assert.Check(t, initContainers[0].Properties.SecurityContext.SeccompProfile == nil, "SeccompProfile is not supported")
 		}
 		if confidentialComputeProperties != nil {
@@ -72,6 +76,7 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 		Spec: v1.PodSpec{
 			SecurityContext: &v1.PodSecurityContext{
 				RunAsUser: &UID2,
+				RunAsGroup: &GID2,
 				SeccompProfile: &v1.SeccompProfile{},
 			},
 			Containers: []v1.Container{
@@ -81,6 +86,7 @@ func TestCreatePodWithConfidentialComputeProperties(t *testing.T) {
 					SecurityContext: &v1.SecurityContext{
 						Privileged: &privilege,
 						RunAsUser: &UID1,
+						RunAsGroup: &GID1,
 						AllowPrivilegeEscalation: &privilege,
 						Capabilities: &v1.Capabilities{
 							Add: []v1.Capability{"ADD"},
