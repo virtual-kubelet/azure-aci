@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -33,10 +34,16 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 
 	"github.com/cpuguy83/dockercfg"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/reference"
 )
 
 const (
@@ -80,6 +87,7 @@ type ACIProvider struct {
 	podsL                    corev1listers.PodLister
 	enabledFeatures          *featureflag.FlagIdentifier
 	providerNetwork          network.ProviderNetwork
+	eventRecorder            record.EventRecorder
 
 	resourceGroup      string
 	region             string
@@ -170,7 +178,7 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, pCfg nodeutil.ProviderConfig, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
+func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, pCfg nodeutil.ProviderConfig, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string, kubeClient kubernetes.Interface) (*ACIProvider, error) {
 	var p ACIProvider
 	var err error
 
@@ -208,6 +216,12 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	if p.providerNetwork.VnetResourceGroup == "" {
 		p.providerNetwork.VnetResourceGroup = p.resourceGroup
 	}
+
+	providerEB := record.NewBroadcaster()
+	providerEB.StartLogging(log.G(ctx).Infof)
+	providerEB.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: kubeClient.CoreV1().Events(v1.NamespaceAll)})
+	p.eventRecorder = providerEB.NewRecorder(scheme.Scheme, v1.EventSource{Component: path.Join(nodeName, "pod-controller")})
+
 	// If the log analytics file has been specified, load workspace credentials from the file
 	if logAnalyticsAuthFile := os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"); logAnalyticsAuthFile != "" {
 		p.diagnostics, err = analytics.NewContainerGroupDiagnosticsFromFile(logAnalyticsAuthFile)
@@ -764,9 +778,11 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 	// Capture the notifier to be used for communicating updates to VK
 	p.tracker = &PodsTracker{
-		pods:     p.podsL,
-		updateCb: notifierCb,
-		handler:  p,
+		pods:           p.podsL,
+		updateCb:       notifierCb,
+		handler:        p,
+		lastEventCheck: time.UnixMicro(0),
+		eventRecorder:  p.eventRecorder,
 	}
 
 	go p.tracker.StartTracking(ctx)
@@ -801,6 +817,46 @@ func (p *ACIProvider) FetchPodStatus(ctx context.Context, ns, name string) (*v1.
 	defer span.End()
 
 	return p.GetPodStatus(ctx, ns, name)
+}
+
+func (p *ACIProvider) FetchPodEvents(ctx context.Context, pod *v1.Pod, evtSink func(timestamp *time.Time, object runtime.Object, eventtype, reason, messageFmt string, args ...interface{})) error {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.FetchPodEvents")
+	defer span.End()
+	if !p.enabledFeatures.IsEnabled(ctx, featureflag.Events) {
+		return nil
+	}
+
+	ctx = addAzureAttributes(ctx, span, p)
+	cgName := containerGroupName(pod.Namespace, pod.Name)
+	cg, err := p.azClientsAPIs.GetContainerGroup(ctx, p.resourceGroup, cgName)
+	if err != nil {
+		return err
+	}
+	if *cg.Tags["NodeName"] != p.nodeName {
+		return errors.Wrapf(err, "container group %s found with mismatching node", cgName)
+	}
+
+	if cg.Properties != nil && cg.Properties.InstanceView != nil && cg.Properties.InstanceView.Events != nil {
+		for _, evt := range cg.Properties.InstanceView.Events {
+			evtSink(evt.LastTimestamp, pod, *evt.Type, *evt.Name, *evt.Message)
+		}
+	}
+
+	if cg.Properties != nil && cg.Properties.Containers != nil {
+		for _, container := range cg.Properties.Containers {
+			if container.Properties != nil && container.Properties.InstanceView != nil && container.Properties.InstanceView.Events != nil {
+				for _, evt := range container.Properties.InstanceView.Events {
+					podReference, err := reference.GetReference(scheme.Scheme, pod)
+					if err != nil {
+						log.G(ctx).WithError(err).Warnf("cannot get k8s object reference from pod %s in namespace %s", pod.Name, pod.Namespace)
+					}
+					podReference.FieldPath = fmt.Sprintf("spec.containers{%s}", *container.Name)
+					evtSink(evt.LastTimestamp, podReference, *evt.Type, *evt.Name, *evt.Message)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // CleanupPod interface impl
