@@ -44,7 +44,7 @@ func TestCreatedPodWithAzureFilesVolume(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		mockSecretLister, NewMockPodLister(mockCtrl))
+		mockSecretLister, NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
@@ -306,7 +306,7 @@ func TestCreatePodWithProjectedVolume(t *testing.T) {
 	pod.Spec.Volumes = fakeVolumes
 
 	provider, err := createTestProvider(aciMocks, configMapLister,
-		secretLister, NewMockPodLister(mockCtrl))
+		secretLister, NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
@@ -476,7 +476,7 @@ func TestCreatePodWithCSIVolume(t *testing.T) {
 			pod.Spec.Volumes = tc.volumes
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				mockSecretLister, NewMockPodLister(mockCtrl))
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -588,7 +588,7 @@ func TestGetVolumesForSecretVolume(t *testing.T) {
 			pod.Spec.Volumes = fakePodVolumes
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				mockSecretLister, NewMockPodLister(mockCtrl))
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -702,7 +702,7 @@ func TestGetVolumesForConfigMapVolume(t *testing.T) {
 			pod.Spec.Volumes = fakePodVolumes
 
 			provider, err := createTestProvider(aciMocks, mockConfigMapLister,
-				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -826,7 +826,7 @@ func TestGetVolumesProjectedVolSecretSource(t *testing.T) {
 			pod.Spec.Volumes = fakePodVolumes
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				mockSecretLister, NewMockPodLister(mockCtrl))
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -949,7 +949,7 @@ func TestGetVolumesProjectedVolConfMapSource(t *testing.T) {
 			pod.Spec.Volumes = fakePodVolumes
 
 			provider, err := createTestProvider(aciMocks, mockConfigMapLister,
-				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -1065,7 +1065,7 @@ func TestGetVolumesProjectedVolSvcAcctTokenSource(t *testing.T) {
 			pod.Spec.ServiceAccountName = serviceAccountName
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				mockSecretLister, NewMockPodLister(mockCtrl))
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}

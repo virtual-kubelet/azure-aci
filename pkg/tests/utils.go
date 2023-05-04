@@ -370,3 +370,14 @@ func CreatePodsList(podNames []string, podNameSpace string) []*corev1.Pod {
 	}
 	return result
 }
+
+func CreateContainerGroupEvent(count int32, firstTimestamp time.Time, lastTimestamp time.Time, message, name, eventType string) *azaciv2.Event {
+	return &azaciv2.Event{
+		Count:          &count,
+		FirstTimestamp: &firstTimestamp,
+		LastTimestamp:  &lastTimestamp,
+		Message:        &message,
+		Name:           &name,
+		Type:           &eventType,
+	}
+}

@@ -20,6 +20,7 @@ import (
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/client-go/tools/record"
 )
 
 func TestUpdatePodStatus(t *testing.T) {
@@ -80,7 +81,7 @@ func TestProcessPodUpdates(t *testing.T) {
 	aciMocks := createNewACIMock()
 
 	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -131,6 +132,12 @@ func TestProcessPodUpdates(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			pod.Status.Phase = tc.podPhase
 			aciMocks.MockGetContainerGroupInfo = tc.getContainerGroupMock
+			aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
+				if tc.getContainerGroupMock != nil {
+					return tc.getContainerGroupMock(ctx, resourceGroup, podNamespace, podName, "node")
+				}
+				return nil, errdefs.NotFound("cg is not found")
+			}
 
 			podLister := NewMockPodLister(mockCtrl)
 
@@ -238,7 +245,7 @@ func TestCleanupDanglingPods(t *testing.T) {
 	mockPodsNamespaceLister := NewMockPodNamespaceLister(mockCtrl)
 
 	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), activePodsLister)
+		NewMockSecretLister(mockCtrl), activePodsLister, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -278,7 +285,7 @@ func TestUpdatePodsLoop(t *testing.T) {
 	aciMocks := createNewACIMock()
 
 	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -345,6 +352,9 @@ func TestUpdatePodsLoop(t *testing.T) {
 					return nil, errdefs.NotFound("cg is not found")
 				}
 			}
+			aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
+				return aciMocks.MockGetContainerGroupInfo(ctx, resourceGroup, podNamespace, podName, "node")
+			}
 
 			k8sPodsLister := NewMockPodLister(mockCtrl)
 			k8sPodsLister.EXPECT().List(gomock.Any()).Return(k8sPods, nil)
@@ -361,6 +371,112 @@ func TestUpdatePodsLoop(t *testing.T) {
 
 			if !tc.expectedAssertions(pod) {
 				t.Error("Expected assertions failed")
+			}
+		})
+	}
+}
+
+func TestFetchPodEvents(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	aciProvider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	container := testsutil.CreateACIContainerObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+
+	cases := []struct {
+		description           string
+		podPhase              v1.PodPhase
+		getContainerGroupMock func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error)
+		events                [][]*azaciv2.Event
+		expectedEvents        []string
+	}{
+		{
+			description: "Pod events are fetched",
+			podPhase:    v1.PodPending,
+			getContainerGroupMock: func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+				return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", []*azaciv2.Container{container}, "Succeeded"), nil
+			},
+			events: [][]*azaciv2.Event{
+				{
+					testsutil.CreateContainerGroupEvent(1, time.Unix(1, 0), time.Unix(1, 0), "an event", "evt", "Normal"),
+				},
+			},
+			expectedEvents: []string{"evt"},
+		},
+		{
+			description: "Unordered single batch of pod events is fetched",
+			podPhase:    v1.PodPending,
+			getContainerGroupMock: func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+				return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", []*azaciv2.Container{container}, "Succeeded"), nil
+			},
+			events: [][]*azaciv2.Event{
+				{
+					testsutil.CreateContainerGroupEvent(1, time.Unix(2, 0), time.Unix(2, 0), "first event", "evt1", "Normal"),
+					testsutil.CreateContainerGroupEvent(1, time.Unix(1, 0), time.Unix(1, 0), "second event", "evt2", "Normal"),
+				},
+			},
+			expectedEvents: []string{"evt1", "evt2"},
+		},
+		{
+			description: "Past events are skipped",
+			podPhase:    v1.PodPending,
+			getContainerGroupMock: func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+				return testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", []*azaciv2.Container{container}, "Succeeded"), nil
+			},
+			events: [][]*azaciv2.Event{
+				{
+					testsutil.CreateContainerGroupEvent(1, time.Unix(2, 0), time.Unix(2, 0), "first event", "evt1", "Normal"),
+				},
+				{
+					testsutil.CreateContainerGroupEvent(1, time.Unix(1, 0), time.Unix(1, 0), "past event", "evt2", "Normal"),
+					testsutil.CreateContainerGroupEvent(1, time.Unix(3, 0), time.Unix(3, 0), "next event", "evt3", "Normal"),
+				},
+			},
+			expectedEvents: []string{"evt1", "evt3"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			aciMocks.MockGetContainerGroupInfo = tc.getContainerGroupMock
+			aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
+				return tc.getContainerGroupMock(ctx, resourceGroup, podNamespace, podName, "node")
+			}
+
+			podLister := NewMockPodLister(mockCtrl)
+			eventRecorder := record.NewFakeRecorder(2)
+
+			podsTracker := &PodsTracker{
+				pods:          podLister,
+				updateCb:      func(p *v1.Pod) {},
+				handler:       aciProvider,
+				eventRecorder: eventRecorder,
+			}
+
+			for _, evts := range tc.events {
+				container.Properties.InstanceView.Events = evts
+				podsTracker.processPodUpdates(context.Background(), pod)
+			}
+
+			close(eventRecorder.Events)
+			assert.Equal(t, len(tc.expectedEvents), len(eventRecorder.Events))
+			i := 0
+			for evt := range eventRecorder.Events {
+				strings.Contains(evt, tc.expectedEvents[i])
+				i++
 			}
 		})
 	}
