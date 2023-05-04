@@ -183,7 +183,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			ctx := context.TODO()
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}

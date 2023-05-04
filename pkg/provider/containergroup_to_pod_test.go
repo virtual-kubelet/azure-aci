@@ -29,7 +29,7 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	provider, err := createTestProvider(createNewACIMock(), NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
