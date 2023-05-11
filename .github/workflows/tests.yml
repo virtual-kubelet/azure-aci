@@ -21,7 +21,6 @@ env:
 jobs:
   unit-tests:
     runs-on: ubuntu-20.04
-    environment: test
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v4

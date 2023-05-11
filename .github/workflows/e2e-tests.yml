@@ -5,14 +5,14 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  workflow_dispatch:
-  pull_request_target:
+  pull_request:
     branches:
       - master
       - release-**
     types: [ opened, ready_for_review, reopened ]
     paths:
       - '.github/workflows/chart.yml'
+      - '.github/workflows/e2e-tests.yml'
       - 'charts/**'
 
 permissions:
@@ -37,7 +37,6 @@ jobs:
 
   e2e-tests:
     needs: export-registry
-    environment: test
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       E2E_IMG_TAG: "e2e-ci"
@@ -73,18 +72,18 @@ jobs:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
 
-      - uses: azure/login@v1.4.6
+      - uses: azure/login@v1
         with:
-          client-id: ${{ secrets.CLIENTID }}
-          tenant-id: ${{ secrets.TENANT_ID }}
-          subscription-id: ${{ secrets.SUBSCRIPTIONID }}
+          client-id: ${{ env.CLIENTID }}
+          tenant-id: ${{ env.TENANT_ID }}
+          subscription-id: ${{ env.SUBSCRIPTIONID }}
 
       - name: Run e2e test
         run: |
           OUTPUT_TYPE=type=registry make e2e-test
         env:
           REGISTRY: ${{ env.REGISTRY}}
-          E2E_REGION: ${{ secrets.E2E_REGION}}
+          E2E_REGION: ${{ env.E2E_REGION}}
           CLUSTER_NAME: ${{ env.CLUSTER_NAME }}
           VERSION: ${{ env.E2E_IMG_TAG}}
           E2E_TARGET: "pr"
