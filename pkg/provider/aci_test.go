@@ -994,6 +994,27 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 	}
 }
 
+func TestCreatePodWithStartupProbe(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	pod.Spec.Containers[0].StartupProbe = &corev1.Probe{}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	err = provider.CreatePod(context.Background(), pod)
+	assert.Check(t, err != nil, "Should fail creating pod with startup probe")
+}
+
 func TestCreatedPodWithContainerPort(t *testing.T) {
 	port4040 := int32(4040)
 	port5050 := int32(5050)
