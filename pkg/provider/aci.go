@@ -1087,6 +1087,10 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 			log.G(ctx).Errorf("azure container instances initcontainers do not support readinessProbe")
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
 		}
+		if hasLifecycleHook(initContainer) {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support lifecycle hooks")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks")
+		}
 
 		newInitContainer := azaciv2.InitContainerDefinition{
 			Name: &pod.Spec.InitContainers[i].Name,
@@ -1111,6 +1115,9 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 
 		if len(podContainers[c].Command) == 0 && len(podContainers[c].Args) > 0 {
 			return nil, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+		}
+		if hasLifecycleHook(podContainers[c]) {
+			return nil, errdefs.InvalidInput("ACI does not support lifecycle hooks")
 		}
 		cmd := p.getCommand(podContainers[c])
 		ports := make([]*azaciv2.ContainerPort, 0, len(podContainers[c].Ports))
@@ -1389,4 +1396,11 @@ func getACIEnvVar(e v1.EnvVar) *azaciv2.EnvironmentVariable {
 		}
 	}
 	return &envVar
+}
+
+func hasLifecycleHook(c v1.Container) bool {
+	hasHandler := func(l *v1.LifecycleHandler) bool {
+		return l != nil && (l.HTTPGet != nil || l.Exec != nil || l.TCPSocket != nil)
+	}
+	return c.Lifecycle != nil && (hasHandler(c.Lifecycle.PreStop) || hasHandler(c.Lifecycle.PostStart))
 }
