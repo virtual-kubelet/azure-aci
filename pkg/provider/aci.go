@@ -1103,6 +1103,10 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 		if hasLifecycleHook(initContainer) {
 			log.G(ctx).Errorf("azure container instances initcontainers do not support lifecycle hooks")
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks")
+        }
+		if initContainer.StartupProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support startupProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support startupProbe")
 		}
 
 		newInitContainer := azaciv2.InitContainerDefinition{
@@ -1131,6 +1135,9 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 		}
 		if hasLifecycleHook(podContainers[c]) {
 			return nil, errdefs.InvalidInput("ACI does not support lifecycle hooks")
+        }
+		if podContainers[c].StartupProbe != nil {
+			return nil, errdefs.InvalidInput("ACI does not support startupProbe")
 		}
 		cmd := p.getCommand(podContainers[c])
 		ports := make([]*azaciv2.ContainerPort, 0, len(podContainers[c].Ports))

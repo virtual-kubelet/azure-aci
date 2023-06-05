@@ -65,12 +65,14 @@ func (p *ACIProvider) getPodStatusFromContainerGroup(ctx context.Context, cg *az
 			firstContainerStartTime = *containersList[0].Properties.InstanceView.CurrentState.StartTime
 			lastUpdateTime = firstContainerStartTime
 		}
-
+		containerState := aciContainerStateToContainerState(containersList[i].Properties.InstanceView.CurrentState)
+		started := containerState.Running != nil
 		containerStatus := v1.ContainerStatus{
 			Name:                 *containersList[i].Name,
-			State:                aciContainerStateToContainerState(containersList[i].Properties.InstanceView.CurrentState),
+			State:                containerState,
 			LastTerminationState: aciContainerStateToContainerState(containersList[i].Properties.InstanceView.PreviousState),
 			Ready:                getPodPhaseFromACIState(*containersList[i].Properties.InstanceView.CurrentState.State) == v1.PodRunning,
+			Started:              &started,
 			RestartCount:         *containersList[i].Properties.InstanceView.RestartCount,
 			Image:                *containersList[i].Properties.Image,
 			ImageID:              "",
@@ -131,7 +133,7 @@ func aciContainerStateToContainerState(cs *azaciv2.ContainerState) v1.ContainerS
 			},
 		}
 	// Handle the case of completion.
-	case "Succeeded":
+	case "Succeeded", "Terminated":
 		return v1.ContainerState{
 			Terminated: &v1.ContainerStateTerminated{
 				StartedAt:  metav1.NewTime(startTime),
