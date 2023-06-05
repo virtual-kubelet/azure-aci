@@ -577,9 +577,22 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 		return err
 	}
 
+	termSize := api.TermSize{
+		Width:  60,
+		Height: 120,
+	}
+	if attach.TTY() {
+		resize := attach.Resize()
+		select {
+		case termSize = <-resize:
+			break
+		case <-time.After(5 * time.Second):
+			break
+		}
+	}
 	// Set default terminal size
-	cols := int32(60)
-	rows := int32(120)
+	cols := int32(termSize.Width)
+	rows := int32(termSize.Height)
 	cmdParam := strings.Join(cmd, " ")
 	req := azaciv2.ContainerExecRequest{
 		Command: &cmdParam,

@@ -1996,3 +1996,49 @@ func TestCreatePodWithLifecycleHooks(t *testing.T) {
 	err = provider.CreatePod(context.Background(), pod)
 	assert.Error(t, err, "ACI does not support lifecycle hooks")
 }
+
+func TestRunInContainer(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	cols := 42
+	rows := 43
+	aciMocks := createNewACIMock()
+	aciMocks.MockExecuteContainerCommand = func(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaciv2.ContainerExecRequest) (*azaciv2.ContainerExecResponse, error) {
+		assert.Equal(t, int32(cols), *containerReq.TerminalSize.Cols, "terminal cols size mismatch")
+		assert.Equal(t, int32(rows), *containerReq.TerminalSize.Rows, "terminal rows size mismatch")
+		return nil, fmt.Errorf("this error workarounds the websocket connection")
+	}
+
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
+			testsutil.CreateACIContainersListObj(runningState, "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true), "Succeeded")
+		return cg, nil
+	}
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	pod.Spec.Containers[0].StartupProbe = &corev1.Probe{}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	termSize := make(chan api.TermSize)
+	defer close(termSize)
+	go func() {
+		termSize <- api.TermSize{
+			Width:  uint16(cols),
+			Height: uint16(rows),
+		}
+	}()
+	attachIO := NewMockAttachIO(mockCtrl)
+	attachIO.EXPECT().TTY().Return(true)
+	attachIO.EXPECT().Resize().Return(termSize)
+	attachIO.EXPECT().Stdout().Return(nil)
+
+	provider.RunInContainer(context.Background(), podNamespace, podName, "", nil, attachIO)
+}
