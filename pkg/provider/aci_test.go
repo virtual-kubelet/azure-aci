@@ -1950,3 +1950,28 @@ func TestFetchStandardPodsEvents(t *testing.T) {
 		"Normal cg container event container started 2",
 	}, broadcastEvents)
 }
+
+func TestCreatePodWithLifecycleHooks(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	pod.Spec.Containers[0].Lifecycle = &corev1.Lifecycle{
+		PostStart: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{},
+		},
+	}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	err = provider.CreatePod(context.Background(), pod)
+	assert.Error(t, err, "ACI does not support lifecycle hooks")
+}
