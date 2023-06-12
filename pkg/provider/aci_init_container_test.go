@@ -176,6 +176,40 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			},
 			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support resources requests"),
 		},
+		{
+			description: "Init Containers with lifecycle hook probe",
+			initContainers: []v1.Container{
+				{
+					Name: "initContainer 01",
+					Lifecycle: &v1.Lifecycle{
+						PostStart: &v1.LifecycleHandler{Exec: &v1.ExecAction{}},
+					},
+				},
+			},
+			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks"),
+		},
+        {
+			description: "Init Containers with startup probe",
+			initContainers: []v1.Container{
+				v1.Container{
+					Name: "initContainer 01",
+					StartupProbe: &v1.Probe{
+						ProbeHandler: v1.ProbeHandler{
+							HTTPGet: &v1.HTTPGetAction{
+								Port: intstr.FromInt(8080),
+								Path: "/",
+							},
+						},
+						InitialDelaySeconds: 10,
+						PeriodSeconds:       5,
+						TimeoutSeconds:      60,
+						SuccessThreshold:    3,
+						FailureThreshold:    5,
+					},
+				},
+			},
+			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support startupProbe"),
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {

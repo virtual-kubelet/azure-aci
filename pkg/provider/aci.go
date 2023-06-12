@@ -572,9 +572,22 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 		return err
 	}
 
+	termSize := api.TermSize{
+		Width:  60,
+		Height: 120,
+	}
+	if attach.TTY() {
+		resize := attach.Resize()
+		select {
+		case termSize = <-resize:
+			break
+		case <-time.After(5 * time.Second):
+			break
+		}
+	}
 	// Set default terminal size
-	cols := int32(60)
-	rows := int32(120)
+	cols := int32(termSize.Width)
+	rows := int32(termSize.Height)
 	cmdParam := strings.Join(cmd, " ")
 	req := azaciv2.ContainerExecRequest{
 		Command: &cmdParam,
@@ -1083,6 +1096,14 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 			log.G(ctx).Errorf("azure container instances initcontainers do not support readinessProbe")
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
 		}
+		if hasLifecycleHook(initContainer) {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support lifecycle hooks")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks")
+        }
+		if initContainer.StartupProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support startupProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support startupProbe")
+		}
 
 		newInitContainer := azaciv2.InitContainerDefinition{
 			Name: &pod.Spec.InitContainers[i].Name,
@@ -1116,6 +1137,12 @@ func (p *ACIProvider) getContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv
 
 		if len(podContainers[c].Command) == 0 && len(podContainers[c].Args) > 0 {
 			return nil, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+		}
+		if hasLifecycleHook(podContainers[c]) {
+			return nil, errdefs.InvalidInput("ACI does not support lifecycle hooks")
+        }
+		if podContainers[c].StartupProbe != nil {
+			return nil, errdefs.InvalidInput("ACI does not support startupProbe")
 		}
 		cmd := p.getCommand(podContainers[c])
 		ports := make([]*azaciv2.ContainerPort, 0, len(podContainers[c].Ports))
@@ -1380,4 +1407,11 @@ func getACIEnvVar(e v1.EnvVar) *azaciv2.EnvironmentVariable {
 		}
 	}
 	return &envVar
+}
+
+func hasLifecycleHook(c v1.Container) bool {
+	hasHandler := func(l *v1.LifecycleHandler) bool {
+		return l != nil && (l.HTTPGet != nil || l.Exec != nil || l.TCPSocket != nil)
+	}
+	return c.Lifecycle != nil && (hasHandler(c.Lifecycle.PreStop) || hasHandler(c.Lifecycle.PostStart))
 }
