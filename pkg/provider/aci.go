@@ -1120,7 +1120,8 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 				securityContext := p.getSecurityContext(ctx, pod.Spec.SecurityContext, pod.Spec.InitContainers[i].SecurityContext)
 				newInitContainer.Properties.SecurityContext = securityContext
 			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || pod.Spec.InitContainers[i].SecurityContext != nil){
-				return nil, errdefs.InvalidInput("securityContext is only supproted for confidential sku. skipping security context")
+				log.G(ctx).Warnf("securityContext is only supproted for confidential sku. skipping security context")
+				return nil, nil
 			}
 		}
 
@@ -1266,7 +1267,8 @@ func (p *ACIProvider) getContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv
 				securityContext := p.getSecurityContext(ctx, pod.Spec.SecurityContext, podContainers[c].SecurityContext)
 				aciContainer.Properties.SecurityContext = securityContext
 			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || podContainers[c].SecurityContext != nil) {
-				return nil, errdefs.InvalidInput("securityContext is only supproted for confidential sku. skipping security context")
+				log.G(ctx).Warnf("securityContext is only supproted for confidential sku. skipping security context")
+				return nil, nil
 			}
 		}
 
