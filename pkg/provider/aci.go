@@ -1121,7 +1121,6 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 				newInitContainer.Properties.SecurityContext = securityContext
 			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || pod.Spec.InitContainers[i].SecurityContext != nil){
 				log.G(ctx).Warnf("securityContext is only supproted for confidential sku. skipping security context")
-				return nil, nil
 			}
 		}
 
@@ -1268,7 +1267,6 @@ func (p *ACIProvider) getContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv
 				aciContainer.Properties.SecurityContext = securityContext
 			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || podContainers[c].SecurityContext != nil) {
 				log.G(ctx).Warnf("securityContext is only supproted for confidential sku. skipping security context")
-				return nil, nil
 			}
 		}
 
