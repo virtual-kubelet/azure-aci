@@ -13,6 +13,7 @@ import (
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
 	"github.com/virtual-kubelet/azure-aci/pkg/metrics/collectors"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
@@ -23,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	compbasemetrics "k8s.io/component-base/metrics"
-	dto "github.com/prometheus/client_model/go"
 )
 
 const (
@@ -138,7 +138,6 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	return &s, nil
 }
 
-
 // GetMetrics Resource returns the metrics for pods running on ACI
 func (p *ACIPodMetricsProvider) GetMetricsResource(ctx context.Context) ([]*dto.MetricFamily, error) {
 	ctx, span := trace.StartSpan(ctx, "GetMetricsResource")
@@ -160,7 +159,6 @@ func (p *ACIPodMetricsProvider) GetMetricsResource(ctx context.Context) ([]*dto.
 	}
 	return metricFamily, nil
 }
-
 
 type podStatsGetterDecider struct {
 	realTimeGetter client.PodStatsGetter
