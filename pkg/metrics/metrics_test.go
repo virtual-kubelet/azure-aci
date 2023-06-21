@@ -96,9 +96,9 @@ func TestGetMetricsResource(t *testing.T) {
 			podMetricsProvider.podStatsGetter = mockedPodStatsGetter
 			podLister.EXPECT().List(gomock.Any()).Return(fakePod(getMapKeys(test)), nil)
 			for podName, cpu := range test {
-				if testName  == "podStatsError" {
+				if testName == "podStatsError" {
 					mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakeEmptyPodStatus(), fmt.Errorf("GetStatsSummaryError"))
-				} else if testName  == "nilStatsError" {
+				} else if testName == "nilStatsError" {
 					mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakeEmptyPodStatus(), nil)
 				} else {
 					mockedPodStatsGetter.EXPECT().GetPodStats(gomock.Any(), podNameEq(podName)).Return(fakePodStatus(podName, cpu), nil)
@@ -179,7 +179,7 @@ func fakePod(podNames []string) []*v1.Pod {
 	return result
 }
 
-func fakeEmptyPodStatus() *stats.PodStats{
+func fakeEmptyPodStatus() *stats.PodStats {
 	return nil
 }
 
@@ -190,7 +190,7 @@ func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
 			Name: podName,
 		},
 		CPU: &stats.CPUStats{
-			UsageNanoCores: &cpu,
+			UsageNanoCores:       &cpu,
 			UsageCoreNanoSeconds: &nanosec,
 		},
 		Memory: &stats.MemoryStats{
@@ -198,10 +198,10 @@ func fakePodStatus(podName string, cpu uint64) *stats.PodStats {
 		},
 		Containers: []stats.ContainerStats{
 			stats.ContainerStats{
-				Name: "testcontainer",
+				Name:      "testcontainer",
 				StartTime: metav1.NewTime(time.Now()),
 				CPU: &stats.CPUStats{
-					UsageNanoCores: &cpu,
+					UsageNanoCores:       &cpu,
 					UsageCoreNanoSeconds: &nanosec,
 				},
 				Memory: &stats.MemoryStats{

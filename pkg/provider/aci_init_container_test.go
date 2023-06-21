@@ -188,7 +188,7 @@ func TestCreatePodWithInitContainers(t *testing.T) {
 			},
 			expectedError: errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks"),
 		},
-        {
+		{
 			description: "Init Containers with startup probe",
 			initContainers: []v1.Container{
 				v1.Container{

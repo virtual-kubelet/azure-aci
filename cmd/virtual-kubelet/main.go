@@ -156,7 +156,6 @@ func main() {
 				var err error
 
 				cfg.AuthzConfig.WebhookRetryBackoff = options.DefaultAuthWebhookRetryBackoff()
-				cfg.AuthzConfig.WebhookRetryBackoff = options.DefaultAuthWebhookRetryBackoff()
 
 				if webhookAuthnCacheTTL > 0 {
 					cfg.AuthnConfig.CacheTTL = webhookAuthnCacheTTL
