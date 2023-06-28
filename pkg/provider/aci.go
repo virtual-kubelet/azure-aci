@@ -76,6 +76,7 @@ const (
 const (
 	confidentialComputeSkuLabel       = "virtual-kubelet.io/container-sku"
 	confidentialComputeCcePolicyLabel = "virtual-kubelet.io/confidential-compute-cce-policy"
+	availabilityZonesLabel             = "virtual-kubelet.io/aci-availability-zones"
 )
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
@@ -347,6 +348,10 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature) {
 		// set confidentialComputeProperties
 		p.setConfidentialComputeProperties(ctx, pod, cg)
+	}
+
+	if p.enabledFeatures.IsEnabled(ctx, featureflag.AvailabilityZonesFeature) {
+		cg.Zones = p.setAvailabilityZones(ctx, pod, cg)
 	}
 
 	// assign all the things
@@ -1265,6 +1270,16 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 		containers = append(containers, &aciContainer)
 	}
 	return containers, nil
+}
+
+func (p *ACIProvider) setAvailabilityZones(ctx context.Context, pod *v1.Pod, cg *azaciv2.ContainerGroup) []*string {
+	availabilityZonesString := pod.Annotations[availabilityZonesLabel]
+	availabilityZones := strings.Split(availabilityZonesString, ",")
+	zones := make([]*string, 0, len(availabilityZones))
+	for i := range availabilityZones {
+		zones = append(zones, &availabilityZones[i])
+	}
+	return zones
 }
 
 func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod *v1.Pod, cg *azaciv2.ContainerGroup) {

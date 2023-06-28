@@ -34,6 +34,11 @@ func TestIsEnabled(t *testing.T) {
 			feature:       Events,
 			shouldEnabled: true,
 		},
+		{
+			description:   fmt.Sprintf(" %s feature should be enabled", AvailabilityZonesFeature),
+			feature:       AvailabilityZonesFeature,
+			shouldEnabled: true,
+		},
 	}
 	for i, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
