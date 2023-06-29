@@ -46,32 +46,28 @@ func TestCreatePodWithAvailabilityZones(t *testing.T) {
 		description    string
 		initContainers []v1.Container
 		annotations    map[string]string
-		expectedError  error
 		numZones       int
 	}{
 		{
 			description:   "container group request with one availability zone",
-			expectedError: nil,
 			annotations: map[string]string{
-				availabiltyZonesLabel : "1",
+				availabilityZonesLabel : "1",
 			},
 			initContainers: nil,
 			numZones: 1,
 		},
 		{
 			description:   "container group request with multiple availablity zones",
-			expectedError: nil,
 			annotations: map[string]string{
-				availabiltyZonesLabel : "1,2,3",
+				availabilityZonesLabel : "1,2,3",
 			},
 			initContainers: nil,
 			numZones: 3,
 		},
 		{
 			description:   "container group request with init containers and availability zones",
-			expectedError: nil,
 			annotations: map[string]string{
-				availabiltyZonesLabel : "1,2,3,4",
+				availabilityZonesLabel : "1,2,3,4",
 			},
 			numZones: 4,
 			initContainers: []v1.Container{
@@ -99,8 +95,6 @@ func TestCreatePodWithAvailabilityZones(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
 
-			ctx := context.TODO()
-
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
 				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 			if err != nil {
@@ -123,17 +117,14 @@ func TestCreatePodWithAvailabilityZones(t *testing.T) {
 					assert.Check(t, *initContainers[0].Name == initContainerName1, "Name should be correct")
 					assert.Check(t, len(cg.Zones) == tc.numZones, "Number of AvailabilityZones should be correct")
 				}
+				return nil
+			}
 
 			pod.Annotations = tc.annotations
 			pod.Spec.InitContainers = tc.initContainers
 			err = provider.CreatePod(context.Background(), pod)
-
-			// check that the correct error is returned
-			if tc.expectedError != nil && err != tc.expectedError {
-				assert.Equal(t, tc.expectedError.Error(), err.Error(), "expected error and actual error don't match")
-			}
-
-				return nil
+			if err != nil {
+				t.Fatal("Failed to create container group", err)
 			}
 		})
 	}
