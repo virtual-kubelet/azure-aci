@@ -56,7 +56,7 @@ func TestCreatePodWithAvailabilityZones(t *testing.T) {
 			numZones: 1,
 		},
 		{
-			description:   "container group request with multiple availablity zones",
+			description:   "container group request with multiple availability zones",
 			annotations: map[string]string{
 				availabilityZonesLabel : "1,2,3",
 			},
