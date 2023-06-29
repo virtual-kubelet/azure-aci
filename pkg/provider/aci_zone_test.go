@@ -10,7 +10,6 @@ import (
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/golang/mock/gomock"
-	"github.com/virtual-kubelet/azure-aci/pkg/featureflag"
 	"gotest.tools/assert"
 	is "gotest.tools/assert/cmp"
 	v1 "k8s.io/api/core/v1"
