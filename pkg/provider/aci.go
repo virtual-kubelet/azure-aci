@@ -73,11 +73,6 @@ const (
 	containerExitCodePodDeleted int32 = 0
 )
 
-const (
-	confidentialComputeSkuLabel       = "virtual-kubelet.io/container-sku"
-	confidentialComputeCcePolicyLabel = "virtual-kubelet.io/confidential-compute-cce-policy"
-)
-
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
 type ACIProvider struct {
 	azClientsAPIs            client.AzClientsInterface
@@ -318,7 +313,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	cg.Properties.OSType = &os
 
 	// get containers
-	containers, err := p.getContainers(pod)
+	containers, err := p.getContainers(ctx, pod)
 	if err != nil {
 		return err
 	}
@@ -1078,6 +1073,7 @@ func (p *ACIProvider) getEnvironmentVariables(container v1.Container) []*azaciv2
 
 // get InitContainers defined in Pod as []aci.InitContainerDefinition
 func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv2.InitContainerDefinition, error) {
+
 	initContainers := make([]*azaciv2.InitContainerDefinition, 0, len(pod.Spec.InitContainers))
 	for i, initContainer := range pod.Spec.InitContainers {
 		err := p.verifyContainer(&initContainer)
@@ -1125,12 +1121,21 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 			},
 		}
 
+		if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature){
+			if isConfidentialSku(pod) {
+				securityContext := p.getSecurityContext(ctx, pod.Spec.SecurityContext, pod.Spec.InitContainers[i].SecurityContext)
+				newInitContainer.Properties.SecurityContext = securityContext
+			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || pod.Spec.InitContainers[i].SecurityContext != nil){
+				log.G(ctx).Warnf("securityContext is only supproted for confidential sku. skipping security context")
+			}
+		}
+
 		initContainers = append(initContainers, &newInitContainer)
 	}
 	return initContainers, nil
 }
 
-func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
+func (p *ACIProvider) getContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv2.Container, error) {
 	containers := make([]*azaciv2.Container, 0, len(pod.Spec.Containers))
 
 	podContainers := pod.Spec.Containers
@@ -1262,32 +1267,18 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 			aciContainer.Properties.ReadinessProbe = probe
 		}
 
+		if p.enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature) {
+			if isConfidentialSku(pod) {
+				securityContext := p.getSecurityContext(ctx, pod.Spec.SecurityContext, podContainers[c].SecurityContext)
+				aciContainer.Properties.SecurityContext = securityContext
+			} else if !isConfidentialSku(pod) && (pod.Spec.SecurityContext != nil || podContainers[c].SecurityContext != nil) {
+				log.G(ctx).Warnf("securityContext is only supproted for confidential sku. skipping security context")
+			}
+		}
+
 		containers = append(containers, &aciContainer)
 	}
 	return containers, nil
-}
-
-func (p *ACIProvider) setConfidentialComputeProperties(ctx context.Context, pod *v1.Pod, cg *azaciv2.ContainerGroup) {
-	containerGroupSku := pod.Annotations[confidentialComputeSkuLabel]
-	ccePolicy := pod.Annotations[confidentialComputeCcePolicyLabel]
-	confidentialSku := azaciv2.ContainerGroupSKUConfidential
-
-	l := log.G(ctx).WithField("containerGroup", cg.Name)
-
-	if ccePolicy != "" {
-		cg.Properties.SKU = &confidentialSku
-		confidentialComputeProperties := azaciv2.ConfidentialComputeProperties{
-			CcePolicy: &ccePolicy,
-		}
-		cg.Properties.ConfidentialComputeProperties = &confidentialComputeProperties
-		l.Infof("setting confidential compute properties with CCE Policy")
-
-	} else if strings.ToLower(containerGroupSku) == "confidential" {
-		cg.Properties.SKU = &confidentialSku
-		l.Infof("setting confidential container group SKU")
-	}
-
-	l.Infof("no annotations for confidential SKU")
 }
 
 func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {
