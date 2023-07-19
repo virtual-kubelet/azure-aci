@@ -1,3 +1,7 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package provider
 
 import (
@@ -10,7 +14,10 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/record/util"
 )
 
 const (
@@ -31,6 +38,7 @@ type PodIdentifier struct {
 type PodsTrackerHandler interface {
 	ListActivePods(ctx context.Context) ([]PodIdentifier, error)
 	FetchPodStatus(ctx context.Context, ns, name string) (*v1.PodStatus, error)
+	FetchPodEvents(ctx context.Context, pod *v1.Pod, evtSink func(timestamp *time.Time, object runtime.Object, eventtype, reason, messageFmt string, args ...interface{})) error
 	CleanupPod(ctx context.Context, ns, name string) error
 }
 
@@ -38,6 +46,9 @@ type PodsTracker struct {
 	pods     corev1listers.PodLister
 	updateCb func(*v1.Pod)
 	handler  PodsTrackerHandler
+
+	lastEventCheck time.Time
+	eventRecorder  record.EventRecorder
 }
 
 // StartTracking starts the background tracking for created pods.
@@ -143,6 +154,23 @@ func (pt *PodsTracker) cleanupDanglingPods(ctx context.Context) {
 func (pt *PodsTracker) processPodUpdates(ctx context.Context, pod *v1.Pod) bool {
 	ctx, span := trace.StartSpan(ctx, "PodsTracker.processPodUpdates")
 	defer span.End()
+
+	lastEventCheck := pt.lastEventCheck
+	err := pt.handler.FetchPodEvents(ctx, pod, func(timestamp *time.Time, object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
+		if timestamp == nil || timestamp.After(pt.lastEventCheck) {
+			if !util.ValidateEventType(eventtype) {
+				eventtype = v1.EventTypeWarning
+			}
+			if timestamp != nil && timestamp.After(lastEventCheck) {
+				lastEventCheck = *timestamp
+			}
+			pt.eventRecorder.Eventf(object, eventtype, reason, messageFmt, args...)
+		}
+	})
+	pt.lastEventCheck = lastEventCheck
+	if err != nil {
+		log.G(ctx).WithError(err).Warnf("cannot fetch aci events for pod %s in namespace %s", pod.Name, pod.Namespace)
+	}
 
 	if pt.shouldSkipPodStatusUpdate(pod) {
 		log.G(ctx).Infof("pod %s will skip pod status update", pod.Name)

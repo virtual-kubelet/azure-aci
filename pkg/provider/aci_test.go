@@ -5,10 +5,12 @@ Licensed under the Apache 2.0 license.
 package provider
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -24,10 +26,15 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"gotest.tools/assert"
 
+	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	is "gotest.tools/assert/cmp"
-	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/record"
 )
 
 const (
@@ -196,18 +203,18 @@ func TestCreatePodWithoutResourceSpec(t *testing.T) {
 		return nil
 	}
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
 				},
@@ -233,7 +240,7 @@ func TestCreatePodWithWindowsOS(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	
+
 	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
 		containers := cg.Properties.Containers
 		assert.Check(t, cg != nil, "Container group is nil")
@@ -246,18 +253,18 @@ func TestCreatePodWithWindowsOS(t *testing.T) {
 		return nil
 	}
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
 				},
@@ -294,17 +301,17 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	podNamespace := "ns-" + uuid.New().String()
 	ctx := context.Background()
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("1.981"),
 							"memory": resource.MustParse("3.49G"),
 						},
@@ -315,7 +322,7 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -327,7 +334,6 @@ func TestCreatePodWithResourceRequestOnly(t *testing.T) {
 
 // Tests create pod with default GPU SKU.
 func TestCreatePodWithGPU(t *testing.T) {
-	t.Skip("Skipping GPU tests until Location API is fixed")
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -348,21 +354,21 @@ func TestCreatePodWithGPU(t *testing.T) {
 		return nil
 	}
 
-	pod := &v1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("1.981"),
 							"memory": resource.MustParse("3.49G"),
 						},
-						Limits: v1.ResourceList{
+						Limits: corev1.ResourceList{
 							gpuResourceName: resource.MustParse("10"),
 						},
 					},
@@ -372,10 +378,12 @@ func TestCreatePodWithGPU(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
+
+	provider.gpuSKUs = []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}
 
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
@@ -384,8 +392,6 @@ func TestCreatePodWithGPU(t *testing.T) {
 
 // Tests create pod with GPU SKU in annotation.
 func TestCreatePodWithGPUSKU(t *testing.T) {
-	t.Skip("Skipping GPU tests until Location API is fixed")
-
 	podName := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
@@ -403,19 +409,21 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 		assert.Check(t, is.Equal(3.4, *(containers[0]).Properties.Resources.Requests.MemoryInGB), "Request Memory is not expected")
 		assert.Check(t, (containers[0]).Properties.Resources.Requests.Gpu != nil, "Requests GPU is not expected")
 		assert.Check(t, is.Equal(int32(1), *(containers[0]).Properties.Resources.Requests.Gpu.Count), "Requests GPU Count is not expected")
-		assert.Check(t, is.Equal(gpuSKU, (containers[0]).Properties.Resources.Requests.Gpu.SKU), "Requests GPU SKU is not expected")
+		assert.Check(t, is.Equal(gpuSKU, *(containers[0]).Properties.Resources.Requests.Gpu.SKU), "Requests GPU SKU is not expected")
 		assert.Check(t, (containers[0]).Properties.Resources.Limits.Gpu != nil, "Limits GPU is not expected")
 
 		return nil
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
 
-	pod := &v1.Pod{
+	provider.gpuSKUs = []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}
+
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespace,
@@ -423,16 +431,16 @@ func TestCreatePodWithGPUSKU(t *testing.T) {
 				gpuTypeAnnotation: string(gpuSKU),
 			},
 		},
-		Spec: v1.PodSpec{
-			Containers: []v1.Container{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
 				{
 					Name: "nginx",
-					Resources: v1.ResourceRequirements{
-						Requests: v1.ResourceList{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
 							"cpu":    resource.MustParse("1.981"),
 							"memory": resource.MustParse("3.49G"),
 						},
-						Limits: v1.ResourceList{
+						Limits: corev1.ResourceList{
 							gpuResourceName: resource.MustParse("1"),
 						},
 					},
@@ -473,7 +481,7 @@ func TestCreatePodWithResourceRequestAndLimit(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -496,7 +504,7 @@ func TestGetPodsWithEmptyList(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -567,7 +575,7 @@ func TestGetPodsWithoutResourceRequestsLimits(t *testing.T) {
 		}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -618,7 +626,7 @@ func TestGetPodWithoutResourceRequestsLimits(t *testing.T) {
 		return result, nil
 	}
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), podLister)
+		NewMockSecretLister(mockCtrl), podLister, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -637,11 +645,11 @@ func TestPodToACISecretEnvVar(t *testing.T) {
 	testKey := "testVar"
 	testVal := "testVal"
 
-	e := v1.EnvVar{
+	e := corev1.EnvVar{
 		Name:  testKey,
 		Value: testVal,
-		ValueFrom: &v1.EnvVarSource{
-			SecretKeyRef: &v1.SecretKeySelector{},
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{},
 		},
 	}
 	aciEnvVar := getACIEnvVar(e)
@@ -664,10 +672,10 @@ func TestPodToACIEnvVar(t *testing.T) {
 	testKey := "testVar"
 	testVal := "testVal"
 
-	e := v1.EnvVar{
+	e := corev1.EnvVar{
 		Name:      testKey,
 		Value:     testVal,
-		ValueFrom: &v1.EnvVarSource{},
+		ValueFrom: &corev1.EnvVarSource{},
 	}
 	aciEnvVar := getACIEnvVar(e)
 
@@ -705,12 +713,16 @@ func createNewACIMock() *MockACIProvider {
 	})
 }
 
-func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMapLister, secretMocker *MockSecretLister, podMocker *MockPodLister) (*ACIProvider, error) {
+func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMapLister, secretMocker *MockSecretLister, podMocker *MockPodLister, kubeClient kubernetes.Interface) (*ACIProvider, error) {
 	ctx := context.TODO()
 
 	err := setAuthConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	if kubeClient == nil {
+		kubeClient = fake.NewSimpleClientset()
 	}
 
 	err = os.Setenv("ACI_VNET_NAME", fakeVnetName)
@@ -736,18 +748,18 @@ func createTestProvider(aciMocks *MockACIProvider, configMapMocker *MockConfigMa
 		Pods:       podMocker,
 	}
 
-	cfg.Node = &v1.Node{}
+	cfg.Node = &corev1.Node{}
 
 	operatingSystem, osTypeSet := os.LookupEnv("PROVIDER_OPERATING_SYSTEM")
-	
+
 	if !osTypeSet {
 		operatingSystem = "Linux"
 	}
-	
+
 	cfg.Node.Name = fakeNodeName
 	cfg.Node.Status.NodeInfo.OperatingSystem = operatingSystem
 
-	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local")
+	provider, err := NewACIProvider(ctx, "example.toml", azConfig, aciMocks, cfg, fakeNodeName, operatingSystem, "0.0.0.0", 10250, "cluster.local", kubeClient)
 	if err != nil {
 		return nil, err
 	}
@@ -763,7 +775,7 @@ func TestConfigureNode(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
-	node := &v1.Node{
+	node := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "virtual-kubelet",
 			Labels: map[string]string{
@@ -772,9 +784,9 @@ func TestConfigureNode(t *testing.T) {
 				"kubernetes.io/hostname": "virtual-kubelet",
 			},
 		},
-		Spec: v1.NodeSpec{},
-		Status: v1.NodeStatus{
-			NodeInfo: v1.NodeSystemInfo{
+		Spec: corev1.NodeSpec{},
+		Status: corev1.NodeStatus{
+			NodeInfo: corev1.NodeSystemInfo{
 				Architecture:   "amd64",
 				KubeletVersion: "1.26.0",
 			},
@@ -782,7 +794,7 @@ func TestConfigureNode(t *testing.T) {
 	}
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -818,7 +830,7 @@ func TestCreatePodWithNamedLivenessProbe(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -855,7 +867,7 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -868,8 +880,8 @@ func TestCreatePodWithLivenessProbe(t *testing.T) {
 func TestGetProbe(t *testing.T) {
 	cases := []struct {
 		description     string
-		podProbe        *v1.Probe
-		podPorts        []v1.ContainerPort
+		podProbe        *corev1.Probe
+		podPorts        []corev1.ContainerPort
 		expectedCGProbe *azaciv2.ContainerProbe
 		expectedError   error
 	}{
@@ -972,7 +984,7 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 	pod := testsutil.CreatePodObj(podName, podNamespace)
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -980,6 +992,27 @@ func TestCreatePodWithReadinessProbe(t *testing.T) {
 	if err := provider.CreatePod(context.Background(), pod); err != nil {
 		t.Fatal("Failed to create pod", err)
 	}
+}
+
+func TestCreatePodWithStartupProbe(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	pod.Spec.Containers[0].StartupProbe = &corev1.Probe{}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	err = provider.CreatePod(context.Background(), pod)
+	assert.Check(t, err != nil, "Should fail creating pod with startup probe")
 }
 
 func TestCreatedPodWithContainerPort(t *testing.T) {
@@ -990,14 +1023,14 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 
 	cases := []struct {
 		description   string
-		containerList []v1.Container
+		containerList []corev1.Container
 	}{
 		{
 			description: "Container with port and other without port",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: port5050,
 						},
@@ -1010,10 +1043,10 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 		},
 		{
 			description: "Two containers with multiple same ports",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 80,
 						},
@@ -1024,7 +1057,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				{
 					Name: "container2",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: port4040,
 						},
@@ -1034,10 +1067,10 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 		},
 		{
 			description: "Two containers with different ports",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 5050,
 						},
@@ -1045,7 +1078,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				{
 					Name: "container2",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: port4040,
 						},
@@ -1055,10 +1088,10 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 		},
 		{
 			description: "Two containers with the same port",
-			containerList: []v1.Container{
+			containerList: []corev1.Container{
 				{
 					Name: "container1",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 5050,
 						},
@@ -1066,7 +1099,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 				},
 				{
 					Name: "container2",
-					Ports: []v1.ContainerPort{
+					Ports: []corev1.ContainerPort{
 						{
 							ContainerPort: 5050,
 						},
@@ -1077,12 +1110,12 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.description, func(t *testing.T) {
-			pod := &v1.Pod{
+			pod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      podName,
 					Namespace: podNamespace,
 				},
-				Spec: v1.PodSpec{},
+				Spec: corev1.PodSpec{},
 			}
 			pod.Spec.Containers = tc.containerList
 
@@ -1106,7 +1139,7 @@ func TestCreatedPodWithContainerPort(t *testing.T) {
 			}
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+				NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 			if err != nil {
 				t.Fatal("Unable to create test provider", err)
 			}
@@ -1146,7 +1179,7 @@ func TestGetPodWithContainerID(t *testing.T) {
 	}
 
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), podLister)
+		NewMockSecretLister(mockCtrl), podLister, nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
@@ -1163,81 +1196,79 @@ func TestGetPodWithContainerID(t *testing.T) {
 	assert.Check(t, is.Equal(util.GetContainerID(&cgID, &testsutil.TestContainerName), pod.Status.ContainerStatuses[0].ContainerID), "Container ID in the container status is not expected")
 }
 
-func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
+func TestFilterWindowsServiceAccountSecretVolume(t *testing.T) {
 	cgName := "pod-" + uuid.New().String()
 	cgNamespace := "ns-" + uuid.New().String()
 	mockCtrl := gomock.NewController(t)
- 	defer mockCtrl.Finish()
+	defer mockCtrl.Finish()
 
-	volName:= "fakeVolume"
-	volMountName1:= "fakeVolumeMount1"
-	volMountPath1:= "/mnt/azure"
-	volMountName2:= "fakeVolumeMount2"
-	serviceAccountSecretMountPath:= "/var/run/secrets/kubernetes.io/serviceaccount"
+	volName := "fakeVolume"
+	volMountName1 := "fakeVolumeMount1"
+	volMountPath1 := "/mnt/azure"
+	volMountName2 := "fakeVolumeMount2"
+	serviceAccountSecretMountPath := "/var/run/secrets/kubernetes.io/serviceaccount"
 
 	fakeVolumes := []*azaciv2.Volume{
 		{
-			Name: &volName,
-			EmptyDir: &v1.EmptyDirVolumeSource{},
-			
+			Name:     &volName,
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 		{
-			Name: &volMountName2,
-			EmptyDir: &v1.EmptyDirVolumeSource{},
-			
+			Name:     &volMountName2,
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		}}
-	nonServiceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+	nonServiceAccountSecretVolumeMount := []*azaciv2.VolumeMount{
 		{
-			Name: &volMountName1,
+			Name:      &volMountName1,
 			MountPath: &volMountPath1,
 		}}
-	serviceAccountSecretVolumeMount:= []*azaciv2.VolumeMount{
+	serviceAccountSecretVolumeMount := []*azaciv2.VolumeMount{
 		{
-			Name: &volMountName2,
+			Name:      &volMountName2,
 			MountPath: &serviceAccountSecretMountPath,
 		}}
 
 	cases := []struct {
-		description		string
-		os				string
-		containers		[]*azaciv2.Container
-		shouldFilter	bool
+		description  string
+		os           string
+		containers   []*azaciv2.Container
+		shouldFilter bool
 	}{
 		{
 			description: "Container without service account secret mount path",
-			os: "Windows",
+			os:          "Windows",
 			containers: []*azaciv2.Container{
 				{
-					Name: &volMountName1,		
+					Name: &volMountName1,
 					Properties: &azaciv2.ContainerProperties{
 						VolumeMounts: nonServiceAccountSecretVolumeMount,
-					},			
+					},
 				},
 			},
 			shouldFilter: false,
 		},
 		{
 			description: "Container with service account secret mount path",
-			os: "Windows",
+			os:          "Windows",
 			containers: []*azaciv2.Container{
 				{
-					Name: &volMountName2,		
+					Name: &volMountName2,
 					Properties: &azaciv2.ContainerProperties{
 						VolumeMounts: serviceAccountSecretVolumeMount,
-					},			
+					},
 				},
 			},
 			shouldFilter: true,
 		},
 		{
 			description: "Container with service account secret mount path but os is not windows",
-			os: "Linux",
+			os:          "Linux",
 			containers: []*azaciv2.Container{
 				{
-					Name: &volMountName2,		
+					Name: &volMountName2,
 					Properties: &azaciv2.ContainerProperties{
 						VolumeMounts: serviceAccountSecretVolumeMount,
-					},			
+					},
 				},
 			},
 			shouldFilter: false,
@@ -1266,37 +1297,37 @@ func TestFilterWindowsServiceAccountSecretVolume (t *testing.T) {
 	}
 }
 
-func TestDeleteContainerGroup (t *testing.T) {
+func TestDeleteContainerGroup(t *testing.T) {
 	podName1 := "pod-" + uuid.New().String()
 	podName2 := "pod-" + uuid.New().String()
 	podNamespace := "ns-" + uuid.New().String()
 
-	podNames:= []string{podName1, podName2}
-	fakePods:= testsutil.CreatePodsList(podNames, podNamespace)
+	podNames := []string{podName1, podName2}
+	fakePods := testsutil.CreatePodsList(podNames, podNamespace)
 
 	cases := []struct {
-		description				string
-		podName					string
-		cgDeleteExpectedError	error
-		hasValidPodsTracker		bool
+		description           string
+		podName               string
+		cgDeleteExpectedError error
+		hasValidPodsTracker   bool
 	}{
 		{
-			description: "successfully deletes container group and updates pod status",
-			podName: podName1,
+			description:           "successfully deletes container group and updates pod status",
+			podName:               podName1,
 			cgDeleteExpectedError: nil,
-			hasValidPodsTracker: true,
+			hasValidPodsTracker:   true,
 		},
 		{
-			description: "successfully deletes container group but fails to update pod status",
-			podName: "fakePod",
+			description:           "successfully deletes container group but fails to update pod status",
+			podName:               "fakePod",
 			cgDeleteExpectedError: nil,
-			hasValidPodsTracker: false,
+			hasValidPodsTracker:   false,
 		},
 		{
-			description: "fails to delete container group",
-			podName: podName2,
+			description:           "fails to delete container group",
+			podName:               podName2,
 			cgDeleteExpectedError: errors.New("failed to delete container group"),
-			hasValidPodsTracker: false,
+			hasValidPodsTracker:   false,
 		},
 	}
 
@@ -1313,17 +1344,17 @@ func TestDeleteContainerGroup (t *testing.T) {
 			}
 
 			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-				NewMockSecretLister(mockCtrl), podLister)
+				NewMockSecretLister(mockCtrl), podLister, nil)
 			if err != nil {
 				t.Fatal("failed to create the test provider", err)
 			}
 
 			if tc.hasValidPodsTracker {
-				podsTracker:= &PodsTracker{
+				podsTracker := &PodsTracker{
 					pods: podLister,
-					updateCb: func(updatedPod *v1.Pod) {
+					updateCb: func(updatedPod *corev1.Pod) {
 						for index, pod := range fakePods {
-							if (updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace) {
+							if updatedPod.Name == pod.Name && updatedPod.Namespace == pod.Namespace {
 								fakePods[index] = updatedPod
 								break
 							}
@@ -1333,7 +1364,7 @@ func TestDeleteContainerGroup (t *testing.T) {
 				podLister.EXPECT().List(gomock.Any()).Return(fakePods, nil)
 
 				provider.tracker = podsTracker
-			}			
+			}
 
 			err = provider.deleteContainerGroup(context.Background(), podNamespace, tc.podName)
 
@@ -1342,11 +1373,11 @@ func TestDeleteContainerGroup (t *testing.T) {
 			} else {
 				assert.Equal(t, tc.cgDeleteExpectedError.Error(), err.Error())
 			}
-			
+
 			for _, pod := range fakePods {
-				if pod.Name == tc.podName {					
+				if pod.Name == tc.podName {
 					for i := range pod.Status.ContainerStatuses {
-						if (tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil) {
+						if tc.hasValidPodsTracker && tc.cgDeleteExpectedError == nil {
 							assert.Check(t, pod.Status.ContainerStatuses[i].State.Terminated != nil, "Container should be terminated")
 							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Running)), "Container should not be running")
 							assert.Check(t, is.Equal((pod.Status.ContainerStatuses[i].State.Terminated.ExitCode), containerExitCodePodDeleted), "Status exit code should be set to pod deleted")
@@ -1355,11 +1386,659 @@ func TestDeleteContainerGroup (t *testing.T) {
 						} else {
 							assert.Check(t, pod.Status.ContainerStatuses[i].State.Running != nil, "Container should be running")
 							assert.Check(t, is.Nil((pod.Status.ContainerStatuses[i].State.Terminated)), "Container should not be terminated")
-						}					
+						}
 					}
-									
+
 				}
-			}			
+			}
 		})
-	}	
+	}
+}
+
+func TestGetPodStatus(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+
+	invalidContainersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+	invalidContainersList[0].Properties = nil
+
+	validContainerGroup := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded")
+
+	cgEmptyContainerList := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", nil, "Succeeded")
+
+	cgInvalidContainerList := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", invalidContainersList, "Succeeded")
+
+	aciMocks := createNewACIMock()
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	cases := []struct {
+		description   string
+		cgInfo        *azaciv2.ContainerGroup
+		expectedError error
+	}{
+		{
+			description:   "successfully gets pod status",
+			cgInfo:        validContainerGroup,
+			expectedError: nil,
+		},
+		{
+			description:   "fails to get container group info",
+			cgInfo:        nil,
+			expectedError: errors.New("failed to retrieve container group"),
+		},
+		{
+			description:   "fails to validate container group info",
+			cgInfo:        cgEmptyContainerList,
+			expectedError: fmt.Errorf("containers list cannot be nil for container group %s", *cgEmptyContainerList.Name),
+		},
+		{
+			description:   "fails to get pod status",
+			cgInfo:        cgInvalidContainerList,
+			expectedError: fmt.Errorf("container %s properties cannot be nil", *invalidContainersList[0].Name),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			aciMocks.MockGetContainerGroupInfo =
+				func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+					if tc.cgInfo == nil {
+						return nil, tc.expectedError
+					}
+					return tc.cgInfo, nil
+				}
+
+			podStatus, err := provider.GetPodStatus(context.Background(), podNamespace, podName)
+
+			if tc.expectedError != nil {
+				assert.Equal(t, tc.expectedError.Error(), err.Error(), "Error messages should match")
+				assert.Check(t, is.Nil((podStatus)), "podStatus should be nil")
+			} else {
+				assert.Check(t, podStatus != nil, "podStatus should not be nil")
+				assert.Check(t, podStatus.Conditions != nil, "podStatus conditions should be set")
+				assert.Check(t, podStatus.StartTime != nil, "podStatus start time should be set")
+				assert.Check(t, podStatus.ContainerStatuses != nil, "podStatus container statuses should be set")
+				assert.Check(t, is.Equal(podStatus.HostIP, provider.internalIP), "podStatus host IP should match")
+				assert.Check(t, is.Equal(len(podStatus.Conditions), 3), "3 pod conditions should be present")
+			}
+		})
+	}
+}
+
+func TestGetImagePullSecretsWithDockerCfgSecret(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+
+	invalidSecretNoDockerCfg := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: corev1.SecretTypeDockercfg,
+	}
+
+	invalidAuthConfig := `{
+		"repoData": {}
+	}`
+	invalidSecretWithDockerCfg := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: corev1.SecretTypeDockercfg,
+		Data: map[string][]byte{
+			corev1.DockerConfigKey: []byte(invalidAuthConfig),
+		},
+	}
+
+	validAuthConfig := `{
+		"repoData": {
+			"username": "fakeUserName",
+			"password": "fakePassword"
+		}
+	}`
+	validSecretWithDockerCfg := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: corev1.SecretTypeDockercfg,
+		Data: map[string][]byte{
+			corev1.DockerConfigKey: []byte(validAuthConfig),
+		},
+	}
+
+	cases := []struct {
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
+	}{
+		{
+			description: "Secret is of type SecretTypeDockerCfg",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&validSecretWithDockerCfg, nil)
+			},
+			expectedError: nil,
+		},
+		{
+			description: "SecretTypeDockerCfg contains invalid authConfig",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretWithDockerCfg, nil)
+			},
+			expectedError: fmt.Errorf("no username present in auth config for server: repoData"),
+		},
+		{
+			description: "pod contains imagePullSecrets that cannot be retrieved",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(nil, nil)
+			},
+			expectedError: errors.New("error getting image pull secret"),
+		},
+		{
+			description: "Secret type is SecretTypeDockerCfg but no docker config is present",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretNoDockerCfg, nil)
+			},
+			expectedError: errors.New("no dockercfg present in secret"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			}
+
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+			tc.callSecretMocks(mockSecretLister)
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			ips, err := provider.getImagePullSecrets(pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+				assert.Check(t, ips != nil, "imagePullSecrets should not be nil")
+				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
+
+func TestGetImagePullSecretsWithDockerConfigJSONSecret(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+
+	invalidSecretType := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: "fakeType",
+	}
+
+	invalidSecretNoDockerConfigJsonKey := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+	}
+
+	invalidCfgJson := `{
+		"repoData": {
+			"auths": {}
+		}
+	}`
+	invalidSecretMalformedCfgJson := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			corev1.DockerConfigJsonKey: []byte(invalidCfgJson),
+		},
+	}
+
+	validCfgJson := `{
+		"auths": {
+			"repoData": {
+				"username": "fakeUserName",
+				"password": "fakePassword"
+			}
+		}
+	}`
+	validSecretCfgJson := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "fakeSecret",
+			Namespace: podNamespace,
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{
+			corev1.DockerConfigJsonKey: []byte(validCfgJson),
+		},
+	}
+
+	cases := []struct {
+		description     string
+		callSecretMocks func(secretMock *MockSecretLister)
+		expectedError   error
+	}{
+		{
+			description: "Secret is of type SecretTypeDockerConfigJSON with a valid docker config",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&validSecretCfgJson, nil)
+			},
+			expectedError: nil,
+		},
+		{
+			description: "Secret data has malformed docker config",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretMalformedCfgJson, nil)
+			},
+			expectedError: errors.New("malformed dockerconfigjson in secret"),
+		},
+		{
+			description: "Secret type is SecretTypeDockerConfigJSON but no docker config JSON key is present",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretNoDockerConfigJsonKey, nil)
+			},
+			expectedError: errors.New("no dockerconfigjson present in secret"),
+		},
+		{
+			description: "Secret type is not valid",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(&invalidSecretType, nil)
+			},
+			expectedError: errors.New("image pull secret type is not one of kubernetes.io/dockercfg or kubernetes.io/dockerconfigjson"),
+		},
+		{
+			description: "pod contains imagePullSecrets that cannot be found",
+			callSecretMocks: func(secretMock *MockSecretLister) {
+				mockSecretNamespaceLister := NewMockSecretNamespaceLister(mockCtrl)
+				secretMock.EXPECT().Secrets(podNamespace).Return(mockSecretNamespaceLister)
+				mockSecretNamespaceLister.EXPECT().Get(pod.Spec.ImagePullSecrets[0].Name).Return(nil, errors.New("secret not found"))
+			},
+			expectedError: errors.New("secret not found"),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+				{
+					Name: "fakeSecret",
+				},
+			}
+
+			mockSecretLister := NewMockSecretLister(mockCtrl)
+			tc.callSecretMocks(mockSecretLister)
+
+			provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+				mockSecretLister, NewMockPodLister(mockCtrl), nil)
+			if err != nil {
+				t.Fatal("failed to create the test provider", err)
+			}
+
+			ips, err := provider.getImagePullSecrets(pod)
+
+			if tc.expectedError == nil {
+				assert.NilError(t, tc.expectedError, err)
+				assert.Check(t, ips != nil, "imagePullSecrets should not be nil")
+				assert.Check(t, is.Equal(len(ips), 1), "1 image pull secret should be present")
+			} else {
+				assert.Equal(t, tc.expectedError.Error(), err.Error())
+			}
+		})
+	}
+}
+
+func TestGetContainerLogs(t *testing.T) {
+
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	containerName := "fake_container_name"
+	fakeLogContent := "fake_log_content\n"
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	containersList := testsutil.CreateACIContainersListObj(runningState, "Initializing",
+		testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3),
+		true, true, true)
+
+	cgInfo := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded", containersList, "Succeeded")
+
+	aciMocks := createNewACIMock()
+
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+
+		return cgInfo, nil
+	}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	cases := []struct {
+		description    string
+		logContent     *string
+		expectedOutput *string
+	}{
+		{
+			description:    "ListLogs api call returned valid log content",
+			logContent:     &fakeLogContent,
+			expectedOutput: &fakeLogContent,
+		},
+		{
+			description:    "ListLogs api call returned nil",
+			logContent:     nil,
+			expectedOutput: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+
+			aciMocks.MockListLogs =
+				func(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error) {
+
+					return tc.logContent, nil
+				}
+
+			var opts api.ContainerLogOpts
+
+			containerLogsRC, _ := provider.GetContainerLogs(context.Background(), podNamespace, podName, containerName, opts)
+
+			if tc.expectedOutput == nil {
+				assert.Check(t, containerLogsRC == nil, "Container Logs Read Closer should be nil for nil Container Logs content")
+			} else {
+				defer containerLogsRC.Close()
+
+				reader := bufio.NewReader(containerLogsRC)
+				containerLogsContent, err := reader.ReadString('\n')
+				if err != nil && err != io.EOF {
+					t.Fatal("Failed to read string from Read Closer", err)
+				}
+				assert.Equal(t, *tc.expectedOutput, containerLogsContent, "ContainerLogs content should match the expected output")
+			}
+
+		})
+	}
+}
+
+func TestGetGPUSKU(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	cases := []struct {
+		description   string
+		gpuSkus       []azaciv2.GpuSKU
+		desiredSku    string
+		expectedError error
+	}{
+		{
+			description:   "gpuTypeAnnotation is not set but ACI provides gpusku",
+			gpuSkus:       []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100},
+			desiredSku:    "",
+			expectedError: nil,
+		},
+		{
+			description:   "gpuTypeAnnotation is set and the desired sku is supported by ACI",
+			gpuSkus:       []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100},
+			desiredSku:    "P100",
+			expectedError: nil,
+		},
+		{
+			description:   "gpuTypeAnnotation is set but the desired sku is not supported by ACI",
+			gpuSkus:       []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100},
+			desiredSku:    "P120",
+			expectedError: fmt.Errorf("the pod requires GPU SKU P120, but ACI only supports SKUs %v in region %s", []azaciv2.GpuSKU{azaciv2.GpuSKUK80, azaciv2.GpuSKUP100}, provider.region),
+		},
+		{
+			description:   "ACI doesn't provide any gpusku",
+			gpuSkus:       []azaciv2.GpuSKU{},
+			desiredSku:    "",
+			expectedError: fmt.Errorf("the pod requires GPU resource, but ACI doesn't provide GPU enabled container group in region %s", provider.region),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			provider.gpuSKUs = tc.gpuSkus
+
+			pod := testsutil.CreatePodObj(podName, podNamespace)
+			if len(tc.desiredSku) > 0 {
+				pod.Annotations = map[string]string{}
+				pod.Annotations[gpuTypeAnnotation] = tc.desiredSku
+			}
+
+			gpuSKU, err := provider.getGPUSKU(pod)
+
+			if tc.expectedError != nil {
+				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")
+				assert.Equal(t, string(gpuSKU), "", "No GPU SKU should be returned")
+			} else {
+				assert.NilError(t, err, "no error should be returned")
+				if len(tc.desiredSku) == 0 {
+					assert.Equal(t, gpuSKU, tc.gpuSkus[0], "Since no desired SKU was set, the first gpuSKU in the list should be returned")
+				} else {
+					assert.Equal(t, string(gpuSKU), tc.desiredSku, "Desired SKU should be returned")
+				}
+			}
+		})
+	}
+}
+
+func TestFetchStandardPodsEvents(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: podName,
+		},
+		Spec: corev1.PodSpec{},
+	}
+
+	cg := testsutil.CreateContainerGroupObj(containerGroupName(podNamespace, podNamespace), "", "Succeeded",
+		testsutil.CreateACIContainersListObj(runningState, "Initializing",
+			testsutil.CgCreationTime.Add(time.Second*2),
+			testsutil.CgCreationTime.Add(time.Second*3),
+			false, false, false), "Succeeded")
+	now := time.Now().Add(-10 * time.Second)
+	cg.Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "mount failed", "cg event", "Warning"),
+	}
+	cg.Properties.Containers[0].Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "container started", "cg container event", "Normal"),
+	}
+
+	aciMocks := createNewACIMock()
+	aciMocks.MockGetContainerGroup = func(ctx context.Context, resourceGroup, containerGroupName string) (*azaciv2.ContainerGroup, error) {
+		return cg, nil
+	}
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+		return aciMocks.MockGetContainerGroup(ctx, resourceGroup, containerGroupName(name, namespace))
+	}
+	podLister := NewMockPodLister(mockCtrl)
+	podLister.EXPECT().List(labels.Everything()).Times(2).Return([]*corev1.Pod{pod}, nil)
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), podLister, nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	podsTracker := &PodsTracker{
+		pods:           podLister,
+		updateCb:       func(pod *corev1.Pod) {},
+		handler:        provider,
+		lastEventCheck: time.UnixMicro(0),
+	}
+
+	fakeRecorder := record.NewFakeRecorder(2)
+	podsTracker.eventRecorder = fakeRecorder
+	podsTracker.updatePodsLoop(context.Background())
+	close(fakeRecorder.Events)
+	broadcastEvents := make([]string, 0)
+	for evt := range fakeRecorder.Events {
+		broadcastEvents = append(broadcastEvents, evt)
+	}
+	assert.DeepEqual(t, []string{
+		"Warning cg event mount failed",
+		"Normal cg container event container started",
+	}, broadcastEvents)
+
+	fakeRecorder = record.NewFakeRecorder(2)
+	podsTracker.eventRecorder = fakeRecorder
+	now = time.Now().Add(10 * time.Second)
+	cg.Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "mount failed 2", "cg event", "InvalidType"),
+	}
+	cg.Properties.Containers[0].Properties.InstanceView.Events = []*azaciv2.Event{
+		testsutil.CreateContainerGroupEvent(1, now, now, "container started 2", "cg container event", "Normal"),
+	}
+	podsTracker.updatePodsLoop(context.Background())
+	close(fakeRecorder.Events)
+	broadcastEvents = broadcastEvents[0:0]
+	for evt := range fakeRecorder.Events {
+		broadcastEvents = append(broadcastEvents, evt)
+	}
+	assert.DeepEqual(t, []string{
+		"Warning cg event mount failed 2",
+		"Normal cg container event container started 2",
+	}, broadcastEvents)
+}
+
+func TestCreatePodWithLifecycleHooks(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	aciMocks := createNewACIMock()
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	pod.Spec.Containers[0].Lifecycle = &corev1.Lifecycle{
+		PostStart: &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{},
+		},
+	}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	err = provider.CreatePod(context.Background(), pod)
+	assert.Error(t, err, "ACI does not support lifecycle hooks")
+}
+
+func TestRunInContainer(t *testing.T) {
+	podName := "pod-" + uuid.New().String()
+	podNamespace := "ns-" + uuid.New().String()
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	cols := 42
+	rows := 43
+	aciMocks := createNewACIMock()
+	aciMocks.MockExecuteContainerCommand = func(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaciv2.ContainerExecRequest) (*azaciv2.ContainerExecResponse, error) {
+		assert.Equal(t, int32(cols), *containerReq.TerminalSize.Cols, "terminal cols size mismatch")
+		assert.Equal(t, int32(rows), *containerReq.TerminalSize.Rows, "terminal rows size mismatch")
+		return nil, fmt.Errorf("this error workarounds the websocket connection")
+	}
+
+	aciMocks.MockGetContainerGroupInfo = func(ctx context.Context, resourceGroup, namespace, name, nodeName string) (*azaciv2.ContainerGroup, error) {
+		cg := testsutil.CreateContainerGroupObj(podName, podNamespace, "Succeeded",
+			testsutil.CreateACIContainersListObj(runningState, "Initializing", testsutil.CgCreationTime.Add(time.Second*2), testsutil.CgCreationTime.Add(time.Second*3), true, true, true), "Succeeded")
+		return cg, nil
+	}
+
+	pod := testsutil.CreatePodObj(podName, podNamespace)
+	pod.Spec.Containers[0].StartupProbe = &corev1.Probe{}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("failed to create the test provider", err)
+	}
+
+	termSize := make(chan api.TermSize)
+	defer close(termSize)
+	go func() {
+		termSize <- api.TermSize{
+			Width:  uint16(cols),
+			Height: uint16(rows),
+		}
+	}()
+	attachIO := NewMockAttachIO(mockCtrl)
+	attachIO.EXPECT().TTY().Return(true)
+	attachIO.EXPECT().Resize().Return(termSize)
+	attachIO.EXPECT().Stdout().Return(nil)
+
+	provider.RunInContainer(context.Background(), podNamespace, podName, "", nil, attachIO)
 }

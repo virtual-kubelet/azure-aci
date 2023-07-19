@@ -156,7 +156,6 @@ func main() {
 				var err error
 
 				cfg.AuthzConfig.WebhookRetryBackoff = options.DefaultAuthWebhookRetryBackoff()
-				cfg.AuthzConfig.WebhookRetryBackoff = options.DefaultAuthWebhookRetryBackoff()
 
 				if webhookAuthnCacheTTL > 0 {
 					cfg.AuthnConfig.CacheTTL = webhookAuthnCacheTTL
@@ -198,13 +197,12 @@ func main() {
 		}
 		return nil
 	}
-
+	k8sClient, err := nodeutil.ClientsetFromEnv(kubeConfigPath)
+	if err != nil {
+		log.G(ctx).Fatal(err)
+	}
 	withClient := func(cfg *nodeutil.NodeConfig) error {
-		client, err := nodeutil.ClientsetFromEnv(kubeConfigPath)
-		if err != nil {
-			return err
-		}
-		return nodeutil.WithClient(client)(cfg)
+		return nodeutil.WithClient(k8sClient)(cfg)
 	}
 
 	run := func(ctx context.Context) error {
@@ -223,7 +221,7 @@ func main() {
 				}
 				p, err := azproviderv2.NewACIProvider(ctx, cfgPath, azConfig, azACIAPIs, cfg,
 					nodeName, operatingSystem, os.Getenv("VKUBELET_POD_IP"),
-					int32(listenPort), clusterDomain)
+					int32(listenPort), clusterDomain, k8sClient)
 				p.ConfigureNode(ctx, cfg.Node)
 				return p, nil, err
 			},

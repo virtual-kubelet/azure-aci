@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -34,11 +35,17 @@ import (
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 
 	"github.com/cpuguy83/dockercfg"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/reference"
 )
 
 const (
@@ -81,7 +88,8 @@ type ACIProvider struct {
 	configL                  corev1listers.ConfigMapLister
 	podsL                    corev1listers.PodLister
 	enabledFeatures          *featureflag.FlagIdentifier
-	providernetwork          network.ProviderNetwork
+	providerNetwork          network.ProviderNetwork
+	eventRecorder            record.EventRecorder
 
 	resourceGroup      string
 	region             string
@@ -172,7 +180,7 @@ func isValidACIRegion(region string) bool {
 }
 
 // NewACIProvider creates a new ACIProvider.
-func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, pCfg nodeutil.ProviderConfig, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string) (*ACIProvider, error) {
+func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, azAPIs client.AzClientsInterface, pCfg nodeutil.ProviderConfig, nodeName, operatingSystem string, internalIP string, daemonEndpointPort int32, clusterDomain string, kubeClient kubernetes.Interface) (*ACIProvider, error) {
 	var p ACIProvider
 	var err error
 
@@ -203,13 +211,19 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 	if azConfig.AKSCredential != nil {
 		p.resourceGroup = azConfig.AKSCredential.ResourceGroup
 		p.region = azConfig.AKSCredential.Region
-		p.providernetwork.VnetName = azConfig.AKSCredential.VNetName
-		p.providernetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
+		p.providerNetwork.VnetName = azConfig.AKSCredential.VNetName
+		p.providerNetwork.VnetResourceGroup = azConfig.AKSCredential.VNetResourceGroup
 	}
 
-	if p.providernetwork.VnetResourceGroup == "" {
-		p.providernetwork.VnetResourceGroup = p.resourceGroup
+	if p.providerNetwork.VnetResourceGroup == "" {
+		p.providerNetwork.VnetResourceGroup = p.resourceGroup
 	}
+
+	providerEB := record.NewBroadcaster()
+	providerEB.StartLogging(log.G(ctx).Infof)
+	providerEB.StartRecordingToSink(&corev1client.EventSinkImpl{Interface: kubeClient.CoreV1().Events(v1.NamespaceAll)})
+	p.eventRecorder = providerEB.NewRecorder(scheme.Scheme, v1.EventSource{Component: path.Join(nodeName, "pod-controller")})
+
 	// If the log analytics file has been specified, load workspace credentials from the file
 	if logAnalyticsAuthFile := os.Getenv("LOG_ANALYTICS_AUTH_LOCATION"); logAnalyticsAuthFile != "" {
 		p.diagnostics, err = analytics.NewContainerGroupDiagnosticsFromFile(logAnalyticsAuthFile)
@@ -261,11 +275,11 @@ func NewACIProvider(ctx context.Context, config string, azConfig auth.Config, az
 		return nil, err
 	}
 
-	if err := p.providernetwork.SetVNETConfig(ctx, &azConfig); err != nil {
+	if err := p.providerNetwork.SetVNETConfig(ctx, &azConfig); err != nil {
 		return nil, err
 	}
 
-	if p.providernetwork.SubnetName != "" {
+	if p.providerNetwork.SubnetName != "" {
 		// windows containers don't support kube-proxy nor realtime metrics
 		if p.operatingSystem != string(azaciv2.OperatingSystemTypesWindows) {
 			err = p.setACIExtensions(ctx)
@@ -371,7 +385,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 			})
 		}
 	}
-	if len(ports) > 0 && p.providernetwork.SubnetName == "" {
+	if len(ports) > 0 && p.providerNetwork.SubnetName == "" {
 		cg.Properties.IPAddress = &azaciv2.IPAddress{
 			Ports: ports,
 			Type:  &util.ContainerGroupIPAddressTypePublic,
@@ -392,7 +406,7 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 		"CreationTimestamp": &podCreationTimestamp,
 	}
 
-	p.providernetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
+	p.providerNetwork.AmendVnetResources(ctx, *cg, pod, p.clusterDomain)
 
 	// windows containers don't support kube-proxy nor realtime metrics
 	if cg.Properties.OSType != nil &&
@@ -610,9 +624,22 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 		return err
 	}
 
+	termSize := api.TermSize{
+		Width:  60,
+		Height: 120,
+	}
+	if attach.TTY() {
+		resize := attach.Resize()
+		select {
+		case termSize = <-resize:
+			break
+		case <-time.After(5 * time.Second):
+			break
+		}
+	}
 	// Set default terminal size
-	cols := int32(60)
-	rows := int32(120)
+	cols := int32(termSize.Width)
+	rows := int32(termSize.Height)
 	cmdParam := strings.Join(cmd, " ")
 	req := azaciv2.ContainerExecRequest{
 		Command: &cmdParam,
@@ -694,6 +721,12 @@ func (p *ACIProvider) RunInContainer(ctx context.Context, namespace, name, conta
 	}
 
 	return ctx.Err()
+}
+
+// AttachToContainer Implementation placeholder
+// TODO: complete the implementation for Attach functionality
+func (p *ACIProvider) AttachToContainer(ctx context.Context, namespace string, podName string, containerName string, attach api.AttachIO) error {
+	return nil
 }
 
 // GetPodStatus returns the status of a pod by name that is running inside ACI
@@ -805,9 +838,11 @@ func (p *ACIProvider) NotifyPods(ctx context.Context, notifierCb func(*v1.Pod)) 
 
 	// Capture the notifier to be used for communicating updates to VK
 	p.tracker = &PodsTracker{
-		pods:     p.podsL,
-		updateCb: notifierCb,
-		handler:  p,
+		pods:           p.podsL,
+		updateCb:       notifierCb,
+		handler:        p,
+		lastEventCheck: time.UnixMicro(0),
+		eventRecorder:  p.eventRecorder,
 	}
 
 	go p.tracker.StartTracking(ctx)
@@ -844,12 +879,58 @@ func (p *ACIProvider) FetchPodStatus(ctx context.Context, ns, name string) (*v1.
 	return p.GetPodStatus(ctx, ns, name)
 }
 
+func (p *ACIProvider) FetchPodEvents(ctx context.Context, pod *v1.Pod, evtSink func(timestamp *time.Time, object runtime.Object, eventtype, reason, messageFmt string, args ...interface{})) error {
+	ctx, span := trace.StartSpan(ctx, "ACIProvider.FetchPodEvents")
+	defer span.End()
+	if !p.enabledFeatures.IsEnabled(ctx, featureflag.Events) {
+		return nil
+	}
+
+	ctx = addAzureAttributes(ctx, span, p)
+	cgName := containerGroupName(pod.Namespace, pod.Name)
+	cg, err := p.azClientsAPIs.GetContainerGroup(ctx, p.resourceGroup, cgName)
+	if err != nil {
+		return err
+	}
+	if *cg.Tags["NodeName"] != p.nodeName {
+		return errors.Wrapf(err, "container group %s found with mismatching node", cgName)
+	}
+
+	if cg.Properties != nil && cg.Properties.InstanceView != nil && cg.Properties.InstanceView.Events != nil {
+		for _, evt := range cg.Properties.InstanceView.Events {
+			evtSink(evt.LastTimestamp, pod, *evt.Type, *evt.Name, *evt.Message)
+		}
+	}
+
+	if cg.Properties != nil && cg.Properties.Containers != nil {
+		for _, container := range cg.Properties.Containers {
+			if container.Properties != nil && container.Properties.InstanceView != nil && container.Properties.InstanceView.Events != nil {
+				for _, evt := range container.Properties.InstanceView.Events {
+					podReference, err := reference.GetReference(scheme.Scheme, pod)
+					if err != nil {
+						log.G(ctx).WithError(err).Warnf("cannot get k8s object reference from pod %s in namespace %s", pod.Name, pod.Namespace)
+					}
+					podReference.FieldPath = fmt.Sprintf("spec.containers{%s}", *container.Name)
+					evtSink(evt.LastTimestamp, podReference, *evt.Type, *evt.Name, *evt.Message)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // CleanupPod interface impl
 func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
 	ctx, span := trace.StartSpan(ctx, "ACIProvider.CleanupPod")
 	defer span.End()
 
 	return p.deleteContainerGroup(ctx, ns, name)
+}
+
+// PortForward
+func (p *ACIProvider) PortForward(ctx context.Context, namespace, pod string, port int32, stream io.ReadWriteCloser) error {
+	log.G(ctx).Info("Port Forward is not supported in AZure ACI")
+	return nil
 }
 
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]*azaciv2.ImageRegistryCredential, error) {
@@ -1072,6 +1153,14 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 			log.G(ctx).Errorf("azure container instances initcontainers do not support readinessProbe")
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support readinessProbe")
 		}
+		if hasLifecycleHook(initContainer) {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support lifecycle hooks")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks")
+		}
+		if initContainer.StartupProbe != nil {
+			log.G(ctx).Errorf("azure container instances initcontainers do not support startupProbe")
+			return nil, errdefs.InvalidInput("azure container instances initContainers do not support startupProbe")
+		}
 
 		newInitContainer := azaciv2.InitContainerDefinition{
 			Name: &pod.Spec.InitContainers[i].Name,
@@ -1096,6 +1185,12 @@ func (p *ACIProvider) getContainers(pod *v1.Pod) ([]*azaciv2.Container, error) {
 
 		if len(podContainers[c].Command) == 0 && len(podContainers[c].Args) > 0 {
 			return nil, errdefs.InvalidInput("ACI does not support providing args without specifying the command. Please supply both command and args to the pod spec.")
+		}
+		if hasLifecycleHook(podContainers[c]) {
+			return nil, errdefs.InvalidInput("ACI does not support lifecycle hooks")
+		}
+		if podContainers[c].StartupProbe != nil {
+			return nil, errdefs.InvalidInput("ACI does not support startupProbe")
 		}
 		cmd := p.getCommand(podContainers[c])
 		ports := make([]*azaciv2.ContainerPort, 0, len(podContainers[c].Ports))
@@ -1254,7 +1349,7 @@ func (p *ACIProvider) getGPUSKU(pod *v1.Pod) (azaciv2.GpuSKU, error) {
 			}
 		}
 
-		return "", fmt.Errorf("the pod requires GPU SKU %s, but ACI only supports SKUs %v in region %s", desiredSKU, p.region, p.gpuSKUs)
+		return "", fmt.Errorf("the pod requires GPU SKU %s, but ACI only supports SKUs %v in region %s", desiredSKU, p.gpuSKUs, p.region)
 	}
 
 	return p.gpuSKUs[0], nil
@@ -1374,4 +1469,11 @@ func getACIEnvVar(e v1.EnvVar) *azaciv2.EnvironmentVariable {
 		}
 	}
 	return &envVar
+}
+
+func hasLifecycleHook(c v1.Container) bool {
+	hasHandler := func(l *v1.LifecycleHandler) bool {
+		return l != nil && (l.HTTPGet != nil || l.Exec != nil || l.TCPSocket != nil)
+	}
+	return c.Lifecycle != nil && (hasHandler(c.Lifecycle.PreStop) || hasHandler(c.Lifecycle.PostStart))
 }

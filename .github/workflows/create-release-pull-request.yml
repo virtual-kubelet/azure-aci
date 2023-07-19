@@ -30,13 +30,13 @@ jobs:
           ref: "${{ github.event.inputs.based_on_branch }}"
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.19"
+          go-version: "1.20"
       - name: update release manifest
         run: make release-manifest
         env:
           VERSION: "${{ github.event.inputs.release_version }}"
       - name: Create release pull request
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v5
         with:
           commit-message: "release: update manifest and helm charts for ${{ github.event.inputs.release_version }}"
           title: "release: update manifest and helm charts for ${{ github.event.inputs.release_version }}"

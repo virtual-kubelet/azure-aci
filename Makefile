@@ -1,7 +1,7 @@
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 
-GOLANGCI_LINT_VER := v1.49.0
+GOLANGCI_LINT_VER := v1.51.0
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
@@ -23,7 +23,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON TEST_AKS_CREDENTIALS_JSON
 
-VERSION ?= v1.5.1
+VERSION ?= v1.6.0
 REGISTRY ?= ghcr.io
 IMG_NAME ?= virtual-kubelet
 INIT_IMG_NAME ?= init-validation
@@ -36,7 +36,7 @@ OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
 INIT_IMG_TAG ?= 0.2.0
-K8S_VERSION ?= 1.23.12
+K8S_VERSION ?= 1.24.10
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 VERSION_FLAGS := "-ldflags=-X main.buildVersion=$(IMG_TAG) -X main.buildTime=$(BUILD_DATE)"
@@ -97,7 +97,8 @@ unit-tests: testauth
 	LOCATION=$(LOCATION) AKS_CREDENTIAL_LOCATION=$(TEST_AKS_CREDENTIALS_JSON) \
 	AZURE_AUTH_LOCATION=$(TEST_CREDENTIALS_JSON) \
 	LOG_ANALYTICS_AUTH_LOCATION=$(TEST_LOGANALYTICS_JSON) \
-	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.out -covermode=atomic
+	go test -v $(shell go list ./... | grep -v /e2e) -race -coverprofile=coverage.txt -covermode=atomic fmt
+	go tool cover -func=coverage.txt
 
 .PHONY: e2e-test
 e2e-test:
@@ -167,4 +168,4 @@ release-manifest:
 	@sed -i -e "s/tag: .*/tag: ${IMG_TAG}/" ./charts/virtual-kubelet/values.yaml
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./charts/virtual-kubelet/README.md
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./docs/UPGRADE-README.md
-	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' .README.md
+	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' README.md

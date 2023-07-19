@@ -1,3 +1,7 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package featureflag
 
 import (
@@ -23,6 +27,11 @@ func TestIsEnabled(t *testing.T) {
 		{
 			description:   fmt.Sprintf(" %s feature should be enabled", ConfidentialComputeFeature),
 			feature:       ConfidentialComputeFeature,
+			shouldEnabled: true,
+		},
+		{
+			description:   fmt.Sprintf(" %s feature should be enabled", Events),
+			feature:       Events,
 			shouldEnabled: true,
 		},
 	}

@@ -14,11 +14,16 @@ const (
 	InitContainerFeature       = "init-container"
 	ConfidentialComputeFeature = "confidential-compute"
 	ManagedIdentityPullFeature = "managed-identity-image-pull"
+
+	// Events : support ACI to K8s event translation and broadcasting
+	Events = "events"
 )
 
 var enabledFeatures = []string{
 	InitContainerFeature,
 	ConfidentialComputeFeature,
+	ManagedIdentityPullFeature,
+	Events,
 }
 
 type FlagIdentifier struct {
@@ -30,6 +35,8 @@ func InitFeatureFlag(ctx context.Context) *FlagIdentifier {
 
 	var featureFlags FlagIdentifier
 	featureFlags.enabledFeatures = enabledFeatures
+
+	log.G(ctx).Infof("features %v enabled", enabledFeatures)
 
 	return &featureFlags
 }
@@ -43,9 +50,10 @@ func (fi *FlagIdentifier) IsEnabled(ctx context.Context, feature string) bool {
 	}
 	for _, feat := range fi.enabledFeatures {
 		if feat == feature {
-			log.G(ctx).Infof("feature %s is enabled", feature)
+			log.G(ctx).Debugf("feature %s is enabled", feature)
 			return true
 		}
 	}
+	log.G(ctx).Debugf("feature %s is disabled", feature)
 	return false
 }

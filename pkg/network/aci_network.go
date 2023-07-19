@@ -54,6 +54,25 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 	ctx, span := trace.StartSpan(ctx, "network.SetVNETConfig")
 	defer span.End()
 
+	err := pn.validateNetworkConfig(ctx, azConfig)
+	if err != nil {
+		return err
+	}
+
+	if pn.SubnetName != "" {
+		if err := pn.setupNetwork(ctx, azConfig); err != nil {
+			return fmt.Errorf("error setting up network: %v", err)
+		}
+
+		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
+			log.G(ctx).Debug("kube DNS IP env variable KUBE_DNS_IP is set")
+			pn.KubeDNSIP = kubeDNSIP
+		}
+	}
+	return nil
+}
+
+func (pn *ProviderNetwork) validateNetworkConfig(ctx context.Context, azConfig *auth.Config) error {
 	// the VNET subscription ID by default is authentication subscription ID.
 	// We need to override when using cross subscription virtual network resource
 	pn.VnetSubscriptionID = azConfig.AuthConfig.SubscriptionID
@@ -93,17 +112,6 @@ func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Con
 		}
 		pn.SubnetCIDR = subnetCIDR
 	}
-
-	if pn.SubnetName != "" {
-		if err := pn.setupNetwork(ctx, azConfig); err != nil {
-			return fmt.Errorf("error setting up network: %v", err)
-		}
-
-		if kubeDNSIP := os.Getenv("KUBE_DNS_IP"); kubeDNSIP != "" {
-			log.G(ctx).Debug("kube DNS IP env variable KUBE_DNS_IP is set")
-			pn.KubeDNSIP = kubeDNSIP
-		}
-	}
 	return nil
 }
 
@@ -112,7 +120,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	ctx, span := trace.StartSpan(ctx, "network.setupNetwork")
 	defer span.End()
 
-	subnetsClient, err := getSubnetClient(ctx, azConfig)
+	subnetsClient, err := pn.GetSubnetClient(ctx, azConfig)
 	if err != nil {
 		return err
 	}
@@ -121,57 +129,22 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
 	createSubnet := true
-	response, err := subnetsClient.Get(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
-	var respErr *azcore.ResponseError
+	currentSubnet, err := pn.GetACISubnet(ctxWithResp, subnetsClient)
 	if err != nil {
-		if errors.As(err, &respErr) && !(respErr.RawResponse.StatusCode == http.StatusNotFound) {
-			return fmt.Errorf("error while looking up subnet: %v", err)
-		}
-
-		if respErr.RawResponse.StatusCode == http.StatusNotFound && pn.SubnetCIDR == "" {
-			return fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
-		}
+		return err
 	}
-	currentSubnet := response.Subnet
 
 	if err == nil {
-		if currentSubnet.Properties.AddressPrefix != nil {
-			if pn.SubnetCIDR == "" {
-				pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
-			}
-			if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
-				return fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
-			}
-			if currentSubnet.Properties.RouteTable != nil {
-				return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
-			}
-			if currentSubnet.Properties.ServiceAssociationLinks != nil {
-				for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
-					if l.Properties != nil && l.Properties.LinkedResourceType != nil {
-						if *l.Properties.LinkedResourceType == subnetDelegationService {
-							createSubnet = false
-							break
-						} else {
-							return fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
-						}
-					}
-				}
-			} else {
-				for _, d := range currentSubnet.Properties.Delegations {
-					if d.Properties != nil && d.Properties.ServiceName != nil &&
-						*d.Properties.ServiceName == subnetDelegationService {
-						createSubnet = false
-						break
-					}
-				}
-			}
+		createSubnet, err = pn.shouldCreateSubnet(currentSubnet, createSubnet)
+		if err != nil {
+			return err
 		}
 	}
 
 	if createSubnet {
 		logger.Debugf("new subnet %s is creating", pn.SubnetName)
 
-		err2 := pn.createACISubnet(ctx, subnetsClient)
+		err2 := pn.CreateACISubnet(ctx, subnetsClient)
 		if err2 != nil {
 			return err2
 		}
@@ -181,9 +154,59 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func getSubnetClient(ctx context.Context, azConfig *auth.Config) (*aznetworkv2.SubnetsClient, error) {
-	logger := log.G(ctx).WithField("method", "getSubnetClient")
-	ctx, span := trace.StartSpan(ctx, "network.getSubnetClient")
+func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, createSubnet bool) (bool, error) {
+	if currentSubnet.Properties.AddressPrefix != nil {
+		if pn.SubnetCIDR == "" {
+			pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
+		}
+		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
+			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
+		}
+		if currentSubnet.Properties.RouteTable != nil {
+			return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+		}
+		if currentSubnet.Properties.ServiceAssociationLinks != nil {
+			for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
+				if l.Properties != nil && l.Properties.LinkedResourceType != nil {
+					if *l.Properties.LinkedResourceType == subnetDelegationService {
+						createSubnet = false
+						break
+					} else {
+						return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
+					}
+				}
+			}
+		} else {
+			for _, d := range currentSubnet.Properties.Delegations {
+				if d.Properties != nil && d.Properties.ServiceName != nil &&
+					*d.Properties.ServiceName == subnetDelegationService {
+					createSubnet = false
+					break
+				}
+			}
+		}
+	}
+	return createSubnet, nil
+}
+
+func (pn *ProviderNetwork) GetACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) (aznetworkv2.Subnet, error) {
+	response, err := subnetsClient.Get(ctx, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, nil)
+	var respErr *azcore.ResponseError
+	if err != nil {
+		if errors.As(err, &respErr) && !(respErr.RawResponse.StatusCode == http.StatusNotFound) {
+			return aznetworkv2.Subnet{}, fmt.Errorf("error while looking up subnet: %v", err)
+		}
+
+		if respErr.RawResponse.StatusCode == http.StatusNotFound && pn.SubnetCIDR == "" {
+			return aznetworkv2.Subnet{}, fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
+		}
+	}
+	return response.Subnet, nil
+}
+
+func (pn *ProviderNetwork) GetSubnetClient(ctx context.Context, azConfig *auth.Config) (*aznetworkv2.SubnetsClient, error) {
+	logger := log.G(ctx).WithField("method", "GetSubnetClient")
+	ctx, span := trace.StartSpan(ctx, "network.GetSubnetClient")
 	defer span.End()
 
 	logger.Debug("getting azure credential")
@@ -215,9 +238,9 @@ func getSubnetClient(ctx context.Context, azConfig *auth.Config) (*aznetworkv2.S
 }
 
 // createACISubnet create new subnet for ACI
-func (pn *ProviderNetwork) createACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) error {
-	logger := log.G(ctx).WithField("method", "createACISubnet")
-	ctx, span := trace.StartSpan(ctx, "network.createACISubnet")
+func (pn *ProviderNetwork) CreateACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) error {
+	logger := log.G(ctx).WithField("method", "CreateACISubnet")
+	ctx, span := trace.StartSpan(ctx, "network.CreateACISubnet")
 	defer span.End()
 
 	logger.Debug("creating a subnet")

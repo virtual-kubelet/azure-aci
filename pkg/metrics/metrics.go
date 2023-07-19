@@ -1,3 +1,7 @@
+/*
+Copyright (c) Microsoft Corporation.
+Licensed under the Apache 2.0 license.
+*/
 package metrics
 
 import (
@@ -9,7 +13,9 @@ import (
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/virtual-kubelet/azure-aci/pkg/client"
+	"github.com/virtual-kubelet/azure-aci/pkg/metrics/collectors"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	stats "github.com/virtual-kubelet/virtual-kubelet/node/api/statsv1alpha1"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
@@ -17,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	corev1listers "k8s.io/client-go/listers/core/v1"
+	compbasemetrics "k8s.io/component-base/metrics"
 )
 
 const (
@@ -129,6 +136,28 @@ func (p *ACIPodMetricsProvider) GetStatsSummary(ctx context.Context) (summary *s
 	}
 
 	return &s, nil
+}
+
+// GetMetrics Resource returns the metrics for pods running on ACI
+func (p *ACIPodMetricsProvider) GetMetricsResource(ctx context.Context) ([]*dto.MetricFamily, error) {
+	ctx, span := trace.StartSpan(ctx, "GetMetricsResource")
+	defer span.End()
+
+	statsSummary, err := p.GetStatsSummary(ctx)
+	if err != nil {
+		span.SetStatus(err)
+		return nil, errors.Wrapf(err, "error fetching MetricsResource")
+	}
+
+	registry := compbasemetrics.NewKubeRegistry()
+	registry.CustomMustRegister(collectors.NewKubeletResourceMetricsCollector(statsSummary))
+
+	metricFamily, err := registry.Gather()
+	if err != nil {
+		span.SetStatus(err)
+		return nil, errors.Wrapf(err, "error gathering metrics from collector")
+	}
+	return metricFamily, nil
 }
 
 type podStatsGetterDecider struct {

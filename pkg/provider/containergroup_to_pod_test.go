@@ -6,6 +6,8 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -29,27 +31,41 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	provider, err := createTestProvider(createNewACIMock(), NewMockConfigMapLister(mockCtrl),
-		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl))
+		NewMockSecretLister(mockCtrl), NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("failed to create the test provider", err)
 	}
 	cases := []struct {
-		description           string
-		containerGroup        *azaciv2.ContainerGroup
-		expectedPodPhase      v1.PodPhase
-		expectedPodConditions []v1.PodCondition
+		description              string
+		containerGroup           *azaciv2.ContainerGroup
+		expectedPodPhase         v1.PodPhase
+		expectedPodConditions    []v1.PodCondition
+		expectedContainerState   string
+		expectedContainerStarted bool
 	}{
 		{
-			description:           "Container is Running/Succeeded",
-			containerGroup:        testutil.CreateContainerGroupObj(cgName, cgName, "Succeeded", testutil.CreateACIContainersListObj("Running", "Initializing", startTime, finishTime, false, false, false), "Succeeded"),
-			expectedPodPhase:      getPodPhaseFromACIState("Succeeded"),
-			expectedPodConditions: testutil.GetPodConditions(metav1.NewTime(cgCreationTime), metav1.NewTime(finishTime), v1.ConditionTrue),
+			description:              "Container is Running/Succeeded",
+			containerGroup:           testutil.CreateContainerGroupObj(cgName, cgName, "Succeeded", testutil.CreateACIContainersListObj("Running", "Initializing", startTime, finishTime, false, false, false), "Succeeded"),
+			expectedPodPhase:         getPodPhaseFromACIState("Succeeded"),
+			expectedPodConditions:    testutil.GetPodConditions(metav1.NewTime(cgCreationTime), metav1.NewTime(finishTime), v1.ConditionTrue),
+			expectedContainerState:   "Running",
+			expectedContainerStarted: true,
 		},
 		{
-			description:           "Container Failed",
-			containerGroup:        testutil.CreateContainerGroupObj(cgName, cgName, "Failed", testutil.CreateACIContainersListObj("Failed", "Running", startTime, finishTime, false, false, false), "Succeeded"),
-			expectedPodPhase:      getPodPhaseFromACIState("Failed"),
-			expectedPodConditions: []v1.PodCondition{},
+			description:              "Container is Terminated/Succeeded",
+			containerGroup:           testutil.CreateContainerGroupObj(cgName, cgName, "Succeeded", testutil.CreateACIContainersListObj("Terminated", "Initializing", startTime, finishTime, false, false, false), "Succeeded"),
+			expectedPodPhase:         getPodPhaseFromACIState("Succeeded"),
+			expectedPodConditions:    testutil.GetPodConditions(metav1.NewTime(cgCreationTime), metav1.NewTime(finishTime), v1.ConditionTrue),
+			expectedContainerState:   "Terminated",
+			expectedContainerStarted: false,
+		},
+		{
+			description:              "Container Failed",
+			containerGroup:           testutil.CreateContainerGroupObj(cgName, cgName, "Failed", testutil.CreateACIContainersListObj("Failed", "Running", startTime, finishTime, false, false, false), "Succeeded"),
+			expectedPodPhase:         getPodPhaseFromACIState("Failed"),
+			expectedPodConditions:    []v1.PodCondition{},
+			expectedContainerState:   "Terminated",
+			expectedContainerStarted: false,
 		},
 	}
 	for _, tc := range cases {
@@ -58,6 +74,8 @@ func TestContainerGroupToPodStatus(t *testing.T) {
 			assert.NilError(t, err, "no errors should be returned")
 			assert.Equal(t, tc.expectedPodPhase, expectedStatus.Phase, "Pod phase is not as expected as current container group phase")
 			assert.Equal(t, len(tc.expectedPodConditions), len(expectedStatus.Conditions), "Pod conditions are not as expected")
+			assert.Equal(t, tc.expectedContainerStarted, *expectedStatus.ContainerStatuses[0].Started, "Container should be started")
+			assert.Check(t, !reflect.ValueOf(expectedStatus.ContainerStatuses[0].State).FieldByName(tc.expectedContainerState).IsNil(), fmt.Sprintf("Container state should be %s", tc.expectedContainerState))
 		})
 	}
 }
