@@ -1,7 +1,7 @@
 TOOLS_DIR := hack/tools
 TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/bin)
 
-GOLANGCI_LINT_VER := v1.49.0
+GOLANGCI_LINT_VER := v1.51.0
 GOLANGCI_LINT_BIN := golangci-lint
 GOLANGCI_LINT := $(abspath $(TOOLS_BIN_DIR)/$(GOLANGCI_LINT_BIN)-$(GOLANGCI_LINT_VER))
 
@@ -23,7 +23,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON TEST_AKS_CREDENTIALS_JSON
 
-VERSION ?= v1.5.1
+VERSION ?= v1.6.0
 REGISTRY ?= ghcr.io
 IMG_NAME ?= virtual-kubelet
 INIT_IMG_NAME ?= init-validation
@@ -168,4 +168,4 @@ release-manifest:
 	@sed -i -e "s/tag: .*/tag: ${IMG_TAG}/" ./charts/virtual-kubelet/values.yaml
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./charts/virtual-kubelet/README.md
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./docs/UPGRADE-README.md
-	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' .README.md
+	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' README.md

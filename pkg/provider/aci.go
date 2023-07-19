@@ -875,6 +875,12 @@ func (p *ACIProvider) CleanupPod(ctx context.Context, ns, name string) error {
 	return p.deleteContainerGroup(ctx, ns, name)
 }
 
+// PortForward
+func (p *ACIProvider) PortForward(ctx context.Context, namespace, pod string, port int32, stream io.ReadWriteCloser) error {
+	log.G(ctx).Info("Port Forward is not supported in AZure ACI")
+	return nil
+}
+
 func (p *ACIProvider) getImagePullSecrets(pod *v1.Pod) ([]*azaciv2.ImageRegistryCredential, error) {
 	ips := make([]*azaciv2.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
 	for _, ref := range pod.Spec.ImagePullSecrets {
@@ -1099,7 +1105,7 @@ func (p *ACIProvider) getInitContainers(ctx context.Context, pod *v1.Pod) ([]*az
 		if hasLifecycleHook(initContainer) {
 			log.G(ctx).Errorf("azure container instances initcontainers do not support lifecycle hooks")
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support lifecycle hooks")
-        }
+		}
 		if initContainer.StartupProbe != nil {
 			log.G(ctx).Errorf("azure container instances initcontainers do not support startupProbe")
 			return nil, errdefs.InvalidInput("azure container instances initContainers do not support startupProbe")
@@ -1140,7 +1146,7 @@ func (p *ACIProvider) getContainers(ctx context.Context, pod *v1.Pod) ([]*azaciv
 		}
 		if hasLifecycleHook(podContainers[c]) {
 			return nil, errdefs.InvalidInput("ACI does not support lifecycle hooks")
-        }
+		}
 		if podContainers[c].StartupProbe != nil {
 			return nil, errdefs.InvalidInput("ACI does not support startupProbe")
 		}

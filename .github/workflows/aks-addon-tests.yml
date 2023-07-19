@@ -19,7 +19,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   # Common versions
-  GO_VERSION: '1.19'
+  GO_VERSION: '1.20'
 
 jobs:
   export-registry:
@@ -70,7 +70,7 @@ jobs:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
 
-      - uses: azure/login@v1.4.6
+      - uses: azure/login@v1.4.7
         with:
           client-id: ${{ secrets.CLIENTID }}
           tenant-id: ${{ secrets.TENANT_ID }}
