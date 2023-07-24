@@ -21,7 +21,7 @@ $ git checkout v$RELEASE_TAG
 
 ```shell
 # Fixed variables
-export CHART_NAME=virtual-kubelet-azure-aci-upgrade
+export CHART_NAME=virtual-kubelet-azure-aci
 export VK_RELEASE=$CHART_NAME-$RELEASE_TAG
 export NODE_NAME=virtual-kubelet-aci-$RELEASE_TAG
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/gh-pages/charts/$VK_RELEASE.tgz
@@ -33,7 +33,8 @@ export ENABLE_VNET=true
 
 # ASK cluster dependent variables
 # You can find the subnet name and IP range from the vnet view in the azure portal.
-# The subnet name should contain the "virtual-node-aci" substr.
+# The subnet name may contain the "virtual-node-aci" substr. It is the subnet created
+# for the virtual node on aci
 export VIRTUAL_NODE_SUBNET_NAME=
 # By default, the subnet ip range is "10.240.0.0/16".
 export VIRTUAL_NODE_SUBNET_RANGE=
