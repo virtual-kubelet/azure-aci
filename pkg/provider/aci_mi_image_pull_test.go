@@ -26,7 +26,7 @@ func TestGetImageServerNames(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		mockSecretLister, NewMockPodLister(mockCtrl))
+		mockSecretLister, NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
@@ -190,7 +190,7 @@ func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 
 	aciMocks := createNewACIMock()
 	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
-		mockSecretLister, NewMockPodLister(mockCtrl))
+		mockSecretLister, NewMockPodLister(mockCtrl), nil)
 	if err != nil {
 		t.Fatal("Unable to create test provider", err)
 	}
