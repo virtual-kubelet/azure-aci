@@ -85,10 +85,9 @@ if [ "$E2E_TARGET" = "pr" ]; then
   IMG_URL=$ACR_NAME.azurecr.io
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$IMG_URL/$IMG_REPO make docker-build-image
   OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$IMG_URL/$INIT_IMG_REPO make docker-build-init-image
-
+  az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
 fi
 
-az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
 export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
 export ACR_NAME=${ACR_NAME}
 
