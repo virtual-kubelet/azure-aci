@@ -13,56 +13,41 @@ import (
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
-	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice"
-	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
-	azidentity "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	v1 "k8s.io/api/core/v1"
 )
 
-func SetContainerGroupIdentity(ctx context.Context, identity *armmsi.Identity, identityType azaciv2.ResourceIdentityType, containerGroup *azaciv2.ContainerGroup) {
-	if identity == nil || identityType != azaciv2.ResourceIdentityTypeUserAssigned {
+func SetContainerGroupIdentity(ctx context.Context, identityList []string, identityType azaciv2.ResourceIdentityType, containerGroup *azaciv2.ContainerGroup) {
+	if len(identityList) == 0 || identityType != azaciv2.ResourceIdentityTypeUserAssigned {
 		return
 	}
 
 	cgIdentity := azaciv2.ContainerGroupIdentity{
 		Type: &identityType,
-		UserAssignedIdentities: map[string]*azaciv2.UserAssignedIdentities{
-			*identity.ID: &azaciv2.UserAssignedIdentities{
-				PrincipalID: identity.Properties.PrincipalID,
-				ClientID: identity.Properties.ClientID,
-			},
-		},
+		UserAssignedIdentities: map[string]*azaciv2.UserAssignedIdentities{},
+	}
+
+	for i, _ := range identityList {
+		cgIdentity.UserAssignedIdentities[identityList[i]] =  &azaciv2.UserAssignedIdentities{}
 	}
 
 	log.G(ctx).Infof("setting managed identity based imageRegistryCredentials\n")
 	containerGroup.Identity = &cgIdentity
 }
 
-func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.Pod) (*armmsi.Identity, error) {
+func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.Pod) (*string, error) {
 
-	// initialize msi  credentials move this to setup
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		return nil, err
-	}
-	client, err := armmsi.NewUserAssignedIdentitiesClient(p.providerNetwork.VnetSubscriptionID, cred, nil)
-	if err != nil {
-		return nil, err
+	if kubeletIdentity := os.Getenv("AKS_KUBELET_IDENTITY"); kubeletIdentity != "" {
+		return &kubeletIdentity, nil
 	}
 
 	// list identities by resource group: covers both default MC_ resource group and user defined node resource group
-	pager := client.NewListByResourceGroupPager(p.resourceGroup, nil)
-	for pager.More() {
-		// pick the agent pool identity
-		nextResult, err := pager.NextPage(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, v := range nextResult.Value {
-			if strings.HasSuffix(*v.ID, "agentpool") {
-				return v, nil
-			}
+	idList, err := p.azClientsAPIs.GetIdentitiesListResult(ctx, p.resourceGroup)
+	if err != nil {
+		log.G(ctx).Errorf("Error while listing identities, %v", err)
+	}
+	for i, _ := range idList {
+		if strings.HasSuffix(*idList[i].ID, "agentpool") {
+			return idList[i].ID, nil
 		}
 	}
 
@@ -82,59 +67,36 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 
 	log.G(ctx).Infof("looking for cluster in resource group: %s \n", rg)
 
-	aksClient, err := armcontainerservice.NewManagedClustersClient(p.providerNetwork.VnetSubscriptionID, cred, nil)
-	if err != nil {
-		return nil, err
-	}
-
 	// List clusters in RG and filter on fqdn
-	clusterResourceGroupPager := aksClient.NewListByResourceGroupPager(rg, nil)
-	for clusterResourceGroupPager.More() {
-		nextResult, err := clusterResourceGroupPager.NextPage(ctx)
-		if err != nil {
-			return nil, err
-		}
+	clusterList, err := p.azClientsAPIs.GetClusterListResult(ctx, p.resourceGroup)
+	if err != nil {
+		log.G(ctx).Errorf("Error while listing clusters in resource group , %v", err)
+	}
+	for _, cluster := range clusterList {
 		// pick the cluster based on fqdn
-		for _, cluster := range nextResult.Value {
-			if (*cluster.Properties.Fqdn == fqdn) {
-				kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
-				if !ok || kubeletIdentity == nil {
-					return nil, fmt.Errorf("could not get kubelet identity from cluster\n")
-				}
-				// get armmsi identity object using identity resource name
-				identityResourceName := strings.SplitAfter(*kubeletIdentity.ResourceID, "userAssignedIdentities/")[1]
-				userAssignedIdentityGetResponse, err := client.Get(ctx, rg, identityResourceName, nil)
-				if err != nil {
-					return nil, err
-				}
-				return &userAssignedIdentityGetResponse.Identity, nil
+		if (*cluster.Properties.Fqdn == fqdn) {
+			kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
+			if !ok || kubeletIdentity == nil {
+				return nil, fmt.Errorf("could not get kubelet identity from cluster\n")
 			}
+			return kubeletIdentity.ResourceID, nil
 		}
 	}
 
 	// if all fails
 	// try to find cluster in the subscription and get kubeletidentity
-	clusterPager := aksClient.NewListPager(nil)
-	for clusterPager.More() {
-		nextResult, err := clusterPager.NextPage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		// pick the cluster based on fqdn
-		for _, cluster := range nextResult.Value {
-			if (*cluster.Properties.Fqdn == fqdn) {
-				kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
-				if !ok || kubeletIdentity == nil {
-					return nil, fmt.Errorf("could not get kubelet identity from cluster\n")
-				}
-				// get armmsi identity object using identity resource name
-				identityResourceName := strings.SplitAfter(*kubeletIdentity.ResourceID, "userAssignedIdentities/")[1]
-				userAssignedIdentityGetResponse, err := client.Get(ctx, rg, identityResourceName, nil)
-				if err != nil {
-					return nil, err
-				}
-				return &userAssignedIdentityGetResponse.Identity, nil
+	clusterList, err = p.azClientsAPIs.GetClusterListBySubscriptionResult(ctx)
+	if err != nil {
+		log.G(ctx).Errorf("Error while listing clusters in subscription, %v", err)
+	}
+	// pick the cluster based on fqdn
+	for _, cluster := range clusterList {
+		if (*cluster.Properties.Fqdn == fqdn) {
+			kubeletIdentity, ok:= cluster.Properties.IdentityProfile["kubeletidentity"]
+			if !ok || kubeletIdentity == nil {
+				return nil, fmt.Errorf("could not get kubelet identity from cluster\n")
 			}
+			return kubeletIdentity.ResourceID, nil
 		}
 	}
 	return nil, fmt.Errorf("could not find an agent pool identity for cluster under subscription %s\n", p.providerNetwork.VnetSubscriptionID)

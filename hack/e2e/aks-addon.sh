@@ -165,14 +165,14 @@ kubectl create configmap test-vars -n kube-system \
 
 sed -e "s|TEST_INIT_IMAGE|$IMG_URL/$INIT_IMG_REPO:$INIT_IMG_TAG|g" -e "s|TEST_IMAGE|$IMG_URL/$IMG_REPO:$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
 
-kubectl wait --for=condition=available deploy "virtual-kubelet-azure-aci" -n kube-system --timeout=300s
+kubectl wait --for=condition=available deploy "virtual-kubelet-azure-aci" -n kube-system --timeout=600s
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break
     sleep 3
 done
 
-kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
+kubectl wait --for=condition=Ready --timeout=600s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
 

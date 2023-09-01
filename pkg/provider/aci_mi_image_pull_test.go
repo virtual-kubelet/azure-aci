@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 	"context"
+	"strings"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
-	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"gotest.tools/assert"
@@ -93,39 +93,37 @@ func TestGetImageServerNames(t *testing.T) {
 }
 
 func TestSetContainerGroupIdentity(t *testing.T) {
-	fakeIdentityURI	:= "fakeuri"
-	fakePrincipalID	:= "fakeprincipalid"
-	fakeClientID	:= "fakeClientid"
-	armmsiIdentity	:= &armmsi.Identity{
-		ID: &fakeIdentityURI,
-		Properties: &armmsi.UserAssignedIdentityProperties{
-			ClientID: &fakeClientID,
-			PrincipalID: &fakePrincipalID,
-		},
-	}
+	fakeIdentityURI	 := "fakeuri"
+	fakeIdentityURI2 := "fakeuri2"
 
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
 	cases := []struct {
 		description     string
-		identity		*armmsi.Identity
+		identityList	[]string
 		identityType	azaciv2.ResourceIdentityType
 	}{
 		{
 			description: "identity is nil",
-			identity: nil,
+			identityList: []string{},
 			identityType: azaciv2.ResourceIdentityTypeUserAssigned,
 		},
 		{
 			description: "identity is not nil",
-			identity: armmsiIdentity,
+			identityList: []string{fakeIdentityURI},
+			identityType: azaciv2.ResourceIdentityTypeUserAssigned,
+
+		},
+		{
+			description: "identity is not nil",
+			identityList: []string{fakeIdentityURI, fakeIdentityURI2},
 			identityType: azaciv2.ResourceIdentityTypeUserAssigned,
 
 		},
 		{
 			description: "identity type is not user assignted",
-			identity: armmsiIdentity,
+			identityList: []string{fakeIdentityURI, fakeIdentityURI2},
 			identityType: azaciv2.ResourceIdentityTypeSystemAssigned,
 		},
 	}
@@ -133,15 +131,14 @@ func TestSetContainerGroupIdentity(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 
 			testContainerGroup := &azaciv2.ContainerGroup{}
-			SetContainerGroupIdentity(context.Background(), tc.identity, tc.identityType, testContainerGroup)
+			SetContainerGroupIdentity(context.Background(), tc.identityList, tc.identityType, testContainerGroup)
 
-			if tc.identityType == azaciv2.ResourceIdentityTypeUserAssigned && tc.identity != nil{
+			if tc.identityType == azaciv2.ResourceIdentityTypeUserAssigned && len(tc.identityList) > 0 {
 				// identity uri, clientID, principalID should match
 				assert.Check(t, testContainerGroup.Identity != nil, "container group identity should be populated")
 				assert.Equal(t, *testContainerGroup.Identity.Type, azaciv2.ResourceIdentityTypeUserAssigned, "identity type should match")
-				assert.Check(t, testContainerGroup.Identity.UserAssignedIdentities[*tc.identity.ID] != nil , "identity uri should be present in UserAssignedIdenttities")
-				assert.Equal(t, testContainerGroup.Identity.UserAssignedIdentities[*tc.identity.ID].PrincipalID, tc.identity.Properties.PrincipalID, "principal id should matc")
-				assert.Equal(t, testContainerGroup.Identity.UserAssignedIdentities[*tc.identity.ID].ClientID, tc.identity.Properties.ClientID , "client id should matc")
+				assert.Check(t, len(testContainerGroup.Identity.UserAssignedIdentities) == len(tc.identityList), "all identities should be populated in UserAssignedIdentities")
+				assert.Check(t, testContainerGroup.Identity.UserAssignedIdentities[tc.identityList[0]] != nil , "identity uri should be present in UserAssignedIdentities")
 			} else {
 				// identity should not be added
 				assert.Check(t, testContainerGroup.Identity == nil, "container group identity should not be populated")
@@ -152,17 +149,9 @@ func TestSetContainerGroupIdentity(t *testing.T) {
 
 func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 	fakeIdentityURI	:= "fakeuri"
-	fakePrincipalID	:= "fakeprincipalid"
-	fakeClientID	:= "fakeClientid"
 	fakeImageName	:= "fakeregistry.azurecr.io/fakeimage:faketag"
 	fakeImageName2	:= "fakeregistry2.azurecr.io/fakeimage:faketag"
-	armmsiIdentity	:= &armmsi.Identity{
-		ID: &fakeIdentityURI,
-		Properties: &armmsi.UserAssignedIdentityProperties{
-			ClientID: &fakeClientID,
-			PrincipalID: &fakePrincipalID,
-		},
-	}
+
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
@@ -197,7 +186,7 @@ func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 
 	cases := []struct {
 		description     string
-		identity		*armmsi.Identity
+		identity		*string
 	}{
 		{
 			description: "identity is nil",
@@ -205,7 +194,7 @@ func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 		},
 		{
 			description: "identity is not nil",
-			identity: armmsiIdentity,
+			identity: &fakeIdentityURI,
 
 		},
 	}
@@ -218,14 +207,75 @@ func TestGetManagedIdentityImageRegistryCredentials(t *testing.T) {
 				// image registry credentials should have identity
 				assert.Check(t, creds != nil, "image registry creds should be populated")
 				assert.Equal(t, len(creds), 2, "credentials for all distinct acr should be added")
-				assert.Equal(t, *(creds)[0].Identity, *tc.identity.ID, "identity uri should be correct")
-				assert.Equal(t, *(creds)[1].Identity, *tc.identity.ID, "identity uri should be correct")
+				assert.Equal(t, *(creds)[0].Identity, *tc.identity, "identity uri should be correct")
+				assert.Equal(t, *(creds)[1].Identity, *tc.identity, "identity uri should be correct")
 				assert.Equal(t, *(creds)[0].Server, "fakeregistry.azurecr.io", "server should be correct")
 				assert.Equal(t, *(creds)[1].Server, "fakeregistry2.azurecr.io", "server should be correct")
 			} else {
 				// identity should not be added to image registry credentials
 				assert.Check(t, len(creds) == 0, "image registry creds should not be populated")
 
+			}
+		})
+	}
+}
+
+func TestSetContainerGroupIdentityFromAnnotation(t *testing.T) {
+	fakeIdentityURI	:= "fakeuri;fakeuri2"
+
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				v1.Container{
+				},
+			},
+		},
+	}
+
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	mockSecretLister := NewMockSecretLister(mockCtrl)
+
+	aciMocks := createNewACIMock()
+	aciMocks.MockCreateContainerGroup = func(ctx context.Context, resourceGroup, podNS, podName string, cg *azaciv2.ContainerGroup) error {
+		ids := strings.Split(pod.Annotations[containerGroupIdentitiesLabel], ";")
+		if cg.Identity != nil {
+			assert.Check(t, len(ids) == len(cg.Identity.UserAssignedIdentities), "container group identity should be set from annotation")
+		}
+		return nil
+	}
+
+	provider, err := createTestProvider(aciMocks, NewMockConfigMapLister(mockCtrl),
+		mockSecretLister, NewMockPodLister(mockCtrl), nil)
+	if err != nil {
+		t.Fatal("Unable to create test provider", err)
+	}
+
+	cases := []struct {
+		description     string
+		annotations		map[string]string
+	}{
+		{
+			description: "container group identity annotation  is nil ",
+			annotations: map[string]string{},
+		},
+		{
+			description: "container group identity annotation is not nil",
+			annotations: map[string]string{
+				containerGroupIdentitiesLabel: fakeIdentityURI,
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.description, func(t *testing.T) {
+			pod.Annotations = tc.annotations
+			if err := provider.CreatePod(context.Background(), pod); err != nil {
+				t.Fatal("failed to create pod", err)
 			}
 		})
 	}

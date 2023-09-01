@@ -15,6 +15,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice"
+	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/azure-aci/pkg/validation"
@@ -33,12 +35,17 @@ type AzClientsInterface interface {
 	DeleteContainerGroup(ctx context.Context, resourceGroup, cgName string) error
 	ListLogs(ctx context.Context, resourceGroup, cgName, containerName string, opts api.ContainerLogOpts) (*string, error)
 	ExecuteContainerCommand(ctx context.Context, resourceGroup, cgName, containerName string, containerReq azaciv2.ContainerExecRequest) (*azaciv2.ContainerExecResponse, error)
+	GetIdentitiesListResult(ctx context.Context, resourceGroup string) ([]*armmsi.Identity, error)
+	GetClusterListResult(ctx context.Context, resourceGroup string) ([]*armcontainerservice.ManagedCluster, error)
+	GetClusterListBySubscriptionResult(ctx context.Context) ([]*armcontainerservice.ManagedCluster, error)
 }
 
 type AzClientsAPIs struct {
 	ContainersClient     *azaciv2.ContainersClient
 	ContainerGroupClient *azaciv2.ContainerGroupsClient
 	LocationClient       *azaciv2.LocationClient
+	MSIClient			 *armmsi.UserAssignedIdentitiesClient
+	AKSClient			 *armcontainerservice.ManagedClustersClient
 }
 
 func NewAzClientsAPIs(ctx context.Context, azConfig auth.Config) (*AzClientsAPIs, error) {
@@ -90,9 +97,21 @@ func NewAzClientsAPIs(ctx context.Context, azConfig auth.Config) (*AzClientsAPIs
 		return nil, errors.Wrap(err, "failed to create location client ")
 	}
 
+	msiClient, err := armmsi.NewUserAssignedIdentitiesClient(azConfig.AuthConfig.SubscriptionID, credential, &options)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create msi client ")
+	}
+
+	aksClient, err := armcontainerservice.NewManagedClustersClient(azConfig.AuthConfig.SubscriptionID, credential, &options)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create aks client ")
+	}
+
 	obj.ContainersClient = cClient
 	obj.ContainerGroupClient = cgClient
 	obj.LocationClient = lClient
+	obj.MSIClient = msiClient
+	obj.AKSClient = aksClient
 
 	logger.Debug("aci clients have been initialized successfully")
 	return &obj, nil
@@ -298,4 +317,70 @@ func (a *AzClientsAPIs) ExecuteContainerCommand(ctx context.Context, resourceGro
 
 func containerGroupName(podNS, podName string) string {
 	return fmt.Sprintf("%s-%s", podNS, podName)
+}
+
+func (a *AzClientsAPIs) GetIdentitiesListResult(ctx context.Context, resourceGroup string) ([]*armmsi.Identity, error) {
+	logger := log.G(ctx).WithField("method", "GetIdentitiesListResult")
+	ctx, span := trace.StartSpan(ctx, "client.GetIdentitiesListResult")
+	defer span.End()
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+
+	pager := a.MSIClient.NewListByResourceGroupPager(resourceGroup, nil)
+	var idList []*armmsi.Identity
+	for pager.More() {
+		page, err := pager.NextPage(ctxWithResp)
+		if err != nil {
+			logger.Errorf("an error has occurred while getting list of Identities, status code %d", rawResponse.StatusCode)
+			return nil, err
+		}
+		idList = append(idList, page.Value...)
+	}
+	return idList, nil
+}
+
+func (a *AzClientsAPIs) GetClusterListResult(ctx context.Context, resourceGroup string) ([]*armcontainerservice.ManagedCluster, error) {
+	logger := log.G(ctx).WithField("method", "GetClusterListResult")
+	ctx, span := trace.StartSpan(ctx, "client.GetClusterListResult")
+	defer span.End()
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+
+	var clusterList []*armcontainerservice.ManagedCluster
+	pager := a.AKSClient.NewListByResourceGroupPager(resourceGroup, nil)
+
+	for pager.More() {
+		page, err := pager.NextPage(ctxWithResp)
+		if err != nil {
+			logger.Errorf("an error has occurred while getting list of clusters, status code %d", rawResponse.StatusCode)
+			return nil, err
+		}
+		clusterList = append(clusterList, page.Value...)
+	}
+	return clusterList, nil
+}
+
+
+func (a *AzClientsAPIs) GetClusterListBySubscriptionResult(ctx context.Context) ([]*armcontainerservice.ManagedCluster, error) {
+	logger := log.G(ctx).WithField("method", "GetClusterListBySubscriptionResult")
+	ctx, span := trace.StartSpan(ctx, "client.GetClusterListBySubscriptionResult")
+	defer span.End()
+
+	var rawResponse *http.Response
+	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+
+	var clusterList []*armcontainerservice.ManagedCluster
+	pager := a.AKSClient.NewListPager(nil)
+
+	for pager.More() {
+		page, err := pager.NextPage(ctxWithResp)
+		if err != nil {
+			logger.Errorf("an error has occurred while getting list of clusters, status code %d", rawResponse.StatusCode)
+			return nil, err
+		}
+		clusterList = append(clusterList, page.Value...)
+	}
+	return clusterList, nil
 }

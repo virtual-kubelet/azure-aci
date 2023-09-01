@@ -4,6 +4,7 @@ metadata:
   name: e2etest-acr-test-mi-container
   namespace: vk-test
 spec:
+  nodeName: vk-aci-test-aks
   restartPolicy: Never
   containers:
   - image: ${ACR_NAME}.azurecr.io/library/alpine

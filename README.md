@@ -22,7 +22,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that ACI servic
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
 * Azure Monitor integration ( aka OMS)
 * Support for init-containers ([use init containers](#Create-pod-with-init-containers))
-* Pull ACR image using managed identity ([acr image pull](#Pulling-images-using-user-assigned-managed-identity))
+* Pull ACR image using managed identity ([acr image pull](./docs/Pull-Images-Using-Managed-Identity))
 
 ### Limitations (Not supported)
 
@@ -171,28 +171,6 @@ helloworld-2559879000-XXXXXX  myResourceGroup    Succeeded            microsoft/
 ```
 </details><br/>
 
-### Pulling images using user assigned managed identity
-If your image is on a private reigstry, you can use a managed Identity to access the image.
-
-First you will need to create a new User Assigned Managed Identity, and add it as a kubelet identity on the aks cluster.
-This step is optional, and can be skipped if you want to use the default kubelet identity instead of creating a new one.
-```bash
-az identity create -g <RESOURCE GROUP> -n <USER ASSIGNED IDENTITY NAME>
-az aks update -g <RESOURCE GROUP> -n <CLUSER NAME> --assign-kubelet-identity <USER ASSIGNED IDENTITY URI>
-```
-
-Attach the private acr registry to the cluster. This will give the managed identity  AcrPull access.
-```bash
-az aks update -g <RESOURCE GROUP> -n <CLUSTER NAME> --attach-acr <ACR NAME>
-```
-
-Create a new pod that pulls an image from the private registry, for example
-```yaml
-spec:
-  containers:
-  - image: <ACR NAME>.azurecr.io/<IMAGE NAME>:<IMAGE TAG>
-    name: test-container
-```
 
 ## Uninstallation
 
