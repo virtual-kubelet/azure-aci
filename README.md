@@ -22,7 +22,7 @@ Virtual Kubelet's ACI provider relies heavily on the feature set that ACI servic
 * [Exec support](https://docs.microsoft.com/azure/container-instances/container-instances-exec) for container instances
 * Azure Monitor integration ( aka OMS)
 * Support for init-containers ([use init containers](#Create-pod-with-init-containers))
-* Pull ACR image using managed identity ([acr image pull](./docs/Pull-Images-Using-Managed-Identity))
+* Pull ACR image using managed identity ([acr image pull](./docs/Pull-Images-Using-Managed-Identity.md))
 
 ### Limitations (Not supported)
 
