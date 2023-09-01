@@ -26,7 +26,7 @@ func SetContainerGroupIdentity(ctx context.Context, identityList []string, ident
 		UserAssignedIdentities: map[string]*azaciv2.UserAssignedIdentities{},
 	}
 
-	for i, _ := range identityList {
+	for i := range identityList {
 		cgIdentity.UserAssignedIdentities[identityList[i]] =  &azaciv2.UserAssignedIdentities{}
 	}
 
@@ -45,7 +45,7 @@ func (p *ACIProvider) GetAgentPoolKubeletIdentity(ctx context.Context, pod *v1.P
 	if err != nil {
 		log.G(ctx).Errorf("Error while listing identities, %v", err)
 	}
-	for i, _ := range idList {
+	for i := range idList {
 		if strings.HasSuffix(*idList[i].ID, "agentpool") {
 			return idList[i].ID, nil
 		}
