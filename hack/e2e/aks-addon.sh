@@ -40,7 +40,6 @@ fi
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=aksaddonvk$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
-: "${K8S_VERSION:=1.24.10}"
 
 error() {
     echo "$@" >&2
@@ -113,7 +112,6 @@ cluster_subnet_id="$(az network vnet subnet show \
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
-    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -128,7 +126,6 @@ else
 
 az aks create \
     -g "$RESOURCE_GROUP" \
-    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -161,7 +158,14 @@ kubectl create configmap test-vars -n kube-system \
 
 sed -e "s|TEST_INIT_IMAGE|$IMG_URL/$INIT_IMG_REPO:$INIT_IMG_TAG|g" -e "s|TEST_IMAGE|$IMG_URL/$IMG_REPO:$IMG_TAG|g" deploy/deployment.yaml | kubectl apply -n kube-system -f -
 
-kubectl wait --for=condition=available deploy "virtual-kubelet-azure-aci" -n kube-system --timeout=300s
+# Check deployment rollout status every 30 seconds (max 5 minutes) until complete.
+ATTEMPTS=0
+ROLLOUT_STATUS_CMD="kubectl rollout status deployment/virtual-kubelet-azure-aci -n kube-system"
+until $ROLLOUT_STATUS_CMD || [ $ATTEMPTS -eq 10 ]; do
+  $ROLLOUT_STATUS_CMD
+  ATTEMPTS=$((attempts + 1))
+  sleep 30
+done
 
 while true; do
     kubectl get node "$TEST_NODE_NAME" &> /dev/null && break
