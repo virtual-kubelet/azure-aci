@@ -40,7 +40,7 @@ jobs:
         run: |
           git tag ${{ steps.get-tag.outputs.tag }}
       - name: Goreleaser
-        uses: goreleaser/goreleaser-action@v4
+        uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
           args: release --rm-dist --timeout 60m --debug
