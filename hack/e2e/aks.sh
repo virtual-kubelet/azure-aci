@@ -40,7 +40,6 @@ fi
 : "${ACR_NAME=vkacr$RANDOM_NUM}"
 : "${CSI_DRIVER_STORAGE_ACCOUNT_NAME=vkcsidrivers$RANDOM_NUM}"
 : "${CSI_DRIVER_SHARE_NAME=vncsidriversharename}"
-: "${K8S_VERSION:=1.24.10}"
 
 error() {
     echo "$@" >&2
@@ -120,7 +119,6 @@ node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-iden
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
     -g "$RESOURCE_GROUP" \
-    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
@@ -137,7 +135,6 @@ else
 
 az aks create \
     -g "$RESOURCE_GROUP" \
-    --kubernetes-version "$K8S_VERSION" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
     --node-vm-size standard_d8_v3 \
