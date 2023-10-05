@@ -29,7 +29,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION  }}
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -40,7 +40,7 @@ jobs:
         run: |
           git tag ${{ steps.get-tag.outputs.tag }}
       - name: Goreleaser
-        uses: goreleaser/goreleaser-action@v4
+        uses: goreleaser/goreleaser-action@v5
         with:
           version: latest
           args: release --rm-dist --timeout 60m --debug
@@ -70,13 +70,13 @@ jobs:
       - id: get-tag
         name: Get tag
         run: echo "tag=$(echo ${{ github.event.pull_request.head.ref }} | tr -d release-)" >> $GITHUB_OUTPUT
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
           ref: ${{ steps.get-tag.outputs.tag }}
       - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@465a07811f14bebb1938fbed4728c6a1ff8901fc
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}

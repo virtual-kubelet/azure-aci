@@ -36,7 +36,6 @@ OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
 INIT_IMG_TAG ?= 0.2.0
-K8S_VERSION ?= 1.26.6
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 VERSION_FLAGS := "-ldflags=-X main.buildVersion=$(IMG_TAG) -X main.buildTime=$(BUILD_DATE)"
@@ -106,7 +105,6 @@ e2e-test:
  	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
  	INIT_IMG_REPO=$(INIT_IMG_NAME) INIT_IMG_TAG=$(INIT_IMG_TAG) \
  	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
- 	K8S_VERSION=$(K8S_VERSION) \
  	$(AKS_E2E_SCRIPT) go test -timeout 60m -v ./e2e
 
 .PHONY: aks-addon-e2e-test
@@ -115,7 +113,6 @@ aks-addon-e2e-test:
 	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
 	INIT_IMG_REPO=$(INIT_IMG_NAME) INIT_IMG_TAG=$(INIT_IMG_TAG) \
 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
-	K8S_VERSION=$(K8S_VERSION) \
 	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 60m -v ./e2e
 
 .PHONY: vet
