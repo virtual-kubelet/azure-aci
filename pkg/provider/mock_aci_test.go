@@ -8,6 +8,8 @@ import (
 	"context"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
+	armcontainerservice "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerservice/armcontainerservice"
+	armmsi "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 )
 
@@ -92,5 +94,17 @@ func (m *MockACIProvider) GetContainerGroup(ctx context.Context, resourceGroup, 
 	if m.MockGetContainerGroup != nil {
 		return m.MockGetContainerGroup(ctx, resourceGroup, containerGroupName)
 	}
+	return nil, nil
+}
+
+func (m *MockACIProvider) GetIdentitiesListResult(ctx context.Context, resourceGroup string) ([]*armmsi.Identity, error) {
+	return nil, nil
+}
+
+func (m *MockACIProvider) GetClusterListResult(ctx context.Context, resourceGroup string) ([]*armcontainerservice.ManagedCluster, error) {
+	return nil, nil
+}
+
+func (m *MockACIProvider) GetClusterListBySubscriptionResult(ctx context.Context) ([]*armcontainerservice.ManagedCluster, error) {
 	return nil, nil
 }

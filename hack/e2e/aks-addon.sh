@@ -84,8 +84,11 @@ if [ "$E2E_TARGET" = "pr" ]; then
   IMG_URL=$ACR_NAME.azurecr.io
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$IMG_URL/$IMG_REPO make docker-build-image
   OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$IMG_URL/$INIT_IMG_REPO make docker-build-init-image
-
+  az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
 fi
+
+export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
+export ACR_NAME=${ACR_NAME}
 
 TMPDIR="$(mktemp -d)"
 
@@ -172,7 +175,7 @@ while true; do
     sleep 3
 done
 
-kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
+kubectl wait --for=condition=Ready --timeout=600s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
 
@@ -212,5 +215,7 @@ CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group "
 
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
 export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
+
+envsubst < e2e/fixtures/mi-pull-image.yaml > e2e/fixtures/mi-pull-image-exec.yaml
 
 $@

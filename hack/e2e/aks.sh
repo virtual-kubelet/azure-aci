@@ -61,7 +61,6 @@ cleanup() {
 }
 trap 'cleanup' EXIT
 
-
 check_aci_registered() {
     az provider list --query "[?contains(namespace,'Microsoft.ContainerInstance')]" -o json | jq -r '.[0].registrationState'
 }
@@ -74,47 +73,64 @@ if [ ! "$(check_aci_registered)" = "Registered" ]; then
     done
 fi
 
+echo -e "\n......Creating Resource Group\n"
 az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
-if [ "$E2E_TARGET" = "pr" ]; then
-  az acr create --resource-group "$RESOURCE_GROUP" \
+echo -e "\n......Creating ACR\n"
+az acr create --resource-group "$RESOURCE_GROUP" \
     --name "$ACR_NAME" --sku Basic
 
+if [ "$E2E_TARGET" = "pr" ]; then
   az acr login --name "$ACR_NAME"
   IMG_URL=$ACR_NAME.azurecr.io
   OUTPUT_TYPE=type=registry IMG_TAG=$IMG_TAG  IMAGE=$IMG_URL/$IMG_REPO make docker-build-image
   OUTPUT_TYPE=type=registry INIT_IMG_TAG=$INIT_IMG_TAG  INIT_IMAGE=$IMG_URL/$INIT_IMG_REPO make docker-build-init-image
 
 fi
+echo -e "\n......Creating ACR.........[DONE]\n"
 
 KUBE_DNS_IP=10.0.0.10
 
+echo -e "\n......Creating vNet\n"
 az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
     --subnet-name $CLUSTER_SUBNET_NAME \
     --subnet-prefix $CLUSTER_SUBNET_RANGE
+echo -e "\n......Creating vNet.........[DONE]\n"
 
+echo -e "\n......Creating vNet subnet\n"
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_RANGE \
     --query id -o tsv)"
+echo -e "\n......Creating vNet subnet.........[DONE]\n"
 
 
 vnet_id="$(az network vnet show --resource-group $RESOURCE_GROUP --name $VNET_NAME --query id -o tsv)"
 aks_subnet_id="$(az network vnet subnet show --resource-group $RESOURCE_GROUP --vnet-name $VNET_NAME --name $CLUSTER_SUBNET_NAME --query id -o tsv)"
 
 TMPDIR="$(mktemp -d)"
+echo -e "\n......Creating managed identities for AKS and Node\n"
 cluster_identity="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query principalId -o tsv)"
 node_identity="$(az identity create --name "${RESOURCE_GROUP}-node-identity" --resource-group "${RESOURCE_GROUP}" --query principalId -o tsv)"
 
 node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
+echo -e "\n......Creating managed identities for AKS and Node.........[DONE]\n"
+
+
+az acr import --name ${ACR_NAME} --source docker.io/library/alpine:latest
+export ACR_ID="$(az acr show --resource-group ${RESOURCE_GROUP} --name ${ACR_NAME} --query id -o tsv)"
+export ACR_NAME=${ACR_NAME}
+
 
 node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query clientId -o tsv)"
+
+echo -e "\n......Creating AKS Cluster.........[DONE]\n"
 
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
@@ -144,9 +160,11 @@ az aks create \
     --dns-service-ip "$KUBE_DNS_IP" \
     --assign-kubelet-identity "$node_identity_id" \
     --assign-identity "$cluster_identity_id" \
+	--attach-acr $ACR_ID \
     --generate-ssh-keys
 fi
 
+echo -e "\n......Creating RBAC Role for Network Contributor on vNet\n"
 az role assignment create \
     --role "Network Contributor" \
     --assignee-object-id "$node_identity" \
@@ -162,21 +180,36 @@ az role assignment create \
     --assignee-object-id "$node_identity" \
     --assignee-principal-type "ServicePrincipal" \
     --scope "$aci_subnet_id"
+echo -e "\n......Creating RBAC Role for Network Contributor on vNet.........[DONE]\n"
+
 
 # Make sure ACI can create containers in the AKS RG.
 # Note, this is not wonderful since it gives a lot of permissions to the identity which is also shared with the kubelet (which it doesn't need).
 # Unfortunately there is no way to scope this down (AFIACT) currently.
+echo -e "\n......Creating RBAC Role for Contributor on Resource Group\n"
 az role assignment create \
     --role "Contributor" \
     --assignee-object-id "$node_identity" \
     --assignee-principal-type "ServicePrincipal" \
     --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
 
+az role assignment create \
+    --role "Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/${RESOURCE_GROUP}"
+echo -e "\n......Creating RBAC Role for Contributor on Resource Group.........[DONE]\n"
+
+echo -e "\n......Set AKS Cluster context\n"
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "${TMPDIR}/kubeconfig"
 export KUBECONFIG="${TMPDIR}/kubeconfig"
+echo -e "\n......Set AKS Cluster context.........[DONE]\n"
 
+echo -e "\n......Get AKS Cluster Master URL\n"
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
+echo -e "\n......Get AKS Cluster Master URL.........[DONE]\n"
 
+echo -e "\n......Install Virtual node on the AKS Cluster with ACI provider\n"
 ## Linux VK
 helm install \
     --kubeconfig="${KUBECONFIG}" \
@@ -206,6 +239,7 @@ done
 kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
 
 export TEST_NODE_NAME
+echo -e "\n......Install Virtual node on the AKS Cluster with ACI provider.........[DONE]\n"
 
 ## Windows VK
 helm install \
@@ -234,6 +268,7 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
 
 export TEST_WINDOWS_NODE_NAME
 
+echo -e "\n......Initialize environment variabled needed for E2e tests\n"
 ## CSI Driver test
 az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -o tsv)
@@ -243,5 +278,9 @@ CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group $
 
 export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
 export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
+
+envsubst < e2e/fixtures/mi-pull-image.yaml > e2e/fixtures/mi-pull-image-exec.yaml
+
+echo -e "\n......Initialize environment variabled needed for E2e tests.........[DONE]\n"
 
 $@

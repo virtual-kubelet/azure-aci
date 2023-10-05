@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"regexp"
 
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/gorilla/websocket"
@@ -76,6 +77,7 @@ const (
 const (
 	confidentialComputeSkuLabel       = "virtual-kubelet.io/container-sku"
 	confidentialComputeCcePolicyLabel = "virtual-kubelet.io/confidential-compute-cce-policy"
+	containerGroupIdentitiesLabel       = "virtual-kubelet.io/container-group-identities"
 )
 
 // ACIProvider implements the virtual-kubelet provider interface and communicates with Azure's ACI APIs.
@@ -334,6 +336,26 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 
 	}
 
+	// if no username credentials are provided use agentpool MI if for pulling images from ACR
+	if len(creds) == 0 && p.enabledFeatures.IsEnabled(ctx, featureflag.ManagedIdentityPullFeature) {
+		identityList := []string{}
+		agentPoolKubeletIdentity, err := p.GetAgentPoolKubeletIdentity(ctx, pod)
+		if err != nil {
+			log.G(ctx).Infof("could not find Agent pool identity %v", err)
+		}
+
+		if agentPoolKubeletIdentity  != nil {
+			identityList = append(identityList, *agentPoolKubeletIdentity)
+		}
+
+		if cgIdentityString := pod.Annotations[containerGroupIdentitiesLabel]; cgIdentityString != "" {
+			cgIdentityURIs := strings.Split(cgIdentityString, ";")
+			identityList = append(identityList, cgIdentityURIs...)
+		}
+		SetContainerGroupIdentity(ctx, identityList, azaciv2.ResourceIdentityTypeUserAssigned, cg)
+		creds = p.getManagedIdentityImageRegistryCredentials(pod, agentPoolKubeletIdentity, cg)
+	}
+
 	if p.enabledFeatures.IsEnabled(ctx, featureflag.InitContainerFeature) {
 		// get initContainers
 		initContainers, err := p.getInitContainers(ctx, pod)
@@ -404,6 +426,40 @@ func (p *ACIProvider) CreatePod(ctx context.Context, pod *v1.Pod) error {
 	log.G(ctx).Debugf("start creating pod %v", pod.Name)
 	// TODO: Run in a go routine to not block workers, and use tracker.UpdatePodStatus() based on result.
 	return p.azClientsAPIs.CreateContainerGroup(ctx, p.resourceGroup, pod.Namespace, pod.Name, cg)
+}
+
+// get list of distinct acr servernames from pod
+func (p *ACIProvider) getImageServerNames(pod *v1.Pod) []string {
+	serverNamesMap := map[string]int{}
+	acrRegexp := "[a-z0-9]+\\.azurecr\\.io"
+	for _, container := range pod.Spec.Containers {
+		re := regexp.MustCompile(`/`)
+		imageSplit := re.Split(container.Image, -1)
+		isMatch, _ := regexp.MatchString(acrRegexp, imageSplit[0])
+		if len(imageSplit) > 1 && isMatch {
+			serverNamesMap[imageSplit[0]] = 0
+		}
+	}
+	serverNames := []string{}
+	for k := range serverNamesMap {
+		serverNames = append(serverNames, k)
+	}
+	return serverNames
+}
+
+func (p *ACIProvider) getManagedIdentityImageRegistryCredentials(pod *v1.Pod, identity *string, containerGroup *azaciv2.ContainerGroup) ([]*azaciv2.ImageRegistryCredential){
+	serverNames := p.getImageServerNames(pod)
+	ips := make([]*azaciv2.ImageRegistryCredential, 0, len(pod.Spec.ImagePullSecrets))
+	if identity != nil{
+		for i := range serverNames {
+			cred := azaciv2.ImageRegistryCredential{
+				Server:  &serverNames[i],
+				Identity: identity,
+			}
+			ips =  append(ips, &cred)
+		}
+	}
+	return ips
 }
 
 // setACIExtensions

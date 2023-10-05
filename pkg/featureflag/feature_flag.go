@@ -13,6 +13,7 @@ import (
 const (
 	InitContainerFeature       = "init-container"
 	ConfidentialComputeFeature = "confidential-compute"
+	ManagedIdentityPullFeature = "managed-identity-image-pull"
 
 	// Events : support ACI to K8s event translation and broadcasting
 	Events = "events"
@@ -21,6 +22,7 @@ const (
 var enabledFeatures = []string{
 	InitContainerFeature,
 	ConfidentialComputeFeature,
+	ManagedIdentityPullFeature,
 	Events,
 }
 
