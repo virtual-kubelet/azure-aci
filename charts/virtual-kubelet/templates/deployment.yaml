@@ -9,7 +9,7 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ template "vk.fullname" . }}
+      app: {{ template "vk.name" . }}
   template:
     metadata:
 {{ include "vk.labels" . | indent 6 }}
