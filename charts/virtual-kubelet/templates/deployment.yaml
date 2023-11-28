@@ -16,8 +16,6 @@ spec:
         component: kubelet
       annotations:
         checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
-      labels:
-        app: {{ template "vk.fullname" . }}
     spec:
       initContainers:
         - name: init-validation
