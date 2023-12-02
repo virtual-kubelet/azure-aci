@@ -128,6 +128,7 @@ var validAciRegions = []string{
 	"centralindia",
 	"centralus",
 	"centraluseuap",
+	"chinaeast2",
 	"eastasia",
 	"eastus",
 	"eastus2",
