@@ -213,7 +213,6 @@ func main() {
 		node, err := nodeutil.NewNode(nodeName,
 			func(cfg nodeutil.ProviderConfig) (nodeutil.Provider, node.NodeProvider, error) {
 				if port := os.Getenv("KUBELET_PORT"); port != "" {
-					var err error
 					kubeletPort, err := strconv.ParseInt(port, 10, 32)
 					if err != nil {
 						return nil, nil, err
