@@ -153,6 +153,7 @@ var validAciRegions = []string{
 	"norwayeast",
 	"norwaywest",
 	"polandcentral",
+	"qatarcentral",
 	"southafricanorth",
 	"southafricawest",
 	"southcentralus",
