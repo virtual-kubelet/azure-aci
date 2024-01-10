@@ -109,6 +109,10 @@ func TestPodLifecycle(t *testing.T) {
 	cmd = kubectl("exec", "vk-e2e-hpa", "-c", "hpa-example", "--namespace=vk-test", "--", "/bin/sh", "-c", " ls")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
+		c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--since=5m")
+		l, _ := c.CombinedOutput()
+		t.Log(string(l))
+
 		t.Fatal(string(out))
 	}
 	if strings.Contains(string(out), "index.php") {
