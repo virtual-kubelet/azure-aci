@@ -98,7 +98,7 @@ func TestPodWithMultiVolume(t *testing.T) {
 	cmd = kubectl("exec", "vk-e2e-volume", "-c", "hpa-example", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--since=5m")
+		c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=30")
 		l, _ := c.CombinedOutput()
 		t.Log(string(l))
 
