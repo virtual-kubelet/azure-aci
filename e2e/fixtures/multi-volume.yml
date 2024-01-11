@@ -39,7 +39,7 @@ spec:
   securityContext: {}
   nodeSelector:
     kubernetes.io/role: agent
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
     type: virtual-kubelet
   preemptionPolicy: PreemptLowerPriority
   tolerations:
