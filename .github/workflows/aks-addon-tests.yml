@@ -23,7 +23,7 @@ env:
 
 jobs:
   export-registry:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -38,7 +38,7 @@ jobs:
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       E2E_IMG_TAG: "e2e-ci"
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v5
@@ -64,11 +64,6 @@ jobs:
           fi
 
           echo "CLUSTER_NAME=aks-addon-vk-test${rand}" >> $GITHUB_ENV
-
-      - name: Install Azure CLI latest
-        run: |
-          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-          az version
 
       - uses: azure/login@v1.5.1
         with:
