@@ -73,7 +73,7 @@ jobs:
           curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
           az version
 
-      - uses: azure/login@v1.5.1
+      - uses: azure/login@v1.6.0
         with:
           client-id: ${{ secrets.CLIENTID }}
           tenant-id: ${{ secrets.TENANT_ID }}
