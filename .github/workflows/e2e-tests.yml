@@ -74,6 +74,10 @@ jobs:
           tenant-id: ${{ secrets.TENANT_ID }}
           subscription-id: ${{ secrets.SUBSCRIPTIONID }}
 
+      - name: Setup kubectl
+        id: install-kubectl
+        uses: azure/setup-kubectl@v3
+
       - name: Run e2e test
         run: |
           OUTPUT_TYPE=type=registry make e2e-test
