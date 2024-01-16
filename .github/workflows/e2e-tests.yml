@@ -26,7 +26,7 @@ env:
 
 jobs:
   export-registry:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -41,7 +41,7 @@ jobs:
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       E2E_IMG_TAG: "e2e-ci"
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v5
@@ -68,7 +68,7 @@ jobs:
 
           echo "CLUSTER_NAME=vk-aci-test${rand}" >> $GITHUB_ENV
 
-      - uses: azure/login@v1.5.1
+      - uses: azure/login@v1.6.0
         with:
           client-id: ${{ secrets.CLIENTID }}
           tenant-id: ${{ secrets.TENANT_ID }}
