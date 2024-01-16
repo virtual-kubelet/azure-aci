@@ -34,7 +34,7 @@ spec:
         cpu: 1
   nodeSelector:
     kubernetes.io/role: agent
-    kubernetes.io/os: linux
+    beta.kubernetes.io/os: linux
     type: virtual-kubelet
     # kubernetes.io/hostname: minsha-vk
   tolerations:
