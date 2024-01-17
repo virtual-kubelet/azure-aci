@@ -5,7 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [master]
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
   push:
