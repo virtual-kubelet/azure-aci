@@ -9,8 +9,10 @@ on:
     branches:
       - master
       - release-**
-  push:
-    branches: [master]
+    types: [ opened, ready_for_review, reopened ]
+    paths:
+      - '.github/workflows/chart.yml'
+      - 'charts/**'
 
 env:
   REGISTRY: ghcr.io
