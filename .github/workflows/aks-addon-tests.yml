@@ -65,7 +65,7 @@ jobs:
 
           echo "CLUSTER_NAME=aks-addon-vk-test${rand}" >> $GITHUB_ENV
 
-      - uses: azure/login@v1.6.0
+      - uses: azure/login@v1.5.0
         with:
           client-id: ${{ secrets.CLIENTID }}
           tenant-id: ${{ secrets.TENANT_ID }}
