@@ -23,6 +23,7 @@ env:
 
 jobs:
   export-registry:
+    environment: test
     runs-on: ubuntu-latest
     outputs:
       registry: ${{ steps.export.outputs.registry }}
@@ -67,7 +68,9 @@ jobs:
 
       - uses: azure/login@v1.6.0
         with:
-          creds: '{"clientId":"${{ secrets.CLIENTID }}","subscriptionId":"${{ secrets.SUBSCRIPTIONID }}","tenantId":"${{ secrets.TENANT_ID }}"}'
+          client-id: ${{ secrets.CLIENTID }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          subscription-id: ${{ secrets.SUBSCRIPTIONID }}
 
       - name: Run e2e test
         run: |
