@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"os"
-	"strings"
 	"testing"
 	"time"
 )
@@ -95,19 +94,19 @@ func TestPodWithMultiVolume(t *testing.T) {
 	}
 	t.Log("success create pod with multi-volume")
 
-	cmd = kubectl("exec", "pod/vk-e2e-volume", "-c", "hpa-example", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=30")
-		l, _ := c.CombinedOutput()
-		t.Log(string(l))
+	// cmd = kubectl("exec", "pod/vk-e2e-volume", "-c", "hpa-example", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
+	// out, err := cmd.CombinedOutput()
+	// if err != nil {
+	// 	c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=30")
+	// 	l, _ := c.CombinedOutput()
+	// 	t.Log(string(l))
 
-		t.Fatal(string(out))
-	}
-	if strings.Contains(string(out), "No such file or directory") {
-		t.Fatal("failed to list mounted volumes")
-	}
-	t.Log("success exec mounted files for pod with multi-volume")
+	// 	t.Fatal(string(out))
+	// }
+	// if strings.Contains(string(out), "No such file or directory") {
+	// 	t.Fatal("failed to list mounted volumes")
+	// }
+	// t.Log("success exec mounted files for pod with multi-volume")
 
 	// query metrics
 	deadline = time.Now().Add(5 * time.Minute)

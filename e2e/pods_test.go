@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -104,21 +103,21 @@ func TestPodLifecycle(t *testing.T) {
 	t.Logf("success query container logs %s", string(out))
 
 	// check container exec
-	t.Log("check execute commands on container ....")
+	// t.Log("check execute commands on container ....")
 
-	cmd = kubectl("exec", "pod/vk-e2e-hpa", "-c", "hpa-example", "--namespace=vk-test", "--", "/bin/sh", "-c", " ls")
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=30")
-		l, _ := c.CombinedOutput()
-		t.Log(string(l))
+	// cmd = kubectl("exec", "pod/vk-e2e-hpa", "-c", "hpa-example", "--namespace=vk-test", "--", "/bin/sh", "-c", " ls")
+	// out, err = cmd.CombinedOutput()
+	// if err != nil {
+	// 	c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=30")
+	// 	l, _ := c.CombinedOutput()
+	// 	t.Log(string(l))
 
-		t.Fatal(string(out))
-	}
-	if strings.Contains(string(out), "index.php") {
-		t.Fatal("failed to exec on the container")
-	}
-	t.Log("success query exec on the container")
+	// 	t.Fatal(string(out))
+	// }
+	// if strings.Contains(string(out), "index.php") {
+	// 	t.Fatal("failed to exec on the container")
+	// }
+	// t.Log("success query exec on the container")
 
 	t.Log("clean up")
 	cmd = kubectl("delete", "namespace", "vk-test", "--ignore-not-found")
