@@ -5,7 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request_target:
+  pull_request:
     branches: [master]
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
   push:
@@ -38,6 +38,7 @@ jobs:
     env:
       REGISTRY: ${{ needs.export-registry.outputs.registry }}
       E2E_IMG_TAG: "e2e-ci"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: ubuntu-latest
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
