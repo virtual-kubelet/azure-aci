@@ -5,41 +5,27 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  workflow_dispatch:
-  pull_request:
+  pull_request_target:
     branches:
       - master
       - release-**
-  push:
-    branches: [master]
+    types: [ opened, ready_for_review, reopened ]
+    paths:
+      - '.github/workflows/chart.yml'
+      - 'charts/**'
+
+env:
+  REGISTRY: ghcr.io
+  GO_VERSION: '1.20' # Common versions
+  E2E_IMG_TAG: "e2e-ci"
 
 permissions:
    id-token: write
    contents: read
 
-env:
-  REGISTRY: ghcr.io
-  # Common versions
-  GO_VERSION: '1.20'
-
 jobs:
-  export-registry:
-    environment: test
-    runs-on: ubuntu-latest
-    outputs:
-      registry: ${{ steps.export.outputs.registry }}
-    steps:
-      - id: export
-        run: |
-          # registry must be in lowercase
-          echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
-
   e2e-tests:
-    needs: export-registry
     environment: test
-    env:
-      REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      E2E_IMG_TAG: "e2e-ci"
     runs-on: ubuntu-latest
     steps:
       - name:  Set up Go ${{ env.GO_VERSION }}
@@ -53,25 +39,26 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
 
-      - name: Shorten SHA
-        id: vars
-        run: echo "::set-output name=pr_sha_short::$(git rev-parse --short ${{ github.event.pull_request.head.sha }} )"
+      - name: Get Repo
+        run: |
+          echo "REGISTRY=$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])" >> $GITHUB_ENV
 
       - name: Set e2e Cluster Name
         run: |
-          rand=${{ steps.vars.outputs.pr_sha_short }}
-          
+          echo "pr_sha_short=$(git rev-parse --short ${{ github.event.pull_request.head.sha }} )" >> $GITHUB_ENV
+          rand=${{ env.pr_sha_short }}
+
           if [ "$rand" = "" ]; then
              rand=$RANDOM
           fi
 
           echo "CLUSTER_NAME=vk-aci-test${rand}" >> $GITHUB_ENV
 
-      - uses: azure/login@v1.6.0
+      - uses: azure/login@v1.5.1
         with:
-          client-id: ${{ secrets.CLIENTID }}
-          tenant-id: ${{ secrets.TENANT_ID }}
-          subscription-id: ${{ secrets.SUBSCRIPTIONID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Run e2e test
         run: |
