@@ -76,3 +76,4 @@ jobs:
         run: |
           set +e
           az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
+          
