@@ -98,10 +98,6 @@ func TestPodWithMultiVolume(t *testing.T) {
 	cmd = kubectl("exec", "pod/vk-e2e-volume", "-c", "hpa-example", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=30")
-		l, _ := c.CombinedOutput()
-		t.Log(string(l))
-
 		t.Fatal(string(out))
 	}
 	if strings.Contains(string(out), "No such file or directory") {
