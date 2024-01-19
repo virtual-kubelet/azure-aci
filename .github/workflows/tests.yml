@@ -18,6 +18,12 @@ env:
   # Common versions
   GO_VERSION: '1.20'
 
+permissions:
+  pull-requests: write
+  contents: read
+  actions: read
+  deployments: read
+
 jobs:
   unit-tests:
     runs-on: ubuntu-20.04

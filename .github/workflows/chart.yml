@@ -9,6 +9,9 @@ on:
 
 permissions:
   contents: write
+  actions: read
+  deployments: read
+  contents: read
 
 jobs:
   publish-helm-chart:
