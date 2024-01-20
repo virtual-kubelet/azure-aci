@@ -95,7 +95,7 @@ func TestPodWithMultiVolume(t *testing.T) {
 	}
 	t.Log("success create pod with multi-volume")
 
-	cmd = kubectl("exec", "pod/vk-e2e-volume", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
+	cmd = kubectl("exec", "pod/vk-e2e-volume", "-c", "hpa-example", "--namespace=vk-test", "--", "ls /var/run/secrets/kubernetes.io/serviceaccount")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatal(string(out))
