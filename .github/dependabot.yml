@@ -1,11 +1,4 @@
 version: 2
-
-permissions:
-  pull-requests: write
-  security-events: write
-  contents: read
-  actions: read
-
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
