@@ -10,7 +10,9 @@ on:
 permissions:
   contents: write
   packages: write
-
+  actions: read
+  deployments: read
+  pull-requests: read
 
 env:
   REGISTRY: ghcr.io

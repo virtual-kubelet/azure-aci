@@ -8,6 +8,11 @@ on:
       - labeled
       - unlabeled
 
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+
 jobs:
   check:
     runs-on: ubuntu-latest

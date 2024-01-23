@@ -20,8 +20,10 @@ env:
   E2E_IMG_TAG: "e2e-ci"
 
 permissions:
-   id-token: write
-   contents: read
+  id-token: write
+  contents: read
+  actions: read
+  deployments: read
 
 jobs:
   e2e-tests:

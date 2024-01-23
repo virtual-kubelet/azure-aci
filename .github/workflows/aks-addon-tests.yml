@@ -20,6 +20,8 @@ env:
 permissions:
   id-token: write # This is required for requesting the JWT
   contents: read # This is required for actions/checkout
+  actions: read #This is required for reading environment variables
+  deployments: read #This is required for reading deployment status
 
 jobs:
   aks-addon-e2e-tests:

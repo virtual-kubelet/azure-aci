@@ -6,6 +6,11 @@ on:
       - '**.md'
       - 'docs/**'
 
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+
 jobs:
   markdown-link-check:
     runs-on: ubuntu-latest
