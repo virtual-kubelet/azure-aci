@@ -58,6 +58,9 @@ func TestPodWithInitConfidentialContainer(t *testing.T) {
 		cmd = kubectl("get", "--raw", "/apis/metrics.k8s.io/v1beta1/namespaces/vk-test/pods/confidential-container-sevsnp")
 		out, err := cmd.CombinedOutput()
 		if time.Now().After(deadline) {
+			c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=20")
+			l, _ := c.CombinedOutput()
+			t.Log(string(l))
 			t.Fatal("failed to query pod's stats from metrics server API")
 		}
 		if err == nil {
