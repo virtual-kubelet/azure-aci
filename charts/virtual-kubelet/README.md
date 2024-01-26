@@ -23,7 +23,7 @@ $ cd helm
 2. Install chart using Helm v3.0+
 
 ```shell
-$ export RELEASE_TAG=1.6.0
+$ export RELEASE_TAG=1.6.1
 $ export CHART_NAME=virtual-kubelet-azure-aci
 $ export VK_RELEASE=$CHART_NAME-$RELEASE_TAG
 $ export NODE_NAME=virtual-kubelet-aci
