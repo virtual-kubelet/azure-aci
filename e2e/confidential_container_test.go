@@ -13,6 +13,10 @@ import (
 )
 
 func TestPodWithInitConfidentialContainer(t *testing.T) {
+	c := kubectl("logs", "-l", "app=aci-connector-linux", "--namespace=kube-system", "--tail=20")
+	l, _ := c.CombinedOutput()
+	t.Log(string(l))
+
 	ctx := context.TODO()
 	enabledFeatures := featureflag.InitFeatureFlag(ctx)
 	if !enabledFeatures.IsEnabled(ctx, featureflag.ConfidentialComputeFeature) {
