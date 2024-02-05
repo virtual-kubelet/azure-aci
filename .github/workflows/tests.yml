@@ -45,7 +45,7 @@ jobs:
           make unit-tests
 
       - name: Upload Codecov report
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           ## Comma-separated list of files to upload
           files: ./coverage.txt
