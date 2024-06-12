@@ -10,7 +10,7 @@ spec:
     imagePullPolicy: Always
     name: busybox
     command:  [
-      "sh",
+      "/bin/sh",
       "-c",
       "sleep 10; while sleep 0.01; do wget -q -O- http://127.0.0.1; done",
     ]
