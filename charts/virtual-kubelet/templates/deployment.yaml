@@ -21,6 +21,10 @@ spec:
         - name: init-validation
           image: "{{ .Values.initImage.repository }}/{{ .Values.initImage.name }}:{{ .Values.initImage.initTag }}"
           imagePullPolicy: {{ .Values.initImage.pullPolicy }}
+          securityContext:
+            capabilities:
+              drop:
+              - ALL
           env:
           - name: KUBELET_PORT
             value: "10250"
@@ -111,6 +115,10 @@ spec:
       - name: {{ template "vk.fullname" . }}
         image: "{{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+          capabilities:
+            drop:
+            - ALL
         env:
         - name: KUBELET_PORT
           value: "10250"
