@@ -4,10 +4,10 @@ metadata:
   name: {{ include "vk.fullname" . }}-clusterrole
 rules:
 - apiGroups: [""]
-  resources: ["pods"]
+  resources: ["pods, nodes"]
   verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
 - apiGroups: [""]
-  resources: ["nodes", "pods/status", "nodes/status"]
+  resources: ["pods/status", "nodes/status"]
   verbs: ["get", "list", "watch", "update"]
 - apiGroups: [""]
   resources: ["persistentvolumes", "persistentvolumeclaims", "replicationcontrollers", "namespaces", "configmaps", "secrets"]
