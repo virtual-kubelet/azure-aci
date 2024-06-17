@@ -10,7 +10,7 @@ rules:
   resources: ["nodes", "pods/status", "nodes/status"]
   verbs: ["get", "list", "watch", "update"]
 - apiGroups: [""]
-  resources: ["persistentvolumes", "persistentvolumeclaims", "replicationcontrollers", "namespaces"]
+  resources: ["persistentvolumes", "persistentvolumeclaims", "replicationcontrollers", "namespaces", "configmaps", "secrets"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [ "" ]
   resources: [ "services" ]
