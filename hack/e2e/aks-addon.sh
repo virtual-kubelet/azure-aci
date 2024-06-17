@@ -177,40 +177,40 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_NODE_NAME"
 export TEST_NODE_NAME
 
 ## Windows VK
-# helm install \
-#     --kubeconfig="${KUBECONFIG}" \
-#     --set nodeOsType=Windows \
-#     --set "image.repository=${IMG_URL}"  \
-#     --set "image.tag=${IMG_TAG}" \
-#     --set "image.name=${IMG_REPO}" \
-#     --set "initImage.repository=${IMG_URL}"  \
-#     --set "initImage.name=${INIT_IMG_REPO}" \
-#     --set "initImage.tag=${INIT_IMG_TAG}" \
-#     --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
-#     --set "providers.azure.masterUri=$MASTER_URI" \
-#     --set "providers.azure.managedIdentityID=$ACI_USER_IDENTITY" \
-#     "$WIN_CHART_NAME" \
-#     ./charts/virtual-kubelet
+helm install \
+    --kubeconfig="${KUBECONFIG}" \
+    --set nodeOsType=Windows \
+    --set "image.repository=${IMG_URL}"  \
+    --set "image.tag=${IMG_TAG}" \
+    --set "image.name=${IMG_REPO}" \
+    --set "initImage.repository=${IMG_URL}"  \
+    --set "initImage.name=${INIT_IMG_REPO}" \
+    --set "initImage.tag=${INIT_IMG_TAG}" \
+    --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
+    --set "providers.azure.masterUri=$MASTER_URI" \
+    --set "providers.azure.managedIdentityID=$ACI_USER_IDENTITY" \
+    "$WIN_CHART_NAME" \
+    ./charts/virtual-kubelet
 
-# kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=500s
+kubectl wait --for=condition=available deploy "${TEST_WINDOWS_NODE_NAME}-virtual-kubelet-azure-aci" -n vk-azure-aci --timeout=500s
 
-# while true; do
-#     kubectl get node "$TEST_WINDOWS_NODE_NAME" &> /dev/null && break
-#     sleep 3
-# done
+while true; do
+    kubectl get node "$TEST_WINDOWS_NODE_NAME" &> /dev/null && break
+    sleep 3
+done
 
-# kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
+kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
 
-# export TEST_WINDOWS_NODE_NAME=$TEST_WINDOWS_NODE_NAME
+export TEST_WINDOWS_NODE_NAME=$TEST_WINDOWS_NODE_NAME
 
 ## CSI Driver test
-az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
-export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g "$RESOURCE_GROUP" -o tsv)
+# az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
+# export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g "$RESOURCE_GROUP" -o tsv)
 
-az storage share create -n "$CSI_DRIVER_SHARE_NAME" --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
-CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group "$RESOURCE_GROUP" --account-name "$CSI_DRIVER_STORAGE_ACCOUNT_NAME" --query "[0].value" -o tsv)
+# az storage share create -n "$CSI_DRIVER_SHARE_NAME" --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
+# CSI_DRIVER_STORAGE_ACCOUNT_KEY=$(az storage account keys list --resource-group "$RESOURCE_GROUP" --account-name "$CSI_DRIVER_STORAGE_ACCOUNT_NAME" --query "[0].value" -o tsv)
 
-export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
-export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
+# export CSI_DRIVER_STORAGE_ACCOUNT_NAME=$CSI_DRIVER_STORAGE_ACCOUNT_NAME
+# export CSI_DRIVER_STORAGE_ACCOUNT_KEY=$CSI_DRIVER_STORAGE_ACCOUNT_KEY
 
 $@
