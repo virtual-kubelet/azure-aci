@@ -12,7 +12,7 @@ rules:
     verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["pods/status", "nodes/status"]
-    verbs: ["get", "list", "watch", "update"]
+    verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: [""]
     resources: ["persistentvolumes", "persistentvolumeclaims", "replicationcontrollers", "namespaces", "configmaps", "secrets", "services"]
     verbs: ["get", "list", "watch"]
