@@ -35,7 +35,7 @@ E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
-INIT_IMG_TAG ?= 0.2.0
+INIT_IMG_TAG ?= $(INIT_CONTAINER_VERSION)
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 VERSION_FLAGS := "-ldflags=-X main.buildVersion=$(IMG_TAG) -X main.buildTime=$(BUILD_DATE)"
@@ -161,8 +161,11 @@ test-loganalytics-json:
 .PHONY: release-manifest
 release-manifest:
 	@sed -i -e 's/^VERSION ?= .*/VERSION ?= ${VERSION}/' ./Makefile
+	@sed -i -e 's/^INIT_IMG_TAG ?= .*/INIT_IMG_TAG ?= ${INIT_IMG_TAG}/' ./Makefile
 	@sed -i -e "s/version: .*/version: ${IMG_TAG}/" ./charts/virtual-kubelet/Chart.yaml
 	@sed -i -e "s/tag: .*/tag: ${IMG_TAG}/" ./charts/virtual-kubelet/values.yaml
+	@sed -i -e "s/initTag: .*/initTag: ${INIT_IMG_TAG}/" ./charts/virtual-kubelet/values.yaml
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./charts/virtual-kubelet/README.md
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' ./docs/UPGRADE-README.md
+	@sed -i -e 's/INIT_IMG_TAG=.*/INIT_IMG_TAG=${INIT_IMG_TAG}/' ./docs/UPGRADE-README.md
 	@sed -i -e 's/RELEASE_TAG=.*/RELEASE_TAG=${IMG_TAG}/' README.md

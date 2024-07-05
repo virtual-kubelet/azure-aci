@@ -6,6 +6,10 @@ on:
       release_version:
         description: 'Which version are we creating a release pull request for?'
         required: true
+      init_container_version:
+        description: 'Which init container version are we creating a release pull request for?'
+        required: true
+        default: v0.3.0
       based_on_branch:
         description: 'Which branch should we base the release pull request on?'
         required: true
@@ -19,12 +23,14 @@ permissions:
 
 jobs:
   create-release-pull-request:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: validate version
         run: |
           echo "${{ github.event.inputs.release_version }}" | grep -E 'v[0-9]+\.[0-9]+\.[0-9]+$'
-          echo "${{ github.event.inputs.based_on_branch }}" | grep -E '^(master|release-[0-9]+\.[0-9]+)$'
+          echo "${{ github.event.inputs.init_container_version }}" | grep -E 'v[0-9]+\.[0-9]+\.[0-9]+$'
+          echo "${{ github.event.inputs.based_on_branch }}" | grep -E '^(master|release-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+\.[0-9]+)$'
+
       - uses: actions/checkout@v4
         with:
           submodules: true
@@ -37,10 +43,11 @@ jobs:
         run: make release-manifest
         env:
           VERSION: "${{ github.event.inputs.release_version }}"
+          INIT_CONTAINER_VERSION: "${{ github.event.inputs.init_container_version }}"
       - name: Create release pull request
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "release: update manifest and helm charts for ${{ github.event.inputs.release_version }}"
           title: "release: update manifest and helm charts for ${{ github.event.inputs.release_version }}"
-          branch: "release-${{ github.event.inputs.release_version }}"
+          branch: "release-${{ github.event.inputs.release_version }}-${{ github.event.inputs.init_container_version }}"
           base: ${{ github.event.inputs.based_on_branch }}

@@ -1,9 +1,7 @@
-name: Create release & Publish the image
+name: Create release
 on:
-  workflow_dispatch:
   pull_request:
     branches:
-      - master
       - release-**
     types: [ closed ]
 
@@ -11,36 +9,59 @@ permissions:
   contents: write
   packages: write
   actions: read
-  deployments: read
   pull-requests: read
 
 env:
   REGISTRY: ghcr.io
   # Common versions
   GO_VERSION: '1.20'
-  IMAGE_NAME: 'virtual-kubelet'
-  INIT_IMAGE_NAME: 'init-validation'
 
 jobs:
   create-release:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'update manifest and helm charts')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get-tag.outputs.tag }}
     steps:
       - name: Set up Go ${{ env.GO_VERSION }}
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION  }}
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
+
       - id: get-tag
         name: Get tag
-        run: echo "tag=$(echo ${{ github.event.pull_request.head.ref }} | tr -d release-)" >> $GITHUB_OUTPUT
-      - name: Create tag
         run: |
-          git tag ${{ steps.get-tag.outputs.tag }}
+          echo "tag=$(echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep 'v[0-9]\.[0-9]\.[0-9]' | head -n 1)" >> $GITHUB_OUTPUT
+
+      - id: check-tag
+        name: Check for Tag
+        run: |
+          TAG=$(echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep 'v[0-9]\.[0-9]\.[0-9]' | head -n 1)" >> $GITHUB_OUTPUT
+
+          if git show-ref --tags --verify --quiet "refs/tags/${TAG}"; then
+            echo "create_tag=$(echo 'false' )" >> $GITHUB_OUTPUT
+          else
+            echo "create_tag=$(echo 'true' )" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 'Create tag'
+        if: steps.check-tag.outputs.create_tag == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{ steps.get-tag.outputs.tag }}',
+              sha: context.sha
+            })
+
       - name: Goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -50,7 +71,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   export-registry:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
+    needs:
+      - create-release
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -59,65 +82,16 @@ jobs:
           # registry must be in lowercase
           echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
 
-  publish-images:
-    if: github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'update manifest and helm charts')
-    needs:
-    - export-registry
-    - create-release
-    env:
-      REGISTRY: ${{ needs.export-registry.outputs.registry }}
-      INIT_IMG_TAG : 0.2.0
-    runs-on: ubuntu-20.04
-    steps:
-      - id: get-tag
-        name: Get tag
-        run: echo "tag=$(echo ${{ github.event.pull_request.head.ref }} | tr -d release-)" >> $GITHUB_OUTPUT
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-          fetch-depth: 0
-          ref: ${{ steps.get-tag.outputs.tag }}
-      - name: Login to ${{ env.REGISTRY }}
-        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Set Image tag
-        run: |
-          ver=${{ steps.get-tag.outputs.tag }}
-          echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
-      - name: Build and push image
-        run: |
-          OUTPUT_TYPE=type=registry make docker-build-image
-          OUTPUT_TYPE=type=registry make docker-build-init-image
-        env:
-          VERSION: ${{ env.IMG_TAG }}
+  publish-image:
+    needs: [export-registry]
+    uses: ./.github/workflows/publish-image.yml
+    with:
+      registry: ${{ needs.export-registry.outputs.registry }}
+      release_version: echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep 'v[0-9]\.[0-9]\.[0-9]' | head -n 1
 
-      - name: Scan ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-          timeout: '5m0s'
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Scan ${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
-          format: 'table'
-          exit-code: '1'
-          ignore-unfixed: true
-          vuln-type: 'os,library'
-          severity: 'CRITICAL,HIGH'
-          timeout: '5m0s'
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+  publish-init-validation-image:
+    needs: [export-registry]
+    uses: ./.github/workflows/publish-init-container-image.yml
+    with:
+      registry: ${{ needs.export-registry.outputs.registry }}
+      init_container_version: echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep 'v[0-9]\.[0-9]\.[0-9]' | sed -n '2p'
