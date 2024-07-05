@@ -1,0 +1,57 @@
+name: Publish the Azure Virtual Kubelet image
+on:
+  workflow_call:
+    inputs:
+      registry:
+        description: 'Which registry are we pushing the image to?'
+        required: true
+      release_version:
+        description: 'Which version are we creating an image for?'
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
+env:
+  REGISTRY: ghcr.io
+  # Common versions
+  GO_VERSION: '1.20'
+  IMAGE_NAME: 'virtual-kubelet'
+
+jobs:
+  publish-images:
+    env:
+      REGISTRY: ${{ github.event.client_payload.registry }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to ${{ env.REGISTRY }}
+        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set Image tag
+        run: |
+          ver=${{ github.event.client_payload.release_version }}
+          echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
+      - name: Build and push image
+        run: |
+          OUTPUT_TYPE=type=registry make docker-build-image
+        env:
+          VERSION: ${{ env.IMG_TAG }}
+
+      - name: Scan ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}"
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          timeout: '5m0s'
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

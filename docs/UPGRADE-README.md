@@ -25,6 +25,7 @@ export CHART_NAME=virtual-kubelet-azure-aci-upgrade
 export VK_RELEASE=$CHART_NAME-$RELEASE_TAG
 export NODE_NAME=virtual-kubelet-aci-$RELEASE_TAG
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/gh-pages/charts/$VK_RELEASE.tgz
+export INIT_IMG_TAG=0.2.0
 export MASTER_URI=$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")
 export IMG_URL=mcr.microsoft.com
 export IMG_REPO=oss/virtual-kubelet/virtual-kubelet
@@ -62,6 +63,7 @@ helm install "$CHART_NAME" "$CHART_URL" \
     --set image.repository=$IMG_URL  \
     --set image.name=$IMG_REPO \
     --set image.tag=$IMG_TAG \
+    --set initImage.initImage=$INIT_IMG_TAG \
     --set providers.azure.masterUri=$MASTER_URI \
     --set providers.azure.vnet.enabled=$ENABLE_VNET \
     --set providers.azure.vnet.subnetName=$VIRTUAL_NODE_SUBNET_NAME \
