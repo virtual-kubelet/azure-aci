@@ -17,23 +17,22 @@ env:
   GO_VERSION: '1.20'
 
 jobs:
-  create-release:
+  check-tag:
     if: github.event.pull_request.merged == true && contains(github.event.pull_request.title, 'update manifest and helm charts')
     runs-on: ubuntu-latest
     outputs:
       release-tag: ${{ steps.set-tags.outputs.release-tag }}
       init-tag: ${{ steps.set-tags.outputs.init-tag }}
     steps:
-      - name: Set up Go ${{ env.GO_VERSION }}
-        uses: actions/setup-go@v5
+      - name: Harden Runner
+        uses: step-security/harden-runner@17d0e2bd7d51742c71671bd19fa12bdc9d40a3d6 # v2.8.1
         with:
-          go-version: ${{ env.GO_VERSION  }}
+          egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           fetch-depth: 0
-          submodules: true
 
       - id: set-tags
         name: set-tags
@@ -44,16 +43,14 @@ jobs:
       - id: check-tag
         name: Check for Tag
         run: |
-          TAG=$(echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep 'v[0-9]\.[0-9]\.[0-9]' | head -n 1)" >> $GITHUB_OUTPUT
-
-          if git show-ref --tags --verify --quiet "refs/tags/${TAG}"; then
+          if git show-ref --tags --verify --quiet "refs/tags/${{ steps.set-tags.outputs.release-tag }}"; then
             echo "create_tag=$(echo 'false' )" >> $GITHUB_OUTPUT
           else
             echo "create_tag=$(echo 'true' )" >> $GITHUB_OUTPUT
           fi
 
       - name: 'Create tag'
-        if: steps.check-tag.outputs.create_tag == 'true'
+        if:  steps.check-tag.outputs.create_tag == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -64,6 +61,23 @@ jobs:
               sha: context.sha
             })
 
+  create-release:
+    runs-on: ubuntu-latest
+    needs:
+      - check-tag
+    steps:
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION  }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          ref: ${{ needs.check-tag.outputs.release-tag }}
+
       - name: Goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -71,11 +85,10 @@ jobs:
           args: release --rm-dist --timeout 60m --debug
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG:  ${{ needs.check-tag.outputs.release-tag }}
 
   export-registry:
     runs-on: ubuntu-latest
-    needs:
-      - create-release
     outputs:
       registry: ${{ steps.export.outputs.registry }}
     steps:
@@ -85,15 +98,19 @@ jobs:
           echo "::set-output name=registry::$(echo "${{ env.REGISTRY }}/${{ github.repository }}" | tr [:upper:] [:lower:])"
 
   publish-image:
-    needs: [export-registry]
+    needs:
+      - check-tag
+      - export-registry
     uses: ./.github/workflows/publish-image.yml
     with:
       registry: ${{ needs.export-registry.outputs.registry }}
-      release_version: ${{ steps.set-tags.outputs.release-tag }}
+      release_version: ${{ needs.check-tag.outputs.release-tag }}
 
   publish-init-validation-image:
-    needs: [export-registry]
+    needs:
+      - check-tag
+      - export-registry
     uses: ./.github/workflows/publish-init-container-image.yml
     with:
       registry: ${{ needs.export-registry.outputs.registry }}
-      init_container_version: ${{ steps.set-tags.outputs.init-tag }}
+      init_container_version: ${{ needs.check-tag.outputs.init-tag }}

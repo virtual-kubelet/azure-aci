@@ -10,7 +10,6 @@ on:
         description: 'Which init container version are we creating an image for?'
         required: true
         type: string
-        default: v0.3.0
 
 permissions:
   contents: write
