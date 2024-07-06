@@ -4,10 +4,12 @@ on:
     inputs:
       registry:
         description: 'Which registry are we pushing the image to?'
+        type: string
         required: true
       init_container_version:
         description: 'Which init container version are we creating an image for?'
         required: true
+        type: string
         default: v0.3.0
 
 permissions:
@@ -48,7 +50,7 @@ jobs:
         run: |
           OUTPUT_TYPE=type=registry make docker-build-init-image
         env:
-          INIT_CONTAINER_VERSION: ${{ env.INIT_IMG_TAG }}
+          INIT_IMG_TAG: ${{ env.INIT_IMG_TAG }}
 
       - name: Scan ${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
         uses: aquasecurity/trivy-action@master

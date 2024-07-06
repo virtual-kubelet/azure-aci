@@ -35,7 +35,7 @@ E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
-INIT_IMG_TAG ?= $(INIT_CONTAINER_VERSION)
+INIT_IMG_TAG ?= 0.2.0
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 VERSION_FLAGS := "-ldflags=-X main.buildVersion=$(IMG_TAG) -X main.buildTime=$(BUILD_DATE)"
