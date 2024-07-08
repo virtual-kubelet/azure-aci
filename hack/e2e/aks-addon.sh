@@ -20,7 +20,7 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=aks-addon-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=eastus2}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=aks-addon--test}"
@@ -35,6 +35,7 @@ fi
 : "${CLUSTER_SUBNET_CIDR=10.240.0.0/16}"
 : "${ACI_SUBNET_CIDR=10.241.0.0/16}"
 : "${VNET_NAME=aksAddonVN}"
+: "${NSG_NAME=aksAddonNSG}"
 : "${CLUSTER_SUBNET_NAME=aksAddonsubnet}"
 : "${ACI_SUBNET_NAME=acisubnet}"
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
@@ -96,10 +97,14 @@ az network vnet create \
     --subnet-name $CLUSTER_SUBNET_NAME \
     --subnet-prefix $CLUSTER_SUBNET_CIDR
 
+az network nsg create \
+    --resource-group $RESOURCE_GROUP \
+    --name $NSG_NAME
+
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
-    --network-security-group $VNET_NAME-nsg \
+    --network-security-group $NSG_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_CIDR \
     --query id -o tsv)"
@@ -115,7 +120,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
+    --node-vm-size standard_d8s_v3 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$cluster_subnet_id" \
