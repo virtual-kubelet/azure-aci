@@ -99,6 +99,7 @@ az network vnet create \
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
+    --network-security-group $VNET_NAME-nsg \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_CIDR \
     --query id -o tsv)"
