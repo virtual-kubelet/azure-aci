@@ -35,6 +35,7 @@ fi
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
 : "${VNET_NAME=myAKSVNet}"
+: "${NSG_NAME=myAKSNSG}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
 : "${ACR_NAME=vkacr$RANDOM_NUM}"
@@ -96,10 +97,14 @@ az network vnet create \
     --subnet-name $CLUSTER_SUBNET_NAME \
     --subnet-prefix $CLUSTER_SUBNET_RANGE
 
+az network nsg create \
+    --resource-group $RESOURCE_GROUP \
+    --name $NSG_NAME
+
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
-    --network-security-group $VNET_NAME-nsg \
+    --network-security-group $NSG_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_RANGE \
     --query id -o tsv)"
@@ -122,7 +127,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
+    --node-vm-size standard_d8s_v3 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$aks_subnet_id" \
@@ -138,7 +143,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
+    --node-vm-size standard_d8s_v3 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$aks_subnet_id" \
