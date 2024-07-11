@@ -120,7 +120,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_d4s_v3 \
+    --node-vm-size standard_ds3_v2 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$cluster_subnet_id" \
@@ -134,7 +134,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_d4s_v3 \
+    --node-vm-size standard_ds3_v2 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$cluster_subnet_id" \
