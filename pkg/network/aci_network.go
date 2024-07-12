@@ -161,23 +161,23 @@ func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, 
 		}
 		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
 			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
+		} else if len(currentSubnet.Properties.AddressPrefixes) > 0 {
+
+			firstPrefix := currentSubnet.Properties.AddressPrefixes[0]
+			if pn.SubnetCIDR == "" {
+				pn.SubnetCIDR = firstPrefix
+			}
+			if pn.SubnetCIDR != firstPrefix {
+				return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, firstPrefix, pn.SubnetCIDR)
+			}
+		} else {
+			return false, fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName)
 		}
-	} else if len(currentSubnet.Properties.AddressPrefixes) > 0 {
-		// Assuming we want to use the first address prefix if available
-		firstPrefix := currentSubnet.Properties.AddressPrefixes[0]
-		if pn.SubnetCIDR == "" {
-			pn.SubnetCIDR = firstPrefix
+
+		if currentSubnet.Properties.RouteTable != nil {
+			return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
 		}
-		if pn.SubnetCIDR != firstPrefix {
-			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, firstPrefix, pn.SubnetCIDR)
-		}
-	} else {
-		return false, fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName)
-	}
-	
-	if currentSubnet.Properties.RouteTable != nil {
-		return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
-	}
+
 		if currentSubnet.Properties.ServiceAssociationLinks != nil {
 			for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
 				if l.Properties != nil && l.Properties.LinkedResourceType != nil {
