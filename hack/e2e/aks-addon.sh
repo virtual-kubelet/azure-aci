@@ -101,14 +101,19 @@ az network nsg create \
     --resource-group $RESOURCE_GROUP \
     --name $NSG_NAME
 
-aci_subnet_id="$(az network vnet subnet create \
+az network vnet subnet update \
+    --resource-group $RESOURCE_GROUP \
+    --vnet-name $VNET_NAME \
+    --name $CLUSTER_SUBNET_NAME \
+    --network-security-group $NSG_NAME
+
+az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --network-security-group $NSG_NAME \
     --name $ACI_SUBNET_NAME \
-    --address-prefix $ACI_SUBNET_CIDR \
-    --query id -o tsv)"
-
+    --address-prefix $ACI_SUBNET_CIDR 
+    
 cluster_subnet_id="$(az network vnet subnet show \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
@@ -120,7 +125,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_ds3_v2 \
+    --node-vm-size standard_d8_v3 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$cluster_subnet_id" \
@@ -134,7 +139,7 @@ az aks create \
     -g "$RESOURCE_GROUP" \
     -l "$LOCATION" \
     -c "$NODE_COUNT" \
-    --node-vm-size standard_ds3_v2 \
+    --node-vm-size standard_d8_v3 \
     -n "$CLUSTER_NAME" \
     --network-plugin azure \
     --vnet-subnet-id "$cluster_subnet_id" \

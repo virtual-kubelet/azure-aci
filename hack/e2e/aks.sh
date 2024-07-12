@@ -101,6 +101,12 @@ az network nsg create \
     --resource-group $RESOURCE_GROUP \
     --name $NSG_NAME
 
+az network vnet subnet update \
+    --resource-group $RESOURCE_GROUP \
+    --vnet-name $VNET_NAME \
+    --name $CLUSTER_SUBNET_NAME \
+    --network-security-group $NSG_NAME
+
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
