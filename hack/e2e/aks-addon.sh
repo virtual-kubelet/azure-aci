@@ -35,7 +35,7 @@ fi
 : "${CLUSTER_SUBNET_CIDR=10.240.0.0/16}"
 : "${ACI_SUBNET_CIDR=10.241.0.0/16}"
 : "${VNET_NAME=aksAddonVN}"
-: "${NSG_NAME=aksAddonNSG}"
+# : "${NSG_NAME=aksAddonNSG}"
 : "${CLUSTER_SUBNET_NAME=aksAddonsubnet}"
 : "${ACI_SUBNET_NAME=acisubnet}"
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
@@ -97,23 +97,23 @@ az network vnet create \
     --subnet-name $CLUSTER_SUBNET_NAME \
     --subnet-prefix $CLUSTER_SUBNET_CIDR
 
-az network nsg create \
-    --resource-group $RESOURCE_GROUP \
-    --name $NSG_NAME
+# az network nsg create \
+#     --resource-group $RESOURCE_GROUP \
+#     --name $NSG_NAME
 
-az network vnet subnet update \
-    --resource-group $RESOURCE_GROUP \
-    --vnet-name $VNET_NAME \
-    --name $CLUSTER_SUBNET_NAME \
-    --network-security-group $NSG_NAME
+# az network vnet subnet update \
+#     --resource-group $RESOURCE_GROUP \
+#     --vnet-name $VNET_NAME \
+#     --name $CLUSTER_SUBNET_NAME \
+#     --network-security-group $NSG_NAME
 
 az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
-    --network-security-group $NSG_NAME \
+    # --network-security-group $NSG_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_CIDR 
-    
+
 cluster_subnet_id="$(az network vnet subnet show \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
