@@ -110,9 +110,9 @@ az network vnet create \
 az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
-    # --network-security-group $NSG_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_CIDR 
+     # --network-security-group $NSG_NAME \
 
 cluster_subnet_id="$(az network vnet subnet show \
     --resource-group $RESOURCE_GROUP \
