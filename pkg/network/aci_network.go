@@ -134,11 +134,9 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 		return err
 	}
 
-	if err == nil {
-		createSubnet, err = pn.shouldCreateSubnet(currentSubnet, createSubnet)
-		if err != nil {
-			return err
-		}
+	createSubnet, err = pn.shouldCreateSubnet(currentSubnet, createSubnet)
+	if err != nil {
+		return err
 	}
 
 	if createSubnet {
@@ -155,34 +153,46 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 }
 
 func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, createSubnet bool) (bool, error) {
-	if currentSubnet.Properties.AddressPrefix != nil {
+	//check if addressPrefix has been set
+	if currentSubnet.Properties.AddressPrefix != nil && len(*currentSubnet.Properties.AddressPrefix) > 0 {
 		if pn.SubnetCIDR == "" {
 			pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
 		}
 		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
 			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
 		}
-		if currentSubnet.Properties.RouteTable != nil {
-			return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+	} else if len(currentSubnet.Properties.AddressPrefixes) > 0 { // else check if addressPrefixes array has been set
+		firstPrefix := currentSubnet.Properties.AddressPrefixes[0]
+		if pn.SubnetCIDR == "" {
+			pn.SubnetCIDR = *firstPrefix
 		}
-		if currentSubnet.Properties.ServiceAssociationLinks != nil {
-			for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
-				if l.Properties != nil && l.Properties.LinkedResourceType != nil {
-					if *l.Properties.LinkedResourceType == subnetDelegationService {
-						createSubnet = false
-						break
-					} else {
-						return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
-					}
-				}
-			}
-		} else {
-			for _, d := range currentSubnet.Properties.Delegations {
-				if d.Properties != nil && d.Properties.ServiceName != nil &&
-					*d.Properties.ServiceName == subnetDelegationService {
+		if pn.SubnetCIDR != *firstPrefix {
+			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *firstPrefix, pn.SubnetCIDR)
+		}
+	} else {
+		return false, fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName)
+	}
+
+	if currentSubnet.Properties.RouteTable != nil {
+		return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+	}
+	if currentSubnet.Properties.ServiceAssociationLinks != nil {
+		for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
+			if l.Properties != nil && l.Properties.LinkedResourceType != nil {
+				if *l.Properties.LinkedResourceType == subnetDelegationService {
 					createSubnet = false
 					break
+				} else {
+					return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
 				}
+			}
+		}
+	} else {
+		for _, d := range currentSubnet.Properties.Delegations {
+			if d.Properties != nil && d.Properties.ServiceName != nil &&
+				*d.Properties.ServiceName == subnetDelegationService {
+				createSubnet = false
+				break
 			}
 		}
 	}
@@ -249,6 +259,9 @@ func (pn *ProviderNetwork) CreateACISubnet(ctx context.Context, subnetsClient *a
 		Name: &pn.SubnetName,
 		Properties: &aznetworkv2.SubnetPropertiesFormat{
 			AddressPrefix: &pn.SubnetCIDR,
+			AddressPrefixes: []*string{
+				&pn.SubnetCIDR,
+			},
 			Delegations: []*aznetworkv2.Delegation{
 				{
 					Name: &delegationName,

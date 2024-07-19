@@ -170,10 +170,20 @@ func TestShouldCreateSubnet(t *testing.T) {
 		expectedAssertions func(result bool) bool
 	}{
 		{
-			description:        "can create a subnet because all the checks pass",
+			description:        "can create a subnet with address prefix set",
 			providerSubnetCIDR: "",
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &fakeAddPrefix,
+			},
+			expectedAssertions: func(result bool) bool {
+				return assert.Equal(t, result, true, "subnet should be created")
+			},
+		},
+		{
+			description:        "can create a subnet with address prefixes set ",
+			providerSubnetCIDR: "",
+			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefixes: []*string{&fakeAddPrefix},
 			},
 			expectedAssertions: func(result bool) bool {
 				return assert.Equal(t, result, true, "subnet should be created")
@@ -210,6 +220,12 @@ func TestShouldCreateSubnet(t *testing.T) {
 			expectedAssertions: func(result bool) bool {
 				return assert.Equal(t, result, false, "subnet should not be created because subnet is being delegated to Microsoft.ContainerInstance/containerGroups")
 			},
+		},
+		{
+			description:        "cannot create a subnet because both address prefix and address prefixes are missing ",
+			providerSubnetCIDR: "",
+			subnetProperties:   aznetworkv2.SubnetPropertiesFormat{},
+			expectedError:      fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName),
 		},
 		{
 			description:        "cannot create a subnet because Microsoft.ContainerInstance/containerGroups can't be delegated to the subnet",
