@@ -35,7 +35,7 @@ fi
 : "${CLUSTER_SUBNET_CIDR=10.240.0.0/16}"
 : "${ACI_SUBNET_CIDR=10.241.0.0/16}"
 : "${VNET_NAME=aksAddonVN}"
- : "${NSG_NAME=aksAddonNSG}"
+: "${NSG_NAME=aksAddonNSG}"
 : "${CLUSTER_SUBNET_NAME=aksAddonsubnet}"
 : "${ACI_SUBNET_NAME=acisubnet}"
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
@@ -165,7 +165,7 @@ az network nsg rule create \
     --source-port-range '*' \
     --destination-address-prefix '*' \
     --destination-port-range '*'
-    
+
 cluster_subnet_id="$(az network vnet subnet show \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
