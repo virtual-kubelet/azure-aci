@@ -246,7 +246,7 @@ func (pn *ProviderNetwork) CreateACISubnet(ctx context.Context, subnetsClient *a
 	defer span.End()
 
 	logger.Debug("creating a subnet")
-
+	logger.Info("NSG info: ", *pn.NetworkSecurityGroup)
 	subnet := aznetworkv2.Subnet{
 		Name: &pn.SubnetName,
 		Properties: &aznetworkv2.SubnetPropertiesFormat{
