@@ -6,14 +6,14 @@ metadata:
 spec:
   nodeName: vk-aci-test-aks
   initContainers:
-  - image: alpine
+  - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     name: init-container-01
     command: [ "/bin/sh" ]
     args: [ "-c", "echo Hi from init-container-01 >> /mnt/azure/newfile.txt" ]
     volumeMounts:
       - name: azure
         mountPath: /mnt/azure
-  - image: alpine
+  - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     name: init-container-02
     command: [ "/bin/sh" ]
     args: [ "-c", "echo Hi from init-container-02 >> /mnt/azure/newfile.txt" ]
@@ -21,7 +21,7 @@ spec:
       - name: azure
         mountPath: /mnt/azure
   containers:
-  - image: alpine
+  - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     imagePullPolicy: Always
     name: container
     command: [
