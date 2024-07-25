@@ -20,7 +20,7 @@ spec:
     - containerPort: 443
       name: https
       protocol: TCP
-  - image: busybox
+  - image: mcr.microsoft.com/cbl-mariner/busybox:1.35
     name: busybox
     imagePullPolicy: Always
     command: [
