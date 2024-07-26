@@ -42,12 +42,13 @@ var (
 )
 
 type ProviderNetwork struct {
-	VnetSubscriptionID string
-	VnetName           string
-	VnetResourceGroup  string
-	SubnetName         string
-	SubnetCIDR         string
-	KubeDNSIP          string
+	VnetSubscriptionID   string
+	VnetName             string
+	VnetResourceGroup    string
+	SubnetName           string
+	SubnetCIDR           string
+	KubeDNSIP            string
+	NetworkSecurityGroup *aznetworkv2.SecurityGroup
 }
 
 func (pn *ProviderNetwork) SetVNETConfig(ctx context.Context, azConfig *auth.Config) error {
@@ -134,6 +135,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 		return err
 	}
 
+	pn.NetworkSecurityGroup = currentSubnet.Properties.NetworkSecurityGroup
 	if err == nil {
 		createSubnet, err = pn.shouldCreateSubnet(currentSubnet, createSubnet)
 		if err != nil {
@@ -258,6 +260,7 @@ func (pn *ProviderNetwork) CreateACISubnet(ctx context.Context, subnetsClient *a
 					},
 				},
 			},
+			NetworkSecurityGroup: pn.NetworkSecurityGroup,
 		},
 	}
 

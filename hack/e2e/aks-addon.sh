@@ -35,6 +35,7 @@ fi
 : "${CLUSTER_SUBNET_CIDR=10.240.0.0/16}"
 : "${ACI_SUBNET_CIDR=10.241.0.0/16}"
 : "${VNET_NAME=aksAddonVN}"
+: "${NSG_NAME=aksAddonNSG}"
 : "${CLUSTER_SUBNET_NAME=aksAddonsubnet}"
 : "${ACI_SUBNET_NAME=acisubnet}"
 : "${ACR_NAME=aksaddonacr$RANDOM_NUM}"
@@ -53,13 +54,13 @@ fi
 
 TMPDIR=""
 
-cleanup() {
- az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
- if [ -n "$TMPDIR" ]; then
-     rm -rf "$TMPDIR"
- fi
-}
-trap 'cleanup' EXIT
+# cleanup() {
+#  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+#  if [ -n "$TMPDIR" ]; then
+#      rm -rf "$TMPDIR"
+#  fi
+# }
+# trap 'cleanup' EXIT
 
 
 check_aci_registered() {
@@ -92,16 +93,78 @@ TMPDIR="$(mktemp -d)"
 az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
-    --address-prefixes $VNET_RANGE \
-    --subnet-name $CLUSTER_SUBNET_NAME \
-    --subnet-prefix $CLUSTER_SUBNET_CIDR
+    --address-prefixes $VNET_RANGE 
 
-aci_subnet_id="$(az network vnet subnet create \
+az network nsg create \
+    --resource-group $RESOURCE_GROUP \
+    --location "$LOCATION" \
+    --name $NSG_NAME
+
+az network vnet subnet create \
+    --resource-group $RESOURCE_GROUP \
+    --vnet-name $VNET_NAME \
+    --name $CLUSTER_SUBNET_NAME \
+    --address-prefix $CLUSTER_SUBNET_CIDR \
+    --network-security-group $NSG_NAME
+
+az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_CIDR \
-    --query id -o tsv)"
+    --network-security-group $NSG_NAME 
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowClusterSubnetTraffic \
+    --priority 1000 \
+    --direction Inbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $CLUSTER_SUBNET_CIDR \
+    --source-port-range '*' \
+    --destination-address-prefix $CLUSTER_SUBNET_CIDR \
+    --destination-port-range '*'
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowClusterSubnetOutbound \
+    --priority 1100 \
+    --direction Outbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $CLUSTER_SUBNET_CIDR \
+    --source-port-range '*' \
+    --destination-address-prefix '*' \
+    --destination-port-range '*'
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowACISubnetTraffic \
+    --priority 1100 \
+    --direction Inbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $ACI_SUBNET_CIDR \
+    --source-port-range '*' \
+    --destination-address-prefix $ACI_SUBNET_CIDR \
+    --destination-port-range '*'
+    
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowACISubnetOutbound \
+    --priority 1300 \
+    --direction Outbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $ACI_SUBNET_CIDR \
+    --source-port-range '*' \
+    --destination-address-prefix '*' \
+    --destination-port-range '*'
 
 cluster_subnet_id="$(az network vnet subnet show \
     --resource-group $RESOURCE_GROUP \
