@@ -179,10 +179,7 @@ func (pn *ProviderNetwork) isCurSubnetValid(currentSubnet aznetworkv2.Subnet, is
 	if currentSubnet.Properties.ServiceAssociationLinks != nil {
 		for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
 			if l.Properties != nil && l.Properties.LinkedResourceType != nil {
-				if *l.Properties.LinkedResourceType == subnetDelegationService {
-					isValidSubnet = false
-					break
-				} else {
+				if *l.Properties.LinkedResourceType != subnetDelegationService {
 					return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
 				}
 			}
@@ -190,7 +187,7 @@ func (pn *ProviderNetwork) isCurSubnetValid(currentSubnet aznetworkv2.Subnet, is
 	} else {
 		for _, d := range currentSubnet.Properties.Delegations {
 			if d.Properties != nil && d.Properties.ServiceName != nil &&
-				*d.Properties.ServiceName == subnetDelegationService {
+				*d.Properties.ServiceName != subnetDelegationService {
 				isValidSubnet = false
 				break
 			}
