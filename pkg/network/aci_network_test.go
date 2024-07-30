@@ -140,7 +140,7 @@ func TestFormDNSNameserversFitsLimits(t *testing.T) {
 	}
 }
 
-func TestIsCurSubnetValid(t *testing.T) {
+func TestShouldCreateSubnet(t *testing.T) {
 	subnetName := "fakeSubnet"
 	fakeAddPrefix := "10.00.0/16"
 	providerSubnetCIDR := "10.00.0/17"
@@ -170,27 +170,17 @@ func TestIsCurSubnetValid(t *testing.T) {
 		expectedAssertions func(result bool) bool
 	}{
 		{
-			description:        "is a valid subnet with address prefix set",
+			description:        "can create a subnet because all the checks pass",
 			providerSubnetCIDR: "",
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &fakeAddPrefix,
 			},
 			expectedAssertions: func(result bool) bool {
-				return assert.Equal(t, result, true, "subnet is valid")
+				return assert.Equal(t, result, true, "subnet should be created")
 			},
 		},
 		{
-			description:        "is a valid subnet with address prefixes set ",
-			providerSubnetCIDR: "",
-			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
-				AddressPrefixes: []*string{&fakeAddPrefix},
-			},
-			expectedAssertions: func(result bool) bool {
-				return assert.Equal(t, result, true, "subnet is valid")
-			},
-		},
-		{
-			description:        "is a valid subnet because subnet is already linked to Microsoft.ContainerInstance/containerGroups",
+			description:        "doesn't create a subnet because subnet is already linked to Microsoft.ContainerInstance/containerGroups",
 			providerSubnetCIDR: "",
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &fakeAddPrefix,
@@ -202,11 +192,11 @@ func TestIsCurSubnetValid(t *testing.T) {
 					}},
 			},
 			expectedAssertions: func(result bool) bool {
-				return assert.Equal(t, result, true, "is a valid subnet because it's already linked to Microsoft.ContainerInstance/containerGroups")
+				return assert.Equal(t, result, false, "subnet should not be created because subnet already linked to Microsoft.ContainerInstance/containerGroups")
 			},
 		},
 		{
-			description:        "is a valid subnet because subnet is being delegated to Microsoft.ContainerInstance/containerGroups",
+			description:        "doesn't create a subnet because subnet is being delegated to Microsoft.ContainerInstance/containerGroups",
 			providerSubnetCIDR: "",
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &fakeAddPrefix,
@@ -218,17 +208,11 @@ func TestIsCurSubnetValid(t *testing.T) {
 					}},
 			},
 			expectedAssertions: func(result bool) bool {
-				return assert.Equal(t, result, true, "is a valid subnet because it's being delegated to Microsoft.ContainerInstance/containerGroups")
+				return assert.Equal(t, result, false, "subnet should not be created because subnet is being delegated to Microsoft.ContainerInstance/containerGroups")
 			},
 		},
 		{
-			description:        "is not a valid subnet because both address prefix and address prefixes are missing ",
-			providerSubnetCIDR: "",
-			subnetProperties:   aznetworkv2.SubnetPropertiesFormat{},
-			expectedError:      fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName),
-		},
-		{
-			description:        "is not a valid subnet because Microsoft.ContainerInstance/containerGroups can't be delegated to the subnet",
+			description:        "cannot create a subnet because Microsoft.ContainerInstance/containerGroups can't be delegated to the subnet",
 			providerSubnetCIDR: "",
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix:           &fakeAddPrefix,
@@ -237,7 +221,7 @@ func TestIsCurSubnetValid(t *testing.T) {
 			expectedError: fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, fakeServiceAssotiationLinks[0]),
 		},
 		{
-			description:        "is not a valid subnet because current subnet references a route table",
+			description:        "cannot create subnet because current subnet references a route table",
 			providerSubnetCIDR: "",
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &fakeAddPrefix,
@@ -247,7 +231,7 @@ func TestIsCurSubnetValid(t *testing.T) {
 			},
 			expectedError: fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, subnetName),
 		}, {
-			description:        "is not a valid subnet because provider subnet CIDR does not match with desired subnet",
+			description:        "cannot create subnet because provider subnet CIDR does not match with desired subnet",
 			providerSubnetCIDR: providerSubnetCIDR,
 			subnetProperties: aznetworkv2.SubnetPropertiesFormat{
 				AddressPrefix: &fakeAddPrefix,
@@ -260,7 +244,7 @@ func TestIsCurSubnetValid(t *testing.T) {
 			pn.SubnetCIDR = tc.providerSubnetCIDR
 			currentSubnet.Properties = &tc.subnetProperties
 
-			result, err := pn.isCurSubnetValid(currentSubnet, true)
+			result, err := pn.shouldCreateNewSubnet(currentSubnet, true)
 
 			if tc.expectedError != nil {
 				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")

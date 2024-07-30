@@ -133,17 +133,14 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 		return err
 	}
 
-	isValidSubnet := true
-	// check if the current subnet is valid
-	isValidSubnet, err = pn.isCurSubnetValid(currentSubnet, isValidSubnet)
+	createNewSubnet := true
+	// check if the current subnet is valid or if we need to create a new subnet
+	createNewSubnet, err = pn.shouldCreateNewSubnet(currentSubnet, createNewSubnet)
 	if err != nil {
 		return err
 	}
 
-	// if the subnet is not valid, we need to create a new subnet
-	isCreate := !isValidSubnet
-
-	err2 := pn.CreateOrUpdateACISubnet(ctx, subnetsClient, isCreate)
+	err2 := pn.CreateOrUpdateACISubnet(ctx, subnetsClient, createNewSubnet)
 	if err2 != nil {
 		return err2
 	}
@@ -152,7 +149,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func (pn *ProviderNetwork) isCurSubnetValid(currentSubnet aznetworkv2.Subnet, isValidSubnet bool) (bool, error) {
+func (pn *ProviderNetwork) shouldCreateNewSubnet(currentSubnet aznetworkv2.Subnet, createNewSubnet bool) (bool, error) {
 	//check if addressPrefix has been set
 	if currentSubnet.Properties.AddressPrefix != nil && len(*currentSubnet.Properties.AddressPrefix) > 0 {
 		if pn.SubnetCIDR == "" {
@@ -179,7 +176,10 @@ func (pn *ProviderNetwork) isCurSubnetValid(currentSubnet aznetworkv2.Subnet, is
 	if currentSubnet.Properties.ServiceAssociationLinks != nil {
 		for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
 			if l.Properties != nil && l.Properties.LinkedResourceType != nil {
-				if *l.Properties.LinkedResourceType != subnetDelegationService {
+				if *l.Properties.LinkedResourceType == subnetDelegationService {
+					createNewSubnet = false
+					break
+				} else {
 					return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
 				}
 			}
@@ -187,13 +187,13 @@ func (pn *ProviderNetwork) isCurSubnetValid(currentSubnet aznetworkv2.Subnet, is
 	} else {
 		for _, d := range currentSubnet.Properties.Delegations {
 			if d.Properties != nil && d.Properties.ServiceName != nil &&
-				*d.Properties.ServiceName != subnetDelegationService {
-				isValidSubnet = false
+				*d.Properties.ServiceName == subnetDelegationService {
+				createNewSubnet = false
 				break
 			}
 		}
 	}
-	return isValidSubnet, nil
+	return createNewSubnet, nil
 }
 
 func (pn *ProviderNetwork) GetACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) (aznetworkv2.Subnet, error) {
