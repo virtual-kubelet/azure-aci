@@ -128,7 +128,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	var rawResponse *http.Response
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
-	updateSubnet := true
+	updateSubnet := false
 	currentSubnet, err := pn.GetACISubnet(ctxWithResp, subnetsClient)
 	if err != nil {
 		return err
@@ -138,6 +138,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	if currentSubnet == (aznetworkv2.Subnet{}) {
 		createNewSubnet = true
 	} else {
+		updateSubnet = true
 		// check if the current subnet is valid or if we need to create a new subnet
 		updateSubnet, err = pn.shouldCreateSubnet(currentSubnet, updateSubnet)
 		if err != nil {
@@ -145,7 +146,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 		}
 	}
 
-	if updateSubnet {
+	if createNewSubnet || updateSubnet {
 		// decide whether to create a new subnet or update the existing one based on createNewSubnet bool
 		err2 := pn.CreateOrUpdateACISubnet(ctx, subnetsClient, createNewSubnet)
 		if err2 != nil {
@@ -166,8 +167,12 @@ func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, 
 		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
 			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
 		}
-	} else if len(currentSubnet.Properties.AddressPrefixes) > 0 { // else check if addressPrefixes array has been set
-		firstPrefix := currentSubnet.Properties.AddressPrefixes[0]
+	} else if currentSubnet.Properties.AddressPrefixes != nil && len(currentSubnet.Properties.AddressPrefixes) > 0 { // else check if addressPrefixes array has been set
+		var firstPrefix *string
+		if len(*currentSubnet.Properties.AddressPrefixes[0]) > 0 {
+			firstPrefix = currentSubnet.Properties.AddressPrefixes[0]
+		}
+
 		if pn.SubnetCIDR == "" {
 			pn.SubnetCIDR = *firstPrefix
 		}
@@ -175,7 +180,7 @@ func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, 
 			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *firstPrefix, pn.SubnetCIDR)
 		}
 	} else {
-		return false, fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName)
+		return false, fmt.Errorf("both AddressPrefix and AddressPrefixes field for subnet '%s' are empty or they have not been set", pn.SubnetName)
 	}
 
 	if currentSubnet.Properties.RouteTable != nil {

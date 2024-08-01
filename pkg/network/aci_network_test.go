@@ -225,7 +225,7 @@ func TestShouldCreateSubnet(t *testing.T) {
 			description:        "cannot create a subnet because both address prefix and address prefixes are missing ",
 			providerSubnetCIDR: "",
 			subnetProperties:   aznetworkv2.SubnetPropertiesFormat{},
-			expectedError:      fmt.Errorf("both AddressPrefix and AddressPrefixes for subnet '%s' are not set", pn.SubnetName),
+			expectedError:      fmt.Errorf("both AddressPrefix and AddressPrefixes field for subnet '%s' are empty or they have not been set", pn.SubnetName),
 		},
 		{
 			description:        "cannot create a subnet because Microsoft.ContainerInstance/containerGroups can't be delegated to the subnet",
