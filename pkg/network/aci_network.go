@@ -128,13 +128,12 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	var rawResponse *http.Response
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
-	updateSubnet := false
 	currentSubnet, err := pn.GetACISubnet(ctxWithResp, subnetsClient)
 	if err != nil {
 		return err
 	}
 
-	createNewSubnet := false
+	var updateSubnet, createNewSubnet bool
 	if currentSubnet == (aznetworkv2.Subnet{}) {
 		createNewSubnet = true
 	} else {
