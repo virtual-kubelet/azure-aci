@@ -137,9 +137,8 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	if currentSubnet == (aznetworkv2.Subnet{}) {
 		createNewSubnet = true
 	} else {
-		updateSubnet = true
 		// check if the current subnet is valid or if we need to create a new subnet
-		updateSubnet, err = pn.shouldCreateSubnet(currentSubnet, updateSubnet)
+		updateSubnet, err = pn.shouldCreateSubnet(currentSubnet)
 		if err != nil {
 			return err
 		}
@@ -157,7 +156,8 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, createSubnet bool) (bool, error) {
+func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet) (bool, error) {
+	createSubnet := true
 	//check if addressPrefix has been set
 	if currentSubnet.Properties.AddressPrefix != nil && len(*currentSubnet.Properties.AddressPrefix) > 0 {
 		if pn.SubnetCIDR == "" {

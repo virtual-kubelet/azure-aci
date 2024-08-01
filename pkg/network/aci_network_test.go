@@ -260,7 +260,7 @@ func TestShouldCreateSubnet(t *testing.T) {
 			pn.SubnetCIDR = tc.providerSubnetCIDR
 			currentSubnet.Properties = &tc.subnetProperties
 
-			result, err := pn.shouldCreateSubnet(currentSubnet, true)
+			result, err := pn.shouldCreateSubnet(currentSubnet)
 
 			if tc.expectedError != nil {
 				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")
