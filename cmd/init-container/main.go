@@ -24,11 +24,21 @@ import (
 	"k8s.io/client-go/util/retry"
 )
 
+var (
+	logLevel = "info"
+)
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 
 	logger := logrus.StandardLogger()
+	lvl, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		logrus.WithError(err).Fatal("Error parsing log level")
+	}
+	logger.SetLevel(lvl)
+
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
 
 	log.G(ctx).Debug("Init container started")
