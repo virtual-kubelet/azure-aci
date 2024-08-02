@@ -128,23 +128,25 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	var rawResponse *http.Response
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
-	createSubnet := true
 	currentSubnet, err := pn.GetACISubnet(ctxWithResp, subnetsClient)
 	if err != nil {
 		return err
 	}
 
-	if err == nil {
-		createSubnet, err = pn.shouldCreateSubnet(currentSubnet, createSubnet)
+	var updateSubnet, createNewSubnet bool
+	if currentSubnet == (aznetworkv2.Subnet{}) {
+		createNewSubnet = true
+	} else {
+		// check if the current subnet is valid or if we need to create a new subnet
+		updateSubnet, err = pn.shouldCreateSubnet(currentSubnet)
 		if err != nil {
 			return err
 		}
 	}
 
-	if createSubnet {
-		logger.Debugf("new subnet %s is creating", pn.SubnetName)
-
-		err2 := pn.CreateACISubnet(ctx, subnetsClient)
+	if createNewSubnet || updateSubnet {
+		// decide whether to create a new subnet or update the existing one based on createNewSubnet bool
+		err2 := pn.CreateOrUpdateACISubnet(ctx, subnetsClient, createNewSubnet)
 		if err2 != nil {
 			return err2
 		}
@@ -154,35 +156,52 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet, createSubnet bool) (bool, error) {
-	if currentSubnet.Properties.AddressPrefix != nil {
+func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet) (bool, error) {
+	createSubnet := true
+	//check if addressPrefix has been set
+	if currentSubnet.Properties.AddressPrefix != nil && len(*currentSubnet.Properties.AddressPrefix) > 0 {
 		if pn.SubnetCIDR == "" {
 			pn.SubnetCIDR = *currentSubnet.Properties.AddressPrefix
 		}
 		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
 			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
 		}
-		if currentSubnet.Properties.RouteTable != nil {
-			return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+	} else if currentSubnet.Properties.AddressPrefixes != nil && len(currentSubnet.Properties.AddressPrefixes) > 0 { // else check if addressPrefixes array has been set
+		var firstPrefix *string
+		if len(*currentSubnet.Properties.AddressPrefixes[0]) > 0 {
+			firstPrefix = currentSubnet.Properties.AddressPrefixes[0]
 		}
-		if currentSubnet.Properties.ServiceAssociationLinks != nil {
-			for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
-				if l.Properties != nil && l.Properties.LinkedResourceType != nil {
-					if *l.Properties.LinkedResourceType == subnetDelegationService {
-						createSubnet = false
-						break
-					} else {
-						return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
-					}
-				}
-			}
-		} else {
-			for _, d := range currentSubnet.Properties.Delegations {
-				if d.Properties != nil && d.Properties.ServiceName != nil &&
-					*d.Properties.ServiceName == subnetDelegationService {
+
+		if pn.SubnetCIDR == "" {
+			pn.SubnetCIDR = *firstPrefix
+		}
+		if pn.SubnetCIDR != *firstPrefix {
+			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *firstPrefix, pn.SubnetCIDR)
+		}
+	} else {
+		return false, fmt.Errorf("both AddressPrefix and AddressPrefixes field for subnet '%s' are empty or they have not been set", pn.SubnetName)
+	}
+
+	if currentSubnet.Properties.RouteTable != nil {
+		return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance since it references the route table '%s'", pn.SubnetName, *currentSubnet.Properties.RouteTable.ID)
+	}
+	if currentSubnet.Properties.ServiceAssociationLinks != nil {
+		for _, l := range currentSubnet.Properties.ServiceAssociationLinks {
+			if l.Properties != nil && l.Properties.LinkedResourceType != nil {
+				if *l.Properties.LinkedResourceType == subnetDelegationService {
 					createSubnet = false
 					break
+				} else {
+					return false, fmt.Errorf("unable to delegate subnet '%s' to Azure Container Instance as it is used by other Azure resource: '%v'", pn.SubnetName, l)
 				}
+			}
+		}
+	} else {
+		for _, d := range currentSubnet.Properties.Delegations {
+			if d.Properties != nil && d.Properties.ServiceName != nil &&
+				*d.Properties.ServiceName == subnetDelegationService {
+				createSubnet = false
+				break
 			}
 		}
 	}
@@ -237,18 +256,16 @@ func (pn *ProviderNetwork) GetSubnetClient(ctx context.Context, azConfig *auth.C
 	return subnetsClient, nil
 }
 
-// createACISubnet create new subnet for ACI
-func (pn *ProviderNetwork) CreateACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient) error {
-	logger := log.G(ctx).WithField("method", "CreateACISubnet")
-	ctx, span := trace.StartSpan(ctx, "network.CreateACISubnet")
+func (pn *ProviderNetwork) CreateOrUpdateACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient, isCreate bool) error {
+	logger := log.G(ctx).WithField("method", "CreateOrUpdateACISubnet")
+	ctx, span := trace.StartSpan(ctx, "network.CreateOrUpdateACISubnet")
 	defer span.End()
 
-	logger.Debug("creating a subnet")
+	action := "updating"
 
 	subnet := aznetworkv2.Subnet{
 		Name: &pn.SubnetName,
 		Properties: &aznetworkv2.SubnetPropertiesFormat{
-			AddressPrefix: &pn.SubnetCIDR,
 			Delegations: []*aznetworkv2.Delegation{
 				{
 					Name: &delegationName,
@@ -261,19 +278,32 @@ func (pn *ProviderNetwork) CreateACISubnet(ctx context.Context, subnetsClient *a
 		},
 	}
 
+	// only set the address prefix and prefixes if we are creating a new subnet
+	if isCreate {
+		subnet.Properties.AddressPrefix = &pn.SubnetCIDR
+		subnet.Properties.AddressPrefixes = []*string{
+			&pn.SubnetCIDR,
+		}
+		action = "creating"
+	}
+
+	logger.Debugf("%s subnet %s", action, *subnet.Name)
+
 	var rawResponse *http.Response
 	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
 
 	poller, err := subnetsClient.BeginCreateOrUpdate(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet, nil)
 	if err != nil {
-		return fmt.Errorf("error creating subnet: %v", err)
+		return fmt.Errorf("error %s subnet: %v", action, err)
 	}
 	_, err = poller.PollUntilDone(context.TODO(), nil)
 	if err != nil {
-		return fmt.Errorf("error creating subnet: %v", err)
+		return fmt.Errorf("error %s subnet: %v", action, err)
 	}
-	logger.Debugf("new subnet %s has been created successfully. vnet %s, response code %d", pn.SubnetName, pn.VnetName, rawResponse.StatusCode)
-	logger.Infof("new subnet %s has been created successfully", pn.SubnetName)
+
+	updatedAction := action[:len(action)-3] + "ed"
+	logger.Debugf("new subnet %s has been %s successfully. vnet %s, response code %d", pn.SubnetName, updatedAction, pn.VnetName, rawResponse.StatusCode)
+	logger.Infof("new subnet %s has been %s successfully", pn.SubnetName, updatedAction)
 	return nil
 }
 
