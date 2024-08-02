@@ -6,7 +6,7 @@ metadata:
 spec:
   nodeName: vk-aci-test-aks
   containers:
-  - image: busybox
+  - image: mcr.microsoft.com/cbl-mariner/busybox:1.35
     imagePullPolicy: Always
     name: busybox
     command:  [

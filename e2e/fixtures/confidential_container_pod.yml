@@ -8,7 +8,7 @@ metadata:
 spec:
   restartPolicy: Always
   containers:
-  - image: docker.io/kengordon/parmasimple:latest
+  - image: mcr.microsoft.com/aci/aci-confidential-helloworld:v1
     imagePullPolicy: Always
     name: e2etest-conf-container
     resources:
