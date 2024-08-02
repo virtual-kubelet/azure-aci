@@ -11,7 +11,7 @@ Install [Helm](https://helm.sh/docs/intro/quickstart/#install-helm)
 ### Clone the project
 
 ```shell
-$ export RELEASE_TAG=1.6.1
+$ export RELEASE_TAG=1.6.2
 $ git clone https://github.com/virtual-kubelet/azure-aci.git
 $ cd azure-aci
 $ git checkout v$RELEASE_TAG
@@ -25,7 +25,7 @@ export CHART_NAME=virtual-kubelet-azure-aci-upgrade
 export VK_RELEASE=$CHART_NAME-$RELEASE_TAG
 export NODE_NAME=virtual-kubelet-aci-$RELEASE_TAG
 export CHART_URL=https://github.com/virtual-kubelet/azure-aci/raw/gh-pages/charts/$VK_RELEASE.tgz
-export INIT_IMG_TAG=0.2.0
+export INIT_IMG_TAG=v0.3.0
 export MASTER_URI=$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")
 export IMG_URL=mcr.microsoft.com
 export IMG_REPO=oss/virtual-kubelet/virtual-kubelet
