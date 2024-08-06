@@ -180,6 +180,37 @@ cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --
 
 node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query clientId -o tsv)"
 
+if [ "$E2E_TARGET" = "pr" ]; then
+az aks create \
+    -g "$RESOURCE_GROUP" \
+    -l "$LOCATION" \
+    -c "$NODE_COUNT" \
+    --node-vm-size standard_d8_v3 \
+    -n "$CLUSTER_NAME" \
+    --network-plugin azure \
+    --vnet-subnet-id "$aks_subnet_id" \
+    --dns-service-ip "$KUBE_DNS_IP" \
+    --assign-kubelet-identity "$node_identity_id" \
+    --assign-identity "$cluster_identity_id" \
+    --generate-ssh-keys \
+    --attach-acr "$ACR_NAME"
+
+else
+
+az aks create \
+    -g "$RESOURCE_GROUP" \
+    -l "$LOCATION" \
+    -c "$NODE_COUNT" \
+    --node-vm-size standard_d8_v3 \
+    -n "$CLUSTER_NAME" \
+    --network-plugin azure \
+    --vnet-subnet-id "$aks_subnet_id" \
+    --dns-service-ip "$KUBE_DNS_IP" \
+    --assign-kubelet-identity "$node_identity_id" \
+    --assign-identity "$cluster_identity_id" \
+    --generate-ssh-keys
+fi
+
 az role assignment create \
     --role "Network Contributor" \
     --assignee-object-id "$node_identity" \
@@ -214,37 +245,6 @@ az role assignment create \
     --assignee-object-id "$node_identity" \
     --assignee-principal-type "ServicePrincipal" \
     --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
-
-if [ "$E2E_TARGET" = "pr" ]; then
-az aks create \
-    -g "$RESOURCE_GROUP" \
-    -l "$LOCATION" \
-    -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
-    -n "$CLUSTER_NAME" \
-    --network-plugin azure \
-    --vnet-subnet-id "$aks_subnet_id" \
-    --dns-service-ip "$KUBE_DNS_IP" \
-    --assign-kubelet-identity "$node_identity_id" \
-    --assign-identity "$cluster_identity_id" \
-    --generate-ssh-keys \
-    --attach-acr "$ACR_NAME"
-
-else
-
-az aks create \
-    -g "$RESOURCE_GROUP" \
-    -l "$LOCATION" \
-    -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
-    -n "$CLUSTER_NAME" \
-    --network-plugin azure \
-    --vnet-subnet-id "$aks_subnet_id" \
-    --dns-service-ip "$KUBE_DNS_IP" \
-    --assign-kubelet-identity "$node_identity_id" \
-    --assign-identity "$cluster_identity_id" \
-    --generate-ssh-keys
-fi
 
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "${TMPDIR}/kubeconfig"
 export KUBECONFIG="${TMPDIR}/kubeconfig"
