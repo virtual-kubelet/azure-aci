@@ -20,7 +20,7 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=northeurope}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -35,6 +35,7 @@ fi
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
 : "${VNET_NAME=myAKSVNet}"
+: "${NSG_NAME=myAKSNSG}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
 : "${ACR_NAME=vkacr$RANDOM_NUM}"
@@ -53,13 +54,13 @@ fi
 
 TMPDIR=""
 
-cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
-  if [ -n "$TMPDIR" ]; then
-      rm -rf "$TMPDIR"
-  fi
-}
-trap 'cleanup' EXIT
+# cleanup() {
+#   az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+#   if [ -n "$TMPDIR" ]; then
+#       rm -rf "$TMPDIR"
+#   fi
+# }
+# trap 'cleanup' EXIT
 
 
 check_aci_registered() {
@@ -93,14 +94,77 @@ az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
-    --subnet-name $CLUSTER_SUBNET_NAME \
-    --subnet-prefix $CLUSTER_SUBNET_RANGE
+
+az network nsg create \
+    --resource-group $RESOURCE_GROUP \
+    --location "$LOCATION" \
+    --name $NSG_NAME
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowClusterSubnetTraffic \
+    --priority 1000 \
+    --direction Inbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $CLUSTER_SUBNET_RANGE \
+    --source-port-range '*' \
+    --destination-address-prefix $CLUSTER_SUBNET_RANGE \
+    --destination-port-range '*'
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowClusterSubnetOutbound \
+    --priority 1100 \
+    --direction Outbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $CLUSTER_SUBNET_RANGE \
+    --source-port-range '*' \
+    --destination-address-prefix '*' \
+    --destination-port-range '*'
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowACISubnetTraffic \
+    --priority 1100 \
+    --direction Inbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $ACI_SUBNET_RANGE \
+    --source-port-range '*' \
+    --destination-address-prefix $ACI_SUBNET_RANGE \
+    --destination-port-range '*'
+
+az network nsg rule create \
+    --resource-group $RESOURCE_GROUP \
+    --nsg-name $NSG_NAME \
+    --name AllowACISubnetOutbound \
+    --priority 1300 \
+    --direction Outbound \
+    --access Allow \
+    --protocol '*' \
+    --source-address-prefix $ACI_SUBNET_RANGE \
+    --source-port-range '*' \
+    --destination-address-prefix '*' \
+    --destination-port-range '*'
+    
+az network vnet subnet create \
+    --resource-group $RESOURCE_GROUP \
+    --vnet-name $VNET_NAME \
+    --name $CLUSTER_SUBNET_NAME \
+    --address-prefix $CLUSTER_SUBNET_RANGE \
+    --network-security-group $NSG_NAME
 
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_RANGE \
+    --network-security-group $NSG_NAME \
     --query id -o tsv)"
 
 
@@ -115,6 +179,41 @@ node_identity_id="$(az identity show --name ${RESOURCE_GROUP}-node-identity --re
 cluster_identity_id="$(az identity show --name ${RESOURCE_GROUP}-aks-identity --resource-group ${RESOURCE_GROUP} --query id -o tsv)"
 
 node_identity_client_id="$(az identity create --name "${RESOURCE_GROUP}-aks-identity" --resource-group "${RESOURCE_GROUP}" --query clientId -o tsv)"
+
+az role assignment create \
+    --role "Network Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "$vnet_id"
+az role assignment create \
+    --role "Network Contributor" \
+    --assignee-object-id "$cluster_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "$vnet_id"
+az role assignment create \
+    --role "Network Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "$aci_subnet_id"
+az role assignment create \
+    --role "Virtual Machine User Login" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "$aci_subnet_id"
+az role assignment create \
+    --role "Virtual Machine User Login" \
+    --assignee-object-id "$cluster_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "$aci_subnet_id"
+
+# Make sure ACI can create containers in the AKS RG.
+# Note, this is not wonderful since it gives a lot of permissions to the identity which is also shared with the kubelet (which it doesn't need).
+# Unfortunately there is no way to scope this down (AFIACT) currently.
+az role assignment create \
+    --role "Contributor" \
+    --assignee-object-id "$node_identity" \
+    --assignee-principal-type "ServicePrincipal" \
+    --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
 
 if [ "$E2E_TARGET" = "pr" ]; then
 az aks create \
@@ -146,31 +245,6 @@ az aks create \
     --assign-identity "$cluster_identity_id" \
     --generate-ssh-keys
 fi
-
-az role assignment create \
-    --role "Network Contributor" \
-    --assignee-object-id "$node_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "$vnet_id"
-az role assignment create \
-    --role "Network Contributor" \
-    --assignee-object-id "$cluster_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "$vnet_id"
-az role assignment create \
-    --role "Network Contributor" \
-    --assignee-object-id "$node_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "$aci_subnet_id"
-
-# Make sure ACI can create containers in the AKS RG.
-# Note, this is not wonderful since it gives a lot of permissions to the identity which is also shared with the kubelet (which it doesn't need).
-# Unfortunately there is no way to scope this down (AFIACT) currently.
-az role assignment create \
-    --role "Contributor" \
-    --assignee-object-id "$node_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/MC_${RESOURCE_GROUP}_${RESOURCE_GROUP}_${LOCATION}"
 
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "${TMPDIR}/kubeconfig"
 export KUBECONFIG="${TMPDIR}/kubeconfig"
