@@ -20,7 +20,7 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=northeurope}"
+: "${LOCATION:=westus}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -35,7 +35,6 @@ fi
 : "${CLUSTER_SUBNET_RANGE=10.240.0.0/16}"
 : "${ACI_SUBNET_RANGE=10.241.0.0/16}"
 : "${VNET_NAME=myAKSVNet}"
-: "${NSG_NAME=myAKSNSG}"
 : "${CLUSTER_SUBNET_NAME=myAKSSubnet}"
 : "${ACI_SUBNET_NAME=myACISubnet}"
 : "${ACR_NAME=vkacr$RANDOM_NUM}"
@@ -94,77 +93,14 @@ az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
-
-az network nsg create \
-    --resource-group $RESOURCE_GROUP \
-    --location "$LOCATION" \
-    --name $NSG_NAME
-
-az network nsg rule create \
-    --resource-group $RESOURCE_GROUP \
-    --nsg-name $NSG_NAME \
-    --name AllowClusterSubnetTraffic \
-    --priority 1000 \
-    --direction Inbound \
-    --access Allow \
-    --protocol '*' \
-    --source-address-prefix $CLUSTER_SUBNET_RANGE \
-    --source-port-range '*' \
-    --destination-address-prefix $CLUSTER_SUBNET_RANGE \
-    --destination-port-range '*'
-
-az network nsg rule create \
-    --resource-group $RESOURCE_GROUP \
-    --nsg-name $NSG_NAME \
-    --name AllowClusterSubnetOutbound \
-    --priority 1100 \
-    --direction Outbound \
-    --access Allow \
-    --protocol '*' \
-    --source-address-prefix $CLUSTER_SUBNET_RANGE \
-    --source-port-range '*' \
-    --destination-address-prefix '*' \
-    --destination-port-range '*'
-
-az network nsg rule create \
-    --resource-group $RESOURCE_GROUP \
-    --nsg-name $NSG_NAME \
-    --name AllowACISubnetTraffic \
-    --priority 1100 \
-    --direction Inbound \
-    --access Allow \
-    --protocol '*' \
-    --source-address-prefix $ACI_SUBNET_RANGE \
-    --source-port-range '*' \
-    --destination-address-prefix $ACI_SUBNET_RANGE \
-    --destination-port-range '*'
-
-az network nsg rule create \
-    --resource-group $RESOURCE_GROUP \
-    --nsg-name $NSG_NAME \
-    --name AllowACISubnetOutbound \
-    --priority 1300 \
-    --direction Outbound \
-    --access Allow \
-    --protocol '*' \
-    --source-address-prefix $ACI_SUBNET_RANGE \
-    --source-port-range '*' \
-    --destination-address-prefix '*' \
-    --destination-port-range '*'
-    
-az network vnet subnet create \
-    --resource-group $RESOURCE_GROUP \
-    --vnet-name $VNET_NAME \
-    --name $CLUSTER_SUBNET_NAME \
-    --address-prefix $CLUSTER_SUBNET_RANGE \
-    --network-security-group $NSG_NAME
+    --subnet-name $CLUSTER_SUBNET_NAME \
+    --subnet-prefix $CLUSTER_SUBNET_RANGE \
 
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_RANGE \
-    --network-security-group $NSG_NAME \
     --query id -o tsv)"
 
 
