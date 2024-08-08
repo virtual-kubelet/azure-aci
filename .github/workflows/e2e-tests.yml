@@ -5,14 +5,9 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request_target:
-    branches:
-      - master
-      - release-**
-    types: [ opened, ready_for_review, reopened ]
-    paths:
-      - '.github/workflows/chart.yml'
-      - 'charts/**'
+  pull_request:
+    branches: [master]
+    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:
   REGISTRY: ghcr.io
