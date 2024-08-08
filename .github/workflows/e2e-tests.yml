@@ -6,14 +6,9 @@ concurrency:
 
 on:
   pull_request_target:
-    branches:
-      - master
-      - release-**
-    types: [ opened, ready_for_review, reopened ]
-    paths:
-      - '.github/workflows/chart.yml'
-      - 'charts/**'
-
+    branches: [master]
+    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
+   
 env:
   REGISTRY: ghcr.io
   GO_VERSION: '1.20' # Common versions

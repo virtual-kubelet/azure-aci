@@ -162,16 +162,16 @@ az role assignment create \
     --assignee-object-id "$node_identity" \
     --assignee-principal-type "ServicePrincipal" \
     --scope "$aci_subnet_id"
-az role assignment create \
-    --role "Virtual Machine User Login" \
-    --assignee-object-id "$node_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "$aci_subnet_id"
-az role assignment create \
-    --role "Virtual Machine User Login" \
-    --assignee-object-id "$cluster_identity" \
-    --assignee-principal-type "ServicePrincipal" \
-    --scope "$aci_subnet_id"
+# az role assignment create \
+#     --role "Virtual Machine User Login" \
+#     --assignee-object-id "$node_identity" \
+#     --assignee-principal-type "ServicePrincipal" \
+#     --scope "$aci_subnet_id"
+# az role assignment create \
+#     --role "Virtual Machine User Login" \
+#     --assignee-object-id "$cluster_identity" \
+#     --assignee-principal-type "ServicePrincipal" \
+#     --scope "$aci_subnet_id"
 
 # Make sure ACI can create containers in the AKS RG.
 # Note, this is not wonderful since it gives a lot of permissions to the identity which is also shared with the kubelet (which it doesn't need).
