@@ -6,7 +6,7 @@ import (
 )
 
 func TestInitVaidationContainer(t *testing.T) {
-	cmd := kubectl("get", "pod", "-l", "app=aci-connector-linux", "-n", "kube-system", "-o", "jsonpath={.items[1].status.phase}")
+	cmd := kubectl("get", "pod", "-l", "app=virtual-kubelet-azure-aci", "-n", "vk-azure-aci", "-o", "jsonpath={.items[0].status.phase}")
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -16,7 +16,7 @@ func TestInitVaidationContainer(t *testing.T) {
 		t.Fatal("pod is not in running state")
 	}
 
-	cmd = kubectl("logs", "-l", "app=aci-connector-linux", "-c", "init-validation", "-n", "kube-system", "--tail=1")
+	cmd = kubectl("logs", "-l", "app=virtual-kubelet-azure-aci", "-c", "init-validation", "-n", "vk-azure-aci", "--tail=1")
 	logOut, logErr := cmd.CombinedOutput()
 	if logErr != nil {
 		t.Fatal(string(out))
