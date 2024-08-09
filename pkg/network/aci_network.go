@@ -266,6 +266,7 @@ func (pn *ProviderNetwork) CreateOrUpdateACISubnet(ctx context.Context, subnetsC
 	subnet := aznetworkv2.Subnet{
 		Name: &pn.SubnetName,
 		Properties: &aznetworkv2.SubnetPropertiesFormat{
+			AddressPrefix: &pn.SubnetCIDR,
 			Delegations: []*aznetworkv2.Delegation{
 				{
 					Name: &delegationName,
@@ -280,7 +281,6 @@ func (pn *ProviderNetwork) CreateOrUpdateACISubnet(ctx context.Context, subnetsC
 
 	// only set the address prefix and prefixes if we are creating a new subnet
 	if isCreate {
-		subnet.Properties.AddressPrefix = &pn.SubnetCIDR
 		subnet.Properties.AddressPrefixes = []*string{
 			&pn.SubnetCIDR,
 		}
