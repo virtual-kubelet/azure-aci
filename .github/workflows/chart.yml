@@ -3,7 +3,7 @@ name: publish_helm_chart
 on:
   pull_request:
     branches:
-      - release-**
+      - release-**-**
       - master
     types: [ closed ]
 
