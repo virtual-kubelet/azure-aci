@@ -5,9 +5,14 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request:
-    branches: [master]
-    paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
+  pull_request_target:
+    branches:
+      - master
+      - release-**
+    types: [ opened, ready_for_review, reopened ]
+    paths:
+      - '.github/workflows/chart.yml'
+      - 'charts/**'
 
 env:
   REGISTRY: ghcr.io
@@ -68,8 +73,8 @@ jobs:
           E2E_TARGET: "pr"
           PR_COMMIT_SHA: ${{ steps.vars.outputs.pr_sha_short }}
 
-      # - name: Cleanup e2e resources
-      #   if: ${{ always() }}
-      #   run: |
-      #     set +e
-      #     az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
+      - name: Cleanup e2e resources
+        if: ${{ always() }}
+        run: |
+          set +e
+          az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
