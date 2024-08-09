@@ -20,7 +20,7 @@ if [ "$PR_RAND" = "" ]; then
 fi
 
 : "${RESOURCE_GROUP:=vk-aci-test-$RANDOM_NUM}"
-: "${LOCATION:=eastus2euap}"
+: "${LOCATION:=westus}"
 : "${CLUSTER_NAME:=${RESOURCE_GROUP}}"
 : "${NODE_COUNT:=1}"
 : "${CHART_NAME:=vk-aci-test-aks}"
@@ -53,13 +53,13 @@ fi
 
 TMPDIR=""
 
-cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
-  if [ -n "$TMPDIR" ]; then
-      rm -rf "$TMPDIR"
-  fi
-}
-trap 'cleanup' EXIT
+# cleanup() {
+#   az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+#   if [ -n "$TMPDIR" ]; then
+#       rm -rf "$TMPDIR"
+#   fi
+# }
+# trap 'cleanup' EXIT
 
 
 check_aci_registered() {
@@ -94,7 +94,7 @@ az network vnet create \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
     --subnet-name $CLUSTER_SUBNET_NAME \
-    --subnet-prefix $CLUSTER_SUBNET_RANGE
+    --subnet-prefix $CLUSTER_SUBNET_RANGE \
 
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
@@ -162,6 +162,16 @@ az role assignment create \
     --assignee-object-id "$node_identity" \
     --assignee-principal-type "ServicePrincipal" \
     --scope "$aci_subnet_id"
+# az role assignment create \
+#     --role "Virtual Machine User Login" \
+#     --assignee-object-id "$node_identity" \
+#     --assignee-principal-type "ServicePrincipal" \
+#     --scope "$aci_subnet_id"
+# az role assignment create \
+#     --role "Virtual Machine User Login" \
+#     --assignee-object-id "$cluster_identity" \
+#     --assignee-principal-type "ServicePrincipal" \
+#     --scope "$aci_subnet_id"
 
 # Make sure ACI can create containers in the AKS RG.
 # Note, this is not wonderful since it gives a lot of permissions to the identity which is also shared with the kubelet (which it doesn't need).
