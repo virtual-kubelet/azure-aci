@@ -9,7 +9,7 @@ on:
   pull_request:
     branches:
       - master
-      - release-**
+      - release-**-**
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
 
 env:
