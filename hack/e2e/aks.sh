@@ -53,13 +53,13 @@ fi
 
 TMPDIR=""
 
-cleanup() {
-  az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
-  if [ -n "$TMPDIR" ]; then
-      rm -rf "$TMPDIR"
-  fi
-}
-trap 'cleanup' EXIT
+# cleanup() {
+#   az group delete --name "$RESOURCE_GROUP" --yes --no-wait || true
+#   if [ -n "$TMPDIR" ]; then
+#       rm -rf "$TMPDIR"
+#   fi
+# }
+# trap 'cleanup' EXIT
 
 
 check_aci_registered() {

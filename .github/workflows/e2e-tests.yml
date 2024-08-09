@@ -68,8 +68,8 @@ jobs:
           E2E_TARGET: "pr"
           PR_COMMIT_SHA: ${{ steps.vars.outputs.pr_sha_short }}
 
-      - name: Cleanup e2e resources
-        if: ${{ always() }}
-        run: |
-          set +e
-          az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
+      # - name: Cleanup e2e resources
+      #   if: ${{ always() }}
+      #   run: |
+      #     set +e
+      #     az group delete --name "${{ env.CLUSTER_NAME }}" --yes --no-wait || true
