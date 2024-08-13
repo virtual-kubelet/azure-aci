@@ -140,7 +140,7 @@ func TestFormDNSNameserversFitsLimits(t *testing.T) {
 	}
 }
 
-func TestShouldCreateSubnet(t *testing.T) {
+func TestShouldCreateOrUpdateSubnet(t *testing.T) {
 	subnetName := "fakeSubnet"
 	fakeAddPrefix := "10.00.0/16"
 	providerSubnetCIDR := "10.00.0/17"
@@ -260,7 +260,7 @@ func TestShouldCreateSubnet(t *testing.T) {
 			pn.SubnetCIDR = tc.providerSubnetCIDR
 			currentSubnet.Properties = &tc.subnetProperties
 
-			result, err := pn.shouldCreateSubnet(currentSubnet)
+			result, err := pn.shouldCreateOrUpdateSubnet(currentSubnet)
 
 			if tc.expectedError != nil {
 				assert.Equal(t, err.Error(), tc.expectedError.Error(), "Error messages should match")

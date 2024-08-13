@@ -133,20 +133,15 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 		return err
 	}
 
-	var updateSubnet, createNewSubnet bool
-	if currentSubnet == (aznetworkv2.Subnet{}) {
-		createNewSubnet = true
-	} else {
-		// check if the current subnet is valid or if we need to create a new subnet
-		updateSubnet, err = pn.shouldCreateSubnet(currentSubnet)
-		if err != nil {
-			return err
-		}
+	// check if the current subnet is valid or if we need to create a new subnet
+	createOrUpdateSubnet, err := pn.shouldCreateOrUpdateSubnet(currentSubnet)
+	if err != nil {
+		return err
 	}
 
-	if createNewSubnet || updateSubnet {
-		// decide whether to create a new subnet or update the existing one based on createNewSubnet bool
-		err2 := pn.CreateOrUpdateACISubnet(ctx, subnetsClient, createNewSubnet)
+	if createOrUpdateSubnet {
+		// decide whether to create a new subnet or update the existing one based currentSubnet
+		err2 := pn.CreateOrUpdateACISubnet(ctx, subnetsClient, currentSubnet)
 		if err2 != nil {
 			return err2
 		}
@@ -156,7 +151,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	return nil
 }
 
-func (pn *ProviderNetwork) shouldCreateSubnet(currentSubnet aznetworkv2.Subnet) (bool, error) {
+func (pn *ProviderNetwork) shouldCreateOrUpdateSubnet(currentSubnet aznetworkv2.Subnet) (bool, error) {
 	createSubnet := true
 	//check if addressPrefix has been set
 	if currentSubnet.Properties.AddressPrefix != nil && len(*currentSubnet.Properties.AddressPrefix) > 0 {
@@ -256,36 +251,35 @@ func (pn *ProviderNetwork) GetSubnetClient(ctx context.Context, azConfig *auth.C
 	return subnetsClient, nil
 }
 
-func (pn *ProviderNetwork) CreateOrUpdateACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient, isCreate bool) error {
+func (pn *ProviderNetwork) CreateOrUpdateACISubnet(ctx context.Context, subnetsClient *aznetworkv2.SubnetsClient, currentSubnet aznetworkv2.Subnet) error {
 	logger := log.G(ctx).WithField("method", "CreateOrUpdateACISubnet")
 	ctx, span := trace.StartSpan(ctx, "network.CreateOrUpdateACISubnet")
 	defer span.End()
 
 	action := "updating"
 
-	subnet := aznetworkv2.Subnet{
-		Name: &pn.SubnetName,
-		Properties: &aznetworkv2.SubnetPropertiesFormat{
-			Delegations: []*aznetworkv2.Delegation{
-				{
-					Name: &delegationName,
-					Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
-						ServiceName: &serviceName,
-						Actions:     []*string{&subnetAction},
-					},
-				},
+	subnet := currentSubnet
+	if currentSubnet == (aznetworkv2.Subnet{}) {
+		action = "creating"
+
+		// only set the address prefix if we are creating a new subnet
+		subnet = aznetworkv2.Subnet{
+			Name: &pn.SubnetName,
+			Properties: &aznetworkv2.SubnetPropertiesFormat{
+				AddressPrefix: &pn.SubnetCIDR,
 			},
-		},
+		}
 	}
 
-	// only set the address prefix and prefixes if we are creating a new subnet
-	if isCreate {
-		subnet.Properties.AddressPrefix = &pn.SubnetCIDR
-		subnet.Properties.AddressPrefixes = []*string{
-			&pn.SubnetCIDR,
-		}
-		action = "creating"
+	// subnet will be delegated to ACI on both create and update scenarios
+	cgDelegation := &aznetworkv2.Delegation{
+		Name: &delegationName,
+		Properties: &aznetworkv2.ServiceDelegationPropertiesFormat{
+			ServiceName: &serviceName,
+			Actions:     []*string{&subnetAction},
+		},
 	}
+	subnet.Properties.Delegations = append(subnet.Properties.Delegations, cgDelegation)
 
 	logger.Debugf("%s subnet %s", action, *subnet.Name)
 
