@@ -6,7 +6,11 @@ on:
         description: 'Which registry are we pushing the image to?'
         type: string
         required: true
-      init_container_version:
+    release_version:
+      description: 'Which version are we creating an image for?'
+      type: string
+      required: true
+    init_container_version:
         description: 'Which init container version are we creating an image for?'
         required: true
         type: string
@@ -29,7 +33,7 @@ jobs:
         with:
           submodules: true
           fetch-depth: 0
-          ref: ${{ steps.get-tag.outputs.tag }}
+          ref: { { inputs.release_version } }
 
       - name: Login to ${{ inputs.registry }}
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
@@ -42,6 +46,7 @@ jobs:
         run: |
           ver=${{ inputs.init_container_version }}
           echo "INIT_IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
+
       - name: Build and push image
         run: |
           OUTPUT_TYPE=type=registry make docker-build-init-image
