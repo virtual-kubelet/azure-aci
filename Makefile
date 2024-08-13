@@ -23,7 +23,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON TEST_AKS_CREDENTIALS_JSON
 
-VERSION ?= v1.6.2
+VERSION ?= v1.6.1
 REGISTRY ?= ghcr.io
 IMG_NAME ?= virtual-kubelet
 INIT_IMG_NAME ?= init-validation
@@ -35,7 +35,7 @@ E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
-INIT_IMG_TAG ?= v0.3.0
+INIT_IMG_TAG ?= v0.2.0
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 VERSION_FLAGS := "-ldflags=-X main.buildVersion=$(IMG_TAG) -X main.buildTime=$(BUILD_DATE)"
@@ -52,12 +52,12 @@ $(GOIMPORTS):
 	GOBIN=$(TOOLS_BIN_DIR) $(GO_INSTALL) golang.org/x/tools/cmd/goimports $(GOIMPORTS_BIN) $(GOIMPORTS_VER)
 
 BUILDX_BUILDER_NAME ?= img-builder
-QEMU_VERSION ?= 5.2.0-2
+QEMU_VERSION ?= 7.2.0-1
 
 .PHONY: docker-buildx-builder
 docker-buildx-builder:
 	@if ! docker buildx ls | grep $(BUILDX_BUILDER_NAME); then \
-  		docker run --rm --privileged multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
+  		docker run --rm --privileged mcr.microsoft.com/mirror/docker/multiarch/qemu-user-static:$(QEMU_VERSION) --reset -p yes; \
 		docker buildx create --name $(BUILDX_BUILDER_NAME) --use; \
 		docker buildx inspect $(BUILDX_BUILDER_NAME) --bootstrap; \
 	fi
