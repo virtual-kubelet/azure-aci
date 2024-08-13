@@ -25,28 +25,28 @@ jobs:
   publish-images:
     runs-on: ubuntu-latest
     steps:
-      - name: Login to ${{ github.event.client_payload.registry }}
+      - name: Login to ${{ inputs.registry }}
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
         with:
-          registry: ${{ github.event.client_payload.registry }}
+          registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Set Image tag
         run: |
-          ver=${{ github.event.client_payload.release_version }}
+          ver=${{ inputs.release_version }}
           echo "IMG_TAG=${ver#"v"}" >> $GITHUB_ENV
       - name: Build and push image
         run: |
           OUTPUT_TYPE=type=registry make docker-build-image
         env:
           VERSION: ${{ env.IMG_TAG }}
-          REGISTRY: ${{ github.event.client_payload.registry }}
+          REGISTRY: ${{ inputs.registry }}
 
-      - name: Scan ${{ github.event.client_payload.registry }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
+      - name: Scan ${{ inputs.registry }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "${{ github.event.client_payload.registry }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}"
+          image-ref: "${{ inputs.registry }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}"
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
