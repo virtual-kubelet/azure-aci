@@ -17,23 +17,21 @@ permissions:
   actions: read
 
 env:
-  REGISTRY: ghcr.io
   # Common versions
   GO_VERSION: '1.20'
   IMAGE_NAME: 'virtual-kubelet'
 
 jobs:
   publish-images:
-    env:
-      REGISTRY: ${{ github.event.client_payload.registry }}
     runs-on: ubuntu-latest
     steps:
-      - name: Login to ${{ env.REGISTRY }}
+      - name: Login to ${{ github.event.client_payload.registry }}
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ github.event.client_payload.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          
       - name: Set Image tag
         run: |
           ver=${{ github.event.client_payload.release_version }}
@@ -43,11 +41,12 @@ jobs:
           OUTPUT_TYPE=type=registry make docker-build-image
         env:
           VERSION: ${{ env.IMG_TAG }}
+          REGISTRY: ${{ github.event.client_payload.registry }}
 
-      - name: Scan ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
+      - name: Scan ${{ github.event.client_payload.registry }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}"
+          image-ref: "${{ github.event.client_payload.registry }}/${{ env.IMAGE_NAME }}:${{ env.IMG_TAG }}"
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
