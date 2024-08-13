@@ -17,15 +17,12 @@ permissions:
   actions: read
 
 env:
-  REGISTRY: ghcr.io
   # Common versions
   GO_VERSION: '1.20'
   INIT_IMAGE_NAME: 'init-validation'
 
 jobs:
   publish-init-images:
-    env:
-      REGISTRY: ${{ github.event.client_payload.registry }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,10 +31,10 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.get-tag.outputs.tag }}
 
-      - name: Login to ${{ env.REGISTRY }}
+      - name: Login to ${{ github.event.client_payload.registry }}
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ github.event.client_payload.registry }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -51,10 +48,10 @@ jobs:
         env:
           INIT_IMG_TAG: ${{ env.INIT_IMG_TAG }}
 
-      - name: Scan ${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
+      - name: Scan ${{ github.event.client_payload.registry }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: "${{ env.REGISTRY }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}"
+          image-ref: "${{ github.event.client_payload.registry }}/${{ env.INIT_IMAGE_NAME }}:${{ env.INIT_IMG_TAG }}"
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
