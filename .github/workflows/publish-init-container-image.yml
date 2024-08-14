@@ -6,11 +6,11 @@ on:
         description: 'Which registry are we pushing the image to?'
         type: string
         required: true
-    release_version:
-      description: 'Which version are we creating an image for?'
-      type: string
-      required: true
-    init_container_version:
+      release_version:
+        description: 'Which version are we creating an image for?'
+        type: string
+        required: true
+      init_container_version:
         description: 'Which init container version are we creating an image for?'
         required: true
         type: string
