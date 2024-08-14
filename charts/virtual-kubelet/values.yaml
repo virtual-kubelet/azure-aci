@@ -8,7 +8,7 @@ image:
 initImage:
   repository: mcr.microsoft.com
   name: oss/virtual-kubelet/init-validation
-  initTag: 0.3.0
+  initTag: v0.3.0
   pullPolicy: IfNotPresent
 
 namespace: vk-azure-aci
