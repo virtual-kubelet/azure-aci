@@ -185,7 +185,7 @@ helm install \
     --set "image.name=${IMG_REPO}" \
     --set "initImage.repository=${IMG_URL}"  \
     --set "initImage.name=${INIT_IMG_REPO}" \
-    --set "initImage.tag=${INIT_IMG_TAG}" \
+    --set "initImage.initTag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_WINDOWS_NODE_NAME}" \
     --set "providers.azure.masterUri=$MASTER_URI" \
     --set "providers.azure.managedIdentityID=$ACI_USER_IDENTITY" \
