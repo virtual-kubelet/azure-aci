@@ -185,7 +185,7 @@ helm install \
     --set "image.tag=${IMG_TAG}" \
     --set "initImage.repository=${IMG_URL}"  \
     --set "initImage.name=${INIT_IMG_REPO}" \
-    --set "initImage.tag=${INIT_IMG_TAG}" \
+    --set "initImage.initTag=${INIT_IMG_TAG}" \
     --set "nodeName=${TEST_NODE_NAME}" \
     --set providers.azure.vnet.enabled=true \
     --set "providers.azure.vnet.subnetName=$ACI_SUBNET_NAME" \
