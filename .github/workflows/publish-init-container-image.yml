@@ -18,7 +18,7 @@ permissions:
 
 env:
   # Common versions
-  GO_VERSION: '1.20'
+  GO_VERSION: '1.22'
   INIT_IMAGE_NAME: 'init-validation'
 
 jobs:
