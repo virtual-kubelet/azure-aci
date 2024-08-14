@@ -9,7 +9,7 @@ on:
       init_container_version:
         description: 'Which init container version are we creating a release pull request for?'
         required: true
-        default: v0.3.0
+        default: 0.3.0
       based_on_branch:
         description: 'Which branch should we base the release pull request on?'
         required: true
@@ -28,7 +28,7 @@ jobs:
       - name: validate version
         run: |
           echo "${{ github.event.inputs.release_version }}" | grep -E 'v[0-9]+\.[0-9]+\.[0-9]+$'
-          echo "${{ github.event.inputs.init_container_version }}" | grep -E '[0-9]+\.[0-9]+\.[0-9]+$'
+          echo "${{ github.event.inputs.init_container_version }}" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$'
           echo "${{ github.event.inputs.based_on_branch }}" | grep -E '^(master|release-[0-9]+\.[0-9]+\.[0-9]+-[0-9]+\.[0-9]+\.[0-9]+)$'
 
       - uses: actions/checkout@v4
