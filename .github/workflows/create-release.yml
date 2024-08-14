@@ -114,4 +114,5 @@ jobs:
     uses: ./.github/workflows/publish-init-container-image.yml
     with:
       registry: ${{ needs.export-registry.outputs.registry }}
+      release_version: ${{ needs.check-tag.outputs.release-tag }}
       init_container_version: ${{ needs.check-tag.outputs.init-tag }}
