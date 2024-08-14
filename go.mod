@@ -1,6 +1,6 @@
 module github.com/virtual-kubelet/azure-aci
 
-go 1.22
+go 1.22.4
 
 toolchain go1.22.5
 
