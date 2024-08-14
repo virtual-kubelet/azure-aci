@@ -5,10 +5,10 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request_target:
+  pull_request:
     branches:
       - master
-      - release-**
+      - release-**-**
     types: [ opened, ready_for_review, reopened ]
     paths:
       - '.github/workflows/chart.yml'
@@ -16,7 +16,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  GO_VERSION: '1.20' # Common versions
+  GO_VERSION: '1.22' # Common versions
   E2E_IMG_TAG: "e2e-ci"
 
 permissions:

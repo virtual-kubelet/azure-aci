@@ -5,7 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request_target:
+  pull_request:
     branches: [master]
     paths-ignore: ['docs/**', '**.md', '**.mdx', '**.png', '**.jpg']
   push:
@@ -14,7 +14,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  GO_VERSION: '1.20'    # Common versions
+  GO_VERSION: '1.22'    # Common versions
   E2E_IMG_TAG: 'e2e-ci'
 
 permissions:
