@@ -39,7 +39,7 @@ jobs:
         name: set-tags
         run: |
           echo "release-tag=$(echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep 'v[0-9]\.[0-9]\.[0-9]' | head -n 1)" >> $GITHUB_OUTPUT
-          echo "init-tag=$(echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sed -n '1p')" >> $GITHUB_OUTPUT
+          echo "init-tag=$(echo ${{ github.event.pull_request.head.ref }} | tr '-' '\n' | grep -E '^[0-9]\.[0-9]\.[0-9]$' | head -n 1)" >> $GITHUB_OUTPUT
 
       - id: check-tag
         name: Check for Tag
