@@ -1,3 +1,8 @@
+//go:build !skip
+
+// skipping this test due to a regression with Plan9 mounts in the containerd package
+// will include this test back once the fix is available
+
 /*
 Copyright (c) Microsoft Corporation.
 Licensed under the Apache 2.0 license.
