@@ -104,8 +104,8 @@ e2e-test:
 	PR_RAND=$(PR_COMMIT_SHA) E2E_TARGET=$(E2E_TARGET) \
  	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
  	INIT_IMG_REPO=$(INIT_IMG_NAME) INIT_IMG_TAG=$(INIT_IMG_TAG) \
- 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \	
- 	$(AKS_E2E_SCRIPT) go test -timeout 90m -v ./e2e --tags=skip # skipping test files with skip tag
+ 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \
+ 	$(AKS_E2E_SCRIPT) go test -timeout 90m -v ./e2e --tags=skip
 
 .PHONY: aks-addon-e2e-test
 aks-addon-e2e-test:
@@ -113,7 +113,7 @@ aks-addon-e2e-test:
 	IMG_URL=$(REGISTRY) IMG_REPO=$(IMG_NAME) IMG_TAG=$(IMG_TAG) \
 	INIT_IMG_REPO=$(INIT_IMG_NAME) INIT_IMG_TAG=$(INIT_IMG_TAG) \
 	LOCATION=$(LOCATION) RESOURCE_GROUP=$(E2E_CLUSTER_NAME) \	
-	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 90m -v ./e2e --tags=skip # skipping test files with skip tag
+	$(AKS_ADDON_E2E_SCRIPT) go test -timeout 90m -v ./e2e --tags=skip
 
 .PHONY: vet
 vet:
