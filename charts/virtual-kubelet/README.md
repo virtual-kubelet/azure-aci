@@ -103,4 +103,3 @@ The following table lists the configurable parameters of the azure-aci chart and
 | rbac.install                                   | Install Default RBAC roles and bindings.                                                                              | `true`                                |
 | rbac.serviceAccountName                        | RBAC service account name.                                                                                            | `virtual-kubelet-helm`                |
 | rbac.apiVersion                                | RBAC api version.                                                                                                     | `v1`                                  |
-| rbac.roleRef                                   | Cluster role reference.                                                                                               | `cluster-admin`                       |
