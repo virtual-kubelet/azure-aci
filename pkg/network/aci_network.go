@@ -14,7 +14,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/pkg/errors"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
@@ -128,7 +128,7 @@ func (pn *ProviderNetwork) setupNetwork(ctx context.Context, azConfig *auth.Conf
 	}
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	currentSubnet, err := pn.GetACISubnet(ctxWithResp, subnetsClient)
 	if err != nil {
@@ -213,7 +213,9 @@ func (pn *ProviderNetwork) GetACISubnet(ctx context.Context, subnetsClient *azne
 			return aznetworkv2.Subnet{}, fmt.Errorf("error while looking up subnet: %v", err)
 		}
 
-		if respErr.RawResponse.StatusCode == http.StatusNotFound && pn.SubnetCIDR == "" {
+		if errors.As(err, &respErr) &&
+			respErr.RawResponse.StatusCode == http.StatusNotFound &&
+			pn.SubnetCIDR == "" {
 			return aznetworkv2.Subnet{}, fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
 		}
 	}
@@ -286,7 +288,7 @@ func (pn *ProviderNetwork) CreateOrUpdateACISubnet(ctx context.Context, subnetsC
 	logger.Debugf("%s subnet %s", action, *subnet.Name)
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	poller, err := subnetsClient.BeginCreateOrUpdate(ctxWithResp, pn.VnetResourceGroup, pn.VnetName, pn.SubnetName, subnet, nil)
 	if err != nil {
