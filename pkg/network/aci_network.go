@@ -214,6 +214,7 @@ func (pn *ProviderNetwork) GetACISubnet(ctx context.Context, subnetsClient *azne
 		}
 
 		if errors.As(err, &respErr) &&
+			respErr.RawResponse != nil &&
 			respErr.RawResponse.StatusCode == http.StatusNotFound &&
 			pn.SubnetCIDR == "" {
 			return aznetworkv2.Subnet{}, fmt.Errorf("subnet '%s' is not found in vnet '%s' in resource group '%s' and subscription '%s' and subnet CIDR is not specified", pn.SubnetName, pn.VnetName, pn.VnetResourceGroup, pn.VnetSubscriptionID)
