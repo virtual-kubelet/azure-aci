@@ -165,7 +165,11 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 			rawResponse != nil && rawResponse.StatusCode == http.StatusNotFound {
 			return nil, errdefs.NotFound("cg is not found")
 		}
-		logger.Errorf("an error has occurred while getting container group info %s, status code %d", cgName, rawResponse.StatusCode)
+		if rawResponse != nil {
+			logger.Errorf("an error has occurred while getting container group info %s, status code %d", cgName, rawResponse.StatusCode)
+		} else {
+			logger.Errorf("an error has occurred while getting container group info %s, status code unknown: %v", cgName, err)
+		}
 		return nil, err
 	}
 
