@@ -13,15 +13,15 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/azure-aci/pkg/auth"
-	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 	"github.com/virtual-kubelet/virtual-kubelet/errdefs"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
+
+	"github.com/virtual-kubelet/azure-aci/pkg/auth"
+	"github.com/virtual-kubelet/azure-aci/pkg/validation"
 )
 
 type AzClientsInterface interface {
@@ -104,11 +104,12 @@ func (a *AzClientsAPIs) GetContainerGroup(ctx context.Context, resourceGroup, co
 	defer span.End()
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	result, err := a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, containerGroupName, nil)
 	if err != nil {
-		if rawResponse.StatusCode == http.StatusNotFound {
+		if errors.As(err, &rawResponse) &&
+			rawResponse.StatusCode == http.StatusNotFound {
 			logger.Errorf("failed to query Container Group %s, not found", containerGroupName)
 			return nil, errdefs.NotFound("cg is not found")
 		}
@@ -136,7 +137,7 @@ func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup,
 	}
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	logger.Infof("creating container group with name: %s", cgName)
 	_, err := a.ContainerGroupClient.BeginCreateOrUpdate(ctxWithResp, resourceGroup, cgName, containerGroup, nil)
@@ -154,13 +155,14 @@ func (a *AzClientsAPIs) GetContainerGroupInfo(ctx context.Context, resourceGroup
 	ctx, span := trace.StartSpan(ctx, "client.GetContainerGroupInfo")
 	defer span.End()
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	cgName := containerGroupName(namespace, name)
 
 	response, err := a.ContainerGroupClient.Get(ctxWithResp, resourceGroup, cgName, nil)
 	if err != nil {
-		if rawResponse != nil && rawResponse.StatusCode == http.StatusNotFound {
+		if errors.As(err, &rawResponse) &&
+			rawResponse != nil && rawResponse.StatusCode == http.StatusNotFound {
 			return nil, errdefs.NotFound("cg is not found")
 		}
 		logger.Errorf("an error has occurred while getting container group info %s, status code %d", cgName, rawResponse.StatusCode)
@@ -185,7 +187,7 @@ func (a *AzClientsAPIs) GetContainerGroupListResult(ctx context.Context, resourc
 	defer span.End()
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	pager := a.ContainerGroupClient.NewListByResourceGroupPager(resourceGroup, nil)
 
@@ -207,7 +209,7 @@ func (a *AzClientsAPIs) ListCapabilities(ctx context.Context, region string) ([]
 	defer span.End()
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	pager := a.LocationClient.NewListCapabilitiesPager(region, nil)
 
@@ -233,7 +235,7 @@ func (a *AzClientsAPIs) DeleteContainerGroup(ctx context.Context, resourceGroup,
 	defer span.End()
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	_, err := a.ContainerGroupClient.BeginDelete(ctxWithResp, resourceGroup, cgName, nil)
 	if err != nil {
@@ -251,7 +253,7 @@ func (a *AzClientsAPIs) ListLogs(ctx context.Context, resourceGroup, cgName, con
 	defer span.End()
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	enableTimestamp := true
 
@@ -284,7 +286,7 @@ func (a *AzClientsAPIs) ExecuteContainerCommand(ctx context.Context, resourceGro
 	defer span.End()
 
 	var rawResponse *http.Response
-	ctxWithResp := runtime.WithCaptureResponse(ctx, &rawResponse)
+	ctxWithResp := policy.WithCaptureResponse(ctx, &rawResponse)
 
 	result, err := a.ContainersClient.ExecuteCommand(ctxWithResp, resourceGroup, cgName, containerName, containerReq, nil)
 	if err != nil {
