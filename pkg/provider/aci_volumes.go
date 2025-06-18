@@ -18,7 +18,7 @@ import (
 
 func (p *ACIProvider) getAzureFileCSI(volume v1.Volume, namespace string) (*azaciv2.Volume, error) {
 	var secretName, shareName string
-	if volume.CSI.VolumeAttributes != nil && len(volume.CSI.VolumeAttributes) != 0 {
+	if len(volume.CSI.VolumeAttributes) != 0 {
 		for k, v := range volume.CSI.VolumeAttributes {
 			switch k {
 			case azureFileSecretName:

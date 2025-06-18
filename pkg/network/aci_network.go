@@ -16,15 +16,17 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/pkg/errors"
-	"github.com/virtual-kubelet/azure-aci/pkg/util"
 	"github.com/virtual-kubelet/virtual-kubelet/trace"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 
+	"github.com/virtual-kubelet/azure-aci/pkg/util"
+
 	azaciv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/containerinstance/armcontainerinstance/v2"
 	aznetworkv2 "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v2"
-	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	v1 "k8s.io/api/core/v1"
+
+	"github.com/virtual-kubelet/azure-aci/pkg/auth"
 )
 
 // DNS configuration settings
@@ -161,7 +163,7 @@ func (pn *ProviderNetwork) shouldCreateOrUpdateSubnet(currentSubnet aznetworkv2.
 		if pn.SubnetCIDR != *currentSubnet.Properties.AddressPrefix {
 			return false, fmt.Errorf("found subnet '%s' using different CIDR: '%s'. desired: '%s'", pn.SubnetName, *currentSubnet.Properties.AddressPrefix, pn.SubnetCIDR)
 		}
-	} else if currentSubnet.Properties.AddressPrefixes != nil && len(currentSubnet.Properties.AddressPrefixes) > 0 { // else check if addressPrefixes array has been set
+	} else if len(currentSubnet.Properties.AddressPrefixes) > 0 { // else check if addressPrefixes array has been set
 		var firstPrefix *string
 		if len(*currentSubnet.Properties.AddressPrefixes[0]) > 0 {
 			firstPrefix = currentSubnet.Properties.AddressPrefixes[0]
