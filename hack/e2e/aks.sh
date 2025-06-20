@@ -89,6 +89,24 @@ fi
 
 KUBE_DNS_IP=10.0.0.10
 
+az network nsg create \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "${CLUSTER_SUBNET_NAME}-nsg" \
+    --location "$LOCATION"
+
+az network nsg rule create \
+    --resource-group "$RESOURCE_GROUP" \
+    --nsg-name "${CLUSTER_SUBNET_NAME}-nsg" \
+    --name "AllowAnyCustomAnyInbound" \
+    --protocol "*" \
+    --direction "Inbound" \
+    --priority 119 \
+    --source-address-prefixes '*' \
+    --source-port-ranges '*' \
+    --destination-address-prefixes '*' \
+    --destination-port-ranges "*" \
+    --access "Allow"
+
 az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
