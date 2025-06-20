@@ -16,7 +16,7 @@ on:
 
 env:
   # Common versions
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.23'
 
 permissions:
   pull-requests: write

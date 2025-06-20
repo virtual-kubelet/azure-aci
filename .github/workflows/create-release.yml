@@ -15,7 +15,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   # Common versions
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.23'
 
 jobs:
   check-tag:
