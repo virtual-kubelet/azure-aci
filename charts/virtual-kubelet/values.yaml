@@ -74,5 +74,3 @@ rbac:
   serviceAccountName: virtual-kubelet-helm
   ## RBAC api version
   apiVersion: v1
-  ## Cluster role reference
-  roleRef: cluster-admin
