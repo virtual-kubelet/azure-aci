@@ -16,12 +16,14 @@ const (
 
 	// Events : support ACI to K8s event translation and broadcasting
 	Events = "events"
+	AvailabilityZonesFeature = "availability-zones"
 )
 
 var enabledFeatures = []string{
 	InitContainerFeature,
 	ConfidentialComputeFeature,
 	Events,
+	AvailabilityZonesFeature,
 }
 
 type FlagIdentifier struct {
