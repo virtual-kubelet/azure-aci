@@ -115,6 +115,8 @@ az network vnet create \
     --subnet-prefix $CLUSTER_SUBNET_CIDR \
     --nsg "${CLUSTER_SUBNET_NAME}-nsg"
 
+vnet_id="$(az network vnet show --resource-group $RESOURCE_GROUP --name $VNET_NAME --query id -o tsv)"
+
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
@@ -129,37 +131,44 @@ cluster_subnet_id="$(az network vnet subnet show \
     --name $CLUSTER_SUBNET_NAME \
     --query id -o tsv)"
 
+
 if [ "$E2E_TARGET" = "pr" ]; then
-az aks create \
-    -g "$RESOURCE_GROUP" \
-    -l "$LOCATION" \
-    -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
-    -n "$CLUSTER_NAME" \
-    --network-plugin azure \
-    --vnet-subnet-id "$cluster_subnet_id" \
-    --enable-addons virtual-node \
-    --aci-subnet-name "$ACI_SUBNET_NAME" \
-    --generate-ssh-keys \
-    --attach-acr "$ACR_NAME"
+  az aks create \
+      -g "$RESOURCE_GROUP" \
+      -l "$LOCATION" \
+      -c "$NODE_COUNT" \
+      --node-vm-size standard_d8_v3 \
+      -n "$CLUSTER_NAME" \
+      --network-plugin azure \
+      --vnet-subnet-id "$cluster_subnet_id" \
+      --enable-addons virtual-node \
+      --aci-subnet-name "$ACI_SUBNET_NAME" \
+      --generate-ssh-keys \
+      --attach-acr "$ACR_NAME"
 else
 
-az aks create \
-    -g "$RESOURCE_GROUP" \
-    -l "$LOCATION" \
-    -c "$NODE_COUNT" \
-    --node-vm-size standard_d8_v3 \
-    -n "$CLUSTER_NAME" \
-    --network-plugin azure \
-    --vnet-subnet-id "$cluster_subnet_id" \
-    --enable-addons virtual-node \
-    --aci-subnet-name "$ACI_SUBNET_NAME" \
-    --generate-ssh-keys \
-
+  az aks create \
+      -g "$RESOURCE_GROUP" \
+      -l "$LOCATION" \
+      -c "$NODE_COUNT" \
+      --node-vm-size standard_d8_v3 \
+      -n "$CLUSTER_NAME" \
+      --network-plugin azure \
+      --vnet-subnet-id "$cluster_subnet_id" \
+      --enable-addons virtual-node \
+      --aci-subnet-name "$ACI_SUBNET_NAME" \
+      --generate-ssh-keys
 fi
 
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubeconfig"
 export KUBECONFIG="$TMPDIR/kubeconfig"
+
+cluster_identity_id="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "identity.type")
+
+az role assignment create \
+    --role "Network Contributor" \
+    --assignee "$cluster_identity" \
+    --scope "$vnet_id"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 
