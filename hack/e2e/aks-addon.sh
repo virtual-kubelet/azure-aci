@@ -89,18 +89,38 @@ fi
 
 TMPDIR="$(mktemp -d)"
 
+az network nsg create \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "${CLUSTER_SUBNET_NAME}-nsg" \
+    --location "$LOCATION"
+
+az network nsg rule create \
+    --resource-group "$RESOURCE_GROUP" \
+    --nsg-name "${CLUSTER_SUBNET_NAME}-nsg" \
+    --name "AllowAnyCustomAnyInbound" \
+    --protocol "*" \
+    --direction "Inbound" \
+    --priority 119 \
+    --source-address-prefixes '*' \
+    --source-port-ranges '*' \
+    --destination-address-prefixes '*' \
+    --destination-port-ranges "*" \
+    --access "Allow"
+
 az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
     --subnet-name $CLUSTER_SUBNET_NAME \
-    --subnet-prefix $CLUSTER_SUBNET_CIDR
+    --subnet-prefix $CLUSTER_SUBNET_CIDR \
+    --nsg "${CLUSTER_SUBNET_NAME}-nsg"
 
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
     --vnet-name $VNET_NAME \
     --name $ACI_SUBNET_NAME \
     --address-prefix $ACI_SUBNET_CIDR \
+    --nsg "${CLUSTER_SUBNET_NAME}-nsg" \
     --query id -o tsv)"
 
 cluster_subnet_id="$(az network vnet subnet show \
