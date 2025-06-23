@@ -89,11 +89,10 @@ fi
 
 TMPDIR="$(mktemp -d)"
 
-nsg_id="$(az network nsg create \
+az network nsg create \
     --resource-group "$RESOURCE_GROUP" \
     --name "${CLUSTER_SUBNET_NAME}-nsg" \
-    --location "$LOCATION" \
-     --query id -o tsv)"
+    --location "$LOCATION"
 
 az network nsg rule create \
     --resource-group "$RESOURCE_GROUP" \
@@ -108,14 +107,15 @@ az network nsg rule create \
     --destination-port-ranges "*" \
     --access "Allow"
 
-vnet_id="$(az network vnet create \
+az network vnet create \
     --resource-group $RESOURCE_GROUP \
     --name $VNET_NAME \
     --address-prefixes $VNET_RANGE \
     --subnet-name $CLUSTER_SUBNET_NAME \
     --subnet-prefix $CLUSTER_SUBNET_CIDR \
-    --nsg "${CLUSTER_SUBNET_NAME}-nsg" \
-    --query id -o tsv)"
+    --nsg "${CLUSTER_SUBNET_NAME}-nsg"
+
+vnet_id="$(az network vnet show --resource-group $RESOURCE_GROUP --name $VNET_NAME --query id -o tsv)"
 
 aci_subnet_id="$(az network vnet subnet create \
     --resource-group $RESOURCE_GROUP \
@@ -163,16 +163,12 @@ az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubec
 export KUBECONFIG="$TMPDIR/kubeconfig"
 
 cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.principalId --output tsv)"
+resource_group_id="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query resourceGroup --output tsv)"
 
 az role assignment create \
     --role "Network Contributor" \
     --assignee "$cluster_identity" \
-    --scope "$vnet_id"
-    
-az role assignment create \
-    --role "Network Contributor" \
-    --assignee "$cluster_identity" \
-    --scope "$nsg_id"
+    --scope "$resource_group_id"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 
