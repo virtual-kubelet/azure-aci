@@ -170,6 +170,11 @@ az role assignment create \
     --assignee "$cluster_identity" \
     --scope "$resource_group_id"
 
+az role assignment create \
+    --role "Private link service" \
+    --assignee "$cluster_identity" \
+    --scope "$resource_group_id"
+
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 
 ACI_USER_IDENTITY="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.clientId -o tsv)"
