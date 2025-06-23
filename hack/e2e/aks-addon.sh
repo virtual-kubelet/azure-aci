@@ -163,7 +163,7 @@ az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubec
 export KUBECONFIG="$TMPDIR/kubeconfig"
 
 cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.principalId --output tsv)"
-resource_group_id="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query resourceGroup --output tsv)"
+resource_group_id="$(az group show -g "$RESOURCE_GROUP" --query id --output tsv)"
 
 az role assignment create \
     --role "Network Contributor" \
