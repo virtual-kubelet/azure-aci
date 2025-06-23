@@ -171,7 +171,7 @@ az role assignment create \
     --scope "$resource_group_id"
 
 az role assignment create \
-    --role "Private link service" \
+    --role "Domain Services Contributor" \
     --assignee "$cluster_identity" \
     --scope "$resource_group_id"
 
