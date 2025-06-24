@@ -162,7 +162,7 @@ fi
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubeconfig"
 export KUBECONFIG="$TMPDIR/kubeconfig"
 
-cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.principalId --output tsv)"
+cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.objectId --output tsv)"
 resource_group_id="$(az group show -g "$RESOURCE_GROUP" --query id --output tsv)"
 
 az role assignment create \
@@ -170,10 +170,10 @@ az role assignment create \
     --assignee "$cluster_identity" \
     --scope "$resource_group_id"
 
-az role assignment create \
-    --role "Domain Services Contributor" \
-    --assignee "$cluster_identity" \
-    --scope "$resource_group_id"
+# az role assignment create \
+#     --role "Domain Services Contributor" \
+#     --assignee "$cluster_identity" \
+#     --scope "$resource_group_id"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
 
