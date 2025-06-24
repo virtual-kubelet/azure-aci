@@ -43,7 +43,6 @@ func TestPodWithInitContainersOrder(t *testing.T) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
-	
 	deadline, ok := t.Deadline()
 	timeout := time.Until(deadline)
 	if !ok {
