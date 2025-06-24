@@ -244,7 +244,7 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
 export TEST_WINDOWS_NODE_NAME=$TEST_WINDOWS_NODE_NAME
 
 ## CSI Driver test
-az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l  --sku Standard_LRS
+az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l "$LOCATION" --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g "$RESOURCE_GROUP" -o tsv)
 
 az storage share create -n "$CSI_DRIVER_SHARE_NAME" --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
