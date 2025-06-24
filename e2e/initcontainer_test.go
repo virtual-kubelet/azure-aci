@@ -39,7 +39,7 @@ func TestPodWithInitContainersOrder(t *testing.T) {
 		t.Fatal(string(out))
 	}
 
-	cmd = kubectl("apply", "-f", "fixtures/initcontainers_ordertest_pod.yml", "--namespace=vk-test")
+	cmd = kubectl("apply", "-f", "fixtures/initcontainers_ordertest_pod.yml")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
