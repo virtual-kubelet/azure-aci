@@ -14,7 +14,7 @@ spec:
       - name: azure
         mountPath: /mnt/azure
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-      name: kube-api-access-zrc9l
+        name: kube-api-access-zrc9l
   - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     name: init-container-02
     command: [ "/bin/sh" ]
@@ -23,7 +23,7 @@ spec:
       - name: azure
         mountPath: /mnt/azure
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-      name: kube-api-access-zrc9l
+        name: kube-api-access-zrc9l
   containers:
   - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     imagePullPolicy: Always
@@ -41,7 +41,7 @@ spec:
       - name: azure
         mountPath: /mnt/azure
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-      name: kube-api-access-zrc9l
+        name: kube-api-access-zrc9l
   nodeSelector:
     kubernetes.io/role: agent
     beta.kubernetes.io/os: linux
