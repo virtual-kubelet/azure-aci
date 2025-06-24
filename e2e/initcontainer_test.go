@@ -39,10 +39,11 @@ func TestPodWithInitContainersOrder(t *testing.T) {
 		t.Fatal(string(out))
 	}
 
-	cmd = kubectl("apply", "-f", "fixtures/initcontainers_ordertest_pod.yml")
+	cmd = kubectl("apply", "-f", "fixtures/initcontainers_ordertest_pod.yml", "--namespace=vk-test")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatal(string(out))
 	}
+	
 	deadline, ok := t.Deadline()
 	timeout := time.Until(deadline)
 	if !ok {
