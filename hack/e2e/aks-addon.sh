@@ -162,7 +162,7 @@ fi
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubeconfig"
 export KUBECONFIG="$TMPDIR/kubeconfig"
 
-cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.objectId --output tsv)"
+cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.clientId --output tsv)"
 resource_group_id="$(az group show -g "$RESOURCE_GROUP" --query id --output tsv)"
 
 az role assignment create \
