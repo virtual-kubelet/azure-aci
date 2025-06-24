@@ -164,7 +164,7 @@ export KUBECONFIG="$TMPDIR/kubeconfig"
 
 cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.principalId --output tsv)"
 resource_group_id="$(az group show -g "$RESOURCE_GROUP" --query id --output tsv)"
-ACI_USER_IDENTITY="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.clientId -o tsv)"
+aci_identity_objectID="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.objectId -o tsv)"
 
 az role assignment create \
     --role "Network Contributor" \
@@ -173,7 +173,7 @@ az role assignment create \
 
 az role assignment create \
     --role "Network Contributor" \
-    --assignee "$ACI_USER_IDENTITY" \
+    --assignee "$aci_identity_objectID" \
     --scope "$resource_group_id"
     
 # az role assignment create \
@@ -182,7 +182,7 @@ az role assignment create \
 #     --scope "$resource_group_id"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
-
+ACI_USER_IDENTITY="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.clientId -o tsv)"
 KUBE_DNS_IP="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query networkProfile.dnsServiceIp -o tsv)"
 CLUSTER_RESOURCE_ID="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "id" -o tsv)"
 MC_RESOURCE_GROUP="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "nodeResourceGroup" -o tsv)"
