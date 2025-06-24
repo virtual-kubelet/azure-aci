@@ -74,7 +74,7 @@ if [ ! "$(check_aci_registered)" = "Registered" ]; then
     done
 fi
 
-az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
+az group create --name "$RESOURCE_GROUP" --location ""
 
 if [ "$E2E_TARGET" = "pr" ]; then
   az acr create --resource-group "$RESOURCE_GROUP" \
@@ -92,7 +92,7 @@ TMPDIR="$(mktemp -d)"
 az network nsg create \
     --resource-group "$RESOURCE_GROUP" \
     --name "${CLUSTER_SUBNET_NAME}-nsg" \
-    --location "$LOCATION"
+    --location ""
 
 az network nsg rule create \
     --resource-group "$RESOURCE_GROUP" \
@@ -134,7 +134,7 @@ cluster_subnet_id="$(az network vnet subnet show \
 if [ "$E2E_TARGET" = "pr" ]; then
   az aks create \
       -g "$RESOURCE_GROUP" \
-      -l "$LOCATION" \
+      -l "" \
       -c "$NODE_COUNT" \
       --node-vm-size standard_d8_v3 \
       -n "$CLUSTER_NAME" \
@@ -148,7 +148,7 @@ else
 
   az aks create \
       -g "$RESOURCE_GROUP" \
-      -l "$LOCATION" \
+      -l "" \
       -c "$NODE_COUNT" \
       --node-vm-size standard_d8_v3 \
       -n "$CLUSTER_NAME" \
@@ -162,17 +162,23 @@ fi
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubeconfig"
 export KUBECONFIG="$TMPDIR/kubeconfig"
 
-cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.clientId --output tsv)"
+cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.principalId --output tsv)"
 resource_group_id="$(az group show -g "$RESOURCE_GROUP" --query id --output tsv)"
+aci_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "addonProfiles.aciConnectorLinux.identity" --output tsv)"
 
 az role assignment create \
     --role "Network Contributor" \
     --assignee "$cluster_identity" \
     --scope "$resource_group_id"
 
+az role assignment create \
+    --role "Network Contributor" \
+    --assignee "$aci_identity" \
+    --scope "$resource_group_id"
+    
 # az role assignment create \
 #     --role "Domain Services Contributor" \
-#     --assignee "$cluster_identity" \
+#     --assignee "$aci_identity" \
 #     --scope "$resource_group_id"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
@@ -238,7 +244,7 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
 export TEST_WINDOWS_NODE_NAME=$TEST_WINDOWS_NODE_NAME
 
 ## CSI Driver test
-az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
+az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l  --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g "$RESOURCE_GROUP" -o tsv)
 
 az storage share create -n "$CSI_DRIVER_SHARE_NAME" --connection-string "$AZURE_STORAGE_CONNECTION_STRING"
