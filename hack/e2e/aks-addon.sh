@@ -74,7 +74,7 @@ if [ ! "$(check_aci_registered)" = "Registered" ]; then
     done
 fi
 
-az group create --name "$RESOURCE_GROUP" --location ""
+az group create --name "$RESOURCE_GROUP" --location "$LOCATION"
 
 if [ "$E2E_TARGET" = "pr" ]; then
   az acr create --resource-group "$RESOURCE_GROUP" \
@@ -92,7 +92,7 @@ TMPDIR="$(mktemp -d)"
 az network nsg create \
     --resource-group "$RESOURCE_GROUP" \
     --name "${CLUSTER_SUBNET_NAME}-nsg" \
-    --location ""
+    --location "$LOCATION"
 
 az network nsg rule create \
     --resource-group "$RESOURCE_GROUP" \
@@ -134,7 +134,7 @@ cluster_subnet_id="$(az network vnet subnet show \
 if [ "$E2E_TARGET" = "pr" ]; then
   az aks create \
       -g "$RESOURCE_GROUP" \
-      -l "" \
+      -l "$LOCATION" \
       -c "$NODE_COUNT" \
       --node-vm-size standard_d8_v3 \
       -n "$CLUSTER_NAME" \
@@ -148,7 +148,7 @@ else
 
   az aks create \
       -g "$RESOURCE_GROUP" \
-      -l "" \
+      -l "$LOCATION" \
       -c "$NODE_COUNT" \
       --node-vm-size standard_d8_v3 \
       -n "$CLUSTER_NAME" \
