@@ -131,7 +131,6 @@ cluster_subnet_id="$(az network vnet subnet show \
     --name $CLUSTER_SUBNET_NAME \
     --query id -o tsv)"
 
-
 if [ "$E2E_TARGET" = "pr" ]; then
   az aks create \
       -g "$RESOURCE_GROUP" \
@@ -163,15 +162,16 @@ fi
 az aks get-credentials -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" -f "$TMPDIR/kubeconfig"
 export KUBECONFIG="$TMPDIR/kubeconfig"
 
-cluster_identity_id="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "identity.type")
+cluster_identity="$(az aks show -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query identity.principalId --output tsv)"
+resource_group_id="$(az group show -g "$RESOURCE_GROUP" --query id --output tsv)"
+aci_identity_objectID="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.objectId -o tsv)"
 
 az role assignment create \
     --role "Network Contributor" \
-    --assignee "$cluster_identity" \
-    --scope "$vnet_id"
+    --assignee "$aci_identity_objectID" \
+    --scope "$resource_group_id"
 
 MASTER_URI="$(kubectl cluster-info | awk '/Kubernetes control plane/{print $7}' | sed "s,\x1B\[[0-9;]*[a-zA-Z],,g")"
-
 ACI_USER_IDENTITY="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query addonProfiles.aciConnectorLinux.identity.clientId -o tsv)"
 KUBE_DNS_IP="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query networkProfile.dnsServiceIp -o tsv)"
 CLUSTER_RESOURCE_ID="$(az aks show  -g "$RESOURCE_GROUP" -n "$CLUSTER_NAME" --query "id" -o tsv)"
@@ -233,7 +233,7 @@ kubectl wait --for=condition=Ready --timeout=300s node "$TEST_WINDOWS_NODE_NAME"
 export TEST_WINDOWS_NODE_NAME=$TEST_WINDOWS_NODE_NAME
 
 ## CSI Driver test
-az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l $LOCATION --sku Standard_LRS
+az storage account create -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g $RESOURCE_GROUP -l "$LOCATION" --sku Standard_LRS
 export AZURE_STORAGE_CONNECTION_STRING=$(az storage account show-connection-string -n $CSI_DRIVER_STORAGE_ACCOUNT_NAME -g "$RESOURCE_GROUP" -o tsv)
 
 az storage share create -n "$CSI_DRIVER_SHARE_NAME" --connection-string "$AZURE_STORAGE_CONNECTION_STRING"

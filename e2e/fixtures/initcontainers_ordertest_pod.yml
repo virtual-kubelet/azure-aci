@@ -13,6 +13,8 @@ spec:
     volumeMounts:
       - name: azure
         mountPath: /mnt/azure
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-zrc9l
   - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     name: init-container-02
     command: [ "/bin/sh" ]
@@ -20,6 +22,8 @@ spec:
     volumeMounts:
       - name: azure
         mountPath: /mnt/azure
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-zrc9l
   containers:
   - image: mcr.microsoft.com/mirror/docker/library/alpine:3.16
     imagePullPolicy: Always
@@ -36,6 +40,8 @@ spec:
     volumeMounts:
       - name: azure
         mountPath: /mnt/azure
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: kube-api-access-zrc9l
   nodeSelector:
     kubernetes.io/role: agent
     beta.kubernetes.io/os: linux
@@ -44,6 +50,24 @@ spec:
   - key: virtual-kubelet.io/provider
     operator: Exists
   volumes:
+  - name: kube-api-access-zrc9l
+    projected:
+      defaultMode: 420
+      sources:
+      - serviceAccountToken:
+          expirationSeconds: 3607
+          path: token
+      - configMap:
+          items:
+          - key: ca.crt
+            path: ca.crt
+          name: kube-root-ca.crt
+      - downwardAPI:
+          items:
+          - fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+            path: namespace
   - name: azure
     csi:
       driver: file.csi.azure.com
