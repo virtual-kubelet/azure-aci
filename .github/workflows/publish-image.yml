@@ -32,7 +32,7 @@ jobs:
           ref: ${{ inputs.release_version }}
 
       - name: Login to ${{ inputs.registry }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
