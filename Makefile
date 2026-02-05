@@ -23,7 +23,7 @@ TEST_CREDENTIALS_JSON ?= $(TEST_CREDENTIALS_DIR)/credentials.json
 TEST_LOGANALYTICS_JSON ?= $(TEST_CREDENTIALS_DIR)/loganalytics.json
 export TEST_CREDENTIALS_JSON TEST_LOGANALYTICS_JSON TEST_AKS_CREDENTIALS_JSON
 
-VERSION ?= v1.6.2
+VERSION ?= v1.6.3
 REGISTRY ?= ghcr.io
 IMG_NAME ?= virtual-kubelet
 INIT_IMG_NAME ?= init-validation
@@ -35,7 +35,7 @@ E2E_CLUSTER_NAME := $(CLUSTER_NAME)
 OUTPUT_TYPE ?= type=docker
 BUILDPLATFORM ?= linux/amd64
 IMG_TAG ?= $(subst v,,$(VERSION))
-INIT_IMG_TAG ?= 0.3.0
+INIT_IMG_TAG ?= 0.3.1
 
 BUILD_DATE ?= $(shell date '+%Y-%m-%dT%H:%M:%S')
 VERSION_FLAGS := "-ldflags=-X main.buildVersion=$(IMG_TAG) -X main.buildTime=$(BUILD_DATE)"
