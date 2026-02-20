@@ -133,6 +133,7 @@ func (a *AzClientsAPIs) CreateContainerGroup(ctx context.Context, resourceGroup,
 		Location:   cg.Location,
 		Tags:       cg.Tags,
 		ID:         cg.ID,
+		Zones:      cg.Zones,
 	}
 
 	var rawResponse *http.Response
